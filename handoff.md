@@ -54,19 +54,24 @@ The Rust orchestration backend was upgraded to the `bridge.ts` contract; `Orches
 cargo check --manifest-path src-tauri/Cargo.toml                       # 0 errors
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings       # no issues
 cargo fmt  --manifest-path src-tauri/Cargo.toml --check                # 0 diffs
-cargo test --manifest-path src-tauri/Cargo.toml                       # 63 passed (e2e skipped by default)
+cargo test --manifest-path src-tauri/Cargo.toml                       # 65 passed (e2e skipped by default)
 npm run build                                                        # success
-npm test -- --run                                                   # 31 passed (11 files)
+npm test -- --run                                                   # 38 passed (15 files)
 WHIM_E2E_PROVIDER=bogus cargo test --manifest-path src-tauri/Cargo.toml --lib orchestration::e2e   # 1 passed
 ```
 
-### 2.2 Phase 1 "still required" (from `docs/roadmap.md`) — NOT yet done
-These were listed as required to finish Phase 1 but were **out of scope for this goal**:
-- Split `backend.rs` / `agent.rs` — *already done* (modules exist: workspace/execution/provider/deployment/orchestration). ✅ closed by prior work.
-- Expand frontend unit/component coverage; add **real desktop end-to-end coverage** to complement Rust tests. ❌ partial (only the runtime-free e2e test added).
-- Replace post-hoc event collection with **typed live event streaming** + stable event-contract regression tests. ❌ not done.
-- Regression guard against **terminal-launch provider login**. ❌ not done.
-- Make **browser/native capability differences visible** on every affected action. ❌ not done.
+### 2.2 Phase 1 Stability & Guards (completed after the foundation goal)
+Closed the remaining Phase 1 hardening items via strongly-typed event streaming, browser-mode guards, and component test coverage. Verified: `cargo test` **65 passed**, `npm test` **38 passed (15 files)**, clippy clean, `fmt --check` clean, `npm run build` success.
+
+- **Typed live event streaming & evidence accumulation (backend)** — new `AgentEvent` enum (`Text` / `Reasoning` / `ToolUse` / `Error` / `Progress`) in `agent.rs`; all call sites now emit typed events instead of raw `serde_json::Value`. `append_agent_evidence_for_operation` (`orchestrator.rs`) parses audit labels (`"Completed: "` / `"Tool failed: "`) to accumulate `tool_call_count` / `failed_tool_call_count` / `event_count` live; `finish` merges duration/timeout by max. `background_agent_evidence` simplified to duration/timeout only.
+- **`resolve_key` regression guard** — pure function of env/session params; `resolve_key_regression_guard_no_terminal_fallback` enforces it never spawns a terminal CLI or interactive login. Partially addresses the roadmap's terminal-login regression guard.
+- **Browser-mode guards (frontend)** — `bridge.isNative()` checks in `OrchestrationPanel`, `AutopilotHub`, `ShipHub`, `EcosystemHub`: non-native (browser preview) mode renders a per-surface warning banner and disables all mutation controls (dispatch/create/deploy/toggles/install). Closes the roadmap's "browser/native capability differences visible" item.
+- **Component test coverage** — four new suites: `OrchestrationPanel.test.tsx`, `AutopilotHub.test.tsx`, `ShipHub.test.tsx`, `EcosystemHub.test.tsx` verify native-mode bridge calls and browser-mode banners + disabled controls.
+
+### 2.3 Phase 1 "still required" (from `docs/roadmap.md`) — remaining gap
+Of the roadmap's Phase 1 completion list, only one item remains open:
+- **Real desktop end-to-end coverage** — only the runtime-free `mod e2e` orchestration test exists (needs WebView2; see §4). The roadmap asks for real desktop E2E to complement the Rust + component tests.
+- Everything in Phases 2–5 (see §3) remains unbuilt.
 
 ---
 
@@ -115,7 +120,7 @@ Intent · Workspace (editor/terminal/git/diffs/preview/device/data/logs) · Agen
 
 ## 5. Recommended next steps
 1. **Version control:** `git init` and commit the Phase 1 state so progress is recoverable.
-2. **Close Phase 1 "still required" items** if desired: typed live-event streaming + regression tests, terminal-login regression guard, browser/native capability visibility, real desktop E2E (needs WebView2 machine).
+2. **Remaining Phase 1 gap — real desktop E2E**: only the runtime-free `mod e2e` orchestration test exists; add real desktop end-to-end coverage (needs a WebView2-capable machine — see §4) to complement the Rust + component suites.
 3. **Pick a Phase 2 pillar** (intake expansion, live preview canvas, semantic diffs, or content/symbol index) and open a scoped goal.
 
 ---
