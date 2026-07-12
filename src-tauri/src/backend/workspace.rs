@@ -1,0 +1,579 @@
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::{self, OpenOptions},
+    io::Write,
+    path::{Component, Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+use tauri::State;
+
+use super::deployment::{git_repository_root, git_worktrees_for_repository};
+use super::{lock, whim_err, BackendState, MAX_READ_BYTES, MAX_WRITE_BYTES};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceInfo {
+    pub path: String,
+    pub name: String,
+    pub git_repository: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileKind {
+    File,
+    Directory,
+    Symlink,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub kind: FileKind,
+    pub size: u64,
+    pub modified_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWorkspaceRequest {
+    pub path: Option<String>,
+    pub include_hidden: Option<bool>,
+    pub max_entries: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryListing {
+    pub workspace: String,
+    pub path: String,
+    pub entries: Vec<FileEntry>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceTreeRequest {
+    pub path: Option<String>,
+    pub include_hidden: Option<bool>,
+    pub max_depth: Option<usize>,
+    pub max_entries: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadFileRequest {
+    pub path: String,
+    pub max_bytes: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileContent {
+    pub path: String,
+    pub content: String,
+    pub size: u64,
+    pub modified_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteFileRequest {
+    pub path: String,
+    pub content: String,
+    pub create_parents: Option<bool>,
+    #[allow(dead_code)]
+    pub overwrite: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileWriteResult {
+    pub path: String,
+    pub bytes_written: usize,
+    pub created: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectWorkspaceRequest {
+    pub candidate_workspace: String,
+}
+
+pub(crate) fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
+    lock(&state.selected_workspace, "workspace")?
+        .clone()
+        .ok_or_else(|| "No workspace is selected".to_string())
+}
+
+pub(crate) fn optional_selected_workspace_path(
+    state: &BackendState,
+) -> Result<Option<PathBuf>, String> {
+    Ok(lock(&state.selected_workspace, "workspace")?
+        .clone()
+        .filter(|path| path.is_dir()))
+}
+
+fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
+    if path.trim().is_empty() {
+        return Err("Workspace path cannot be empty".to_string());
+    }
+
+    let canonical = dunce::canonicalize(path)
+        .map_err(|error| format!("Cannot open workspace '{}': {error}", path.trim()))?;
+    if !canonical.is_dir() {
+        return Err("Selected workspace is not a directory".to_string());
+    }
+    Ok(canonical)
+}
+
+fn workspace_info(path: &Path) -> WorkspaceInfo {
+    WorkspaceInfo {
+        path: path.to_string_lossy().into_owned(),
+        name: path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned()),
+        git_repository: path.join(".git").exists(),
+    }
+}
+
+pub(crate) async fn resolve_agent_workspace(
+    state: &BackendState,
+    requested_workspace: Option<&str>,
+) -> Result<PathBuf, String> {
+    let selected = selected_workspace_path(state)?;
+    let Some(requested_workspace) = requested_workspace else {
+        return Ok(selected);
+    };
+    let requested = canonical_workspace(requested_workspace)?;
+    if requested == selected {
+        return Ok(selected);
+    }
+    let repo_root = git_repository_root(&selected).await.map_err(|error| {
+        format!("A worktree execution target requires a Git repository: {error}")
+    })?;
+    let worktrees = git_worktrees_for_repository(&repo_root).await?;
+    if worktrees.iter().any(|worktree| {
+        dunce::canonicalize(&worktree.path)
+            .map(|path| path == requested)
+            .unwrap_or(false)
+    }) {
+        Ok(requested)
+    } else {
+        Err("The requested execution folder is not a registered worktree of the selected repository".to_string())
+    }
+}
+
+pub(crate) fn sanitize_relative(path: &str, allow_empty: bool) -> Result<PathBuf, String> {
+    if path.contains('\0') {
+        return Err("Path contains an invalid null byte".to_string());
+    }
+
+    let mut safe = PathBuf::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(value) => safe.push(value),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                return Err("Parent-directory traversal is not allowed".to_string())
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err("Only workspace-relative paths are allowed".to_string())
+            }
+        }
+    }
+
+    if safe.as_os_str().is_empty() && !allow_empty {
+        return Err("A non-empty relative path is required".to_string());
+    }
+    Ok(safe)
+}
+
+pub(crate) fn ensure_inside(root: &Path, candidate: &Path) -> Result<(), String> {
+    if candidate.starts_with(root) {
+        Ok(())
+    } else {
+        Err("Resolved path escapes the selected workspace".to_string())
+    }
+}
+
+pub(crate) fn resolve_existing(
+    root: &Path,
+    relative: &str,
+    allow_root: bool,
+) -> Result<PathBuf, String> {
+    let safe = sanitize_relative(relative, allow_root)?;
+    let candidate = root.join(safe);
+    let canonical = dunce::canonicalize(&candidate).map_err(|error| {
+        whim_err(
+            "WORKSPACE_PATH_UNRESOLVED",
+            &format!(
+                "Workspace path '{}' does not exist or cannot be opened: {error}",
+                relative
+            ),
+        )
+    })?;
+    ensure_inside(root, &canonical)?;
+    Ok(canonical)
+}
+
+fn ensure_directory_chain(
+    root: &Path,
+    relative: &Path,
+    create_missing: bool,
+) -> Result<PathBuf, String> {
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err("Invalid parent path".to_string());
+        };
+        let candidate = current.join(name);
+
+        if candidate.exists() {
+            let metadata = fs::symlink_metadata(&candidate)
+                .map_err(|error| format!("Cannot inspect parent directory: {error}"))?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err("A path component is not a real directory".to_string());
+            }
+            current = candidate;
+        } else if create_missing {
+            fs::create_dir(&candidate)
+                .map_err(|error| format!("Cannot create parent directory: {error}"))?;
+            current = candidate;
+        } else {
+            return Err("Parent directory chain is incomplete".to_string());
+        }
+        ensure_inside(root, &current)?;
+    }
+    Ok(current)
+}
+
+fn resolve_write_target(
+    root: &Path,
+    relative: &str,
+    create_parents: bool,
+) -> Result<(PathBuf, bool), String> {
+    let safe = sanitize_relative(relative, false)?;
+    let file_name = safe
+        .file_name()
+        .ok_or_else(|| "A file name is required".to_string())?
+        .to_owned();
+    let parent = safe.parent().unwrap_or_else(|| Path::new(""));
+    let canonical_parent = ensure_directory_chain(root, parent, create_parents)?;
+    let target = canonical_parent.join(file_name);
+    ensure_inside(root, &target)?;
+
+    let existed = target.exists();
+    if existed {
+        let metadata = fs::symlink_metadata(&target)
+            .map_err(|error| format!("Cannot inspect write target: {error}"))?;
+        if metadata.is_dir() {
+            return Err("Write target is a directory".to_string());
+        }
+        if metadata.file_type().is_symlink() {
+            let canonical = target
+                .canonicalize()
+                .map_err(|error| format!("Cannot follow write target symlink: {error}"))?;
+            ensure_inside(root, &canonical)?;
+            return Ok((canonical, existed));
+        }
+    }
+
+    Ok((target, existed))
+}
+
+fn relative_display(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => Some(value.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn modified_ms(metadata: &fs::Metadata) -> Option<u64> {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+}
+
+fn file_entry(root: &Path, path: &Path) -> Result<FileEntry, String> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("Cannot inspect '{}': {error}", path.display()))?;
+    let file_type = metadata.file_type();
+    let kind = if file_type.is_symlink() {
+        FileKind::Symlink
+    } else if metadata.is_dir() {
+        FileKind::Directory
+    } else if metadata.is_file() {
+        FileKind::File
+    } else {
+        FileKind::Other
+    };
+
+    Ok(FileEntry {
+        name: path
+            .file_name()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        path: relative_display(root, path),
+        kind,
+        size: if metadata.is_file() {
+            metadata.len()
+        } else {
+            0
+        },
+        modified_ms: modified_ms(&metadata),
+    })
+}
+
+fn sorted_children(directory: &Path, include_hidden: bool) -> Result<Vec<PathBuf>, String> {
+    let mut children = fs::read_dir(directory)
+        .map_err(|error| format!("Cannot list '{}': {error}", directory.display()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            include_hidden
+                || !path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().starts_with('.'))
+                    .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    children.sort_by(|left, right| {
+        let left_directory = fs::symlink_metadata(left)
+            .map(|value| value.is_dir() && !value.file_type().is_symlink())
+            .unwrap_or(false);
+        let right_directory = fs::symlink_metadata(right)
+            .map(|value| value.is_dir() && !value.file_type().is_symlink())
+            .unwrap_or(false);
+        right_directory.cmp(&left_directory).then_with(|| {
+            left.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase()
+                .cmp(
+                    &right
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase(),
+                )
+        })
+    });
+    Ok(children)
+}
+
+struct TreeOptions {
+    max_depth: usize,
+    max_entries: usize,
+    include_hidden: bool,
+}
+
+fn collect_tree(
+    root: &Path,
+    directory: &Path,
+    depth: usize,
+    options: &TreeOptions,
+    entries: &mut Vec<FileEntry>,
+    truncated: &mut bool,
+) -> Result<(), String> {
+    if depth > options.max_depth || *truncated {
+        return Ok(());
+    }
+
+    for child in sorted_children(directory, options.include_hidden)? {
+        if entries.len() >= options.max_entries {
+            *truncated = true;
+            break;
+        }
+        let metadata = fs::symlink_metadata(&child)
+            .map_err(|error| format!("Cannot inspect '{}': {error}", child.display()))?;
+        let entry = file_entry(root, &child)?;
+        entries.push(entry);
+
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            collect_tree(root, &child, depth + 1, options, entries, truncated)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_selected_workspace(
+    state: State<'_, BackendState>,
+) -> Result<Option<WorkspaceInfo>, String> {
+    lock(&state.selected_workspace, "workspace")
+        .map(|path| path.as_ref().map(|path| workspace_info(path)))
+}
+
+#[tauri::command]
+pub fn select_workspace(
+    state: State<'_, BackendState>,
+    request: SelectWorkspaceRequest,
+) -> Result<WorkspaceInfo, String> {
+    let candidate_path = canonical_workspace(&request.candidate_workspace)?;
+    let info = workspace_info(&candidate_path);
+    *lock(&state.selected_workspace, "workspace")? = Some(candidate_path);
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn list_workspace(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+    request: ListWorkspaceRequest,
+) -> Result<DirectoryListing, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    list_workspace_at(&root, request)
+}
+
+pub(crate) fn list_workspace_at(
+    root: &Path,
+    request: ListWorkspaceRequest,
+) -> Result<DirectoryListing, String> {
+    let relative = request.path.unwrap_or_default();
+    let directory = resolve_existing(root, &relative, true)?;
+    if !directory.is_dir() {
+        return Err("Requested path is not a directory".to_string());
+    }
+    let max_entries = request.max_entries.unwrap_or(500).clamp(1, 2_000);
+    let children = sorted_children(&directory, request.include_hidden.unwrap_or(false))?;
+    let truncated = children.len() > max_entries;
+    let entries = children
+        .into_iter()
+        .take(max_entries)
+        .map(|path| file_entry(root, &path))
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(DirectoryListing {
+        workspace: relative_display(root, root),
+        path: relative_display(root, &directory),
+        entries,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn list_workspace_tree(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+    request: WorkspaceTreeRequest,
+) -> Result<DirectoryListing, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    list_workspace_tree_at(&root, request)
+}
+
+pub(crate) fn list_workspace_tree_at(
+    root: &Path,
+    request: WorkspaceTreeRequest,
+) -> Result<DirectoryListing, String> {
+    let relative = request.path.unwrap_or_default();
+    let directory = resolve_existing(root, &relative, true)?;
+    if !directory.is_dir() {
+        return Err("Requested tree root is not a directory".to_string());
+    }
+    let max_depth = request.max_depth.unwrap_or(4).clamp(1, 12);
+    let max_entries = request.max_entries.unwrap_or(2_000).clamp(1, 10_000);
+    let mut entries = Vec::new();
+    let mut truncated = false;
+    let options = TreeOptions {
+        max_depth,
+        max_entries,
+        include_hidden: request.include_hidden.unwrap_or(false),
+    };
+    collect_tree(root, &directory, 0, &options, &mut entries, &mut truncated)?;
+    Ok(DirectoryListing {
+        workspace: relative_display(root, root),
+        path: relative_display(root, &directory),
+        entries,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn read_workspace_file(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+    request: ReadFileRequest,
+) -> Result<FileContent, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    read_workspace_file_at(&root, request)
+}
+
+pub(crate) fn read_workspace_file_at(
+    root: &Path,
+    request: ReadFileRequest,
+) -> Result<FileContent, String> {
+    let path = resolve_existing(root, &request.path, false)?;
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|error| format!("Cannot inspect file: {error}"))?;
+    if !metadata.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+    let max_bytes = request
+        .max_bytes
+        .unwrap_or(MAX_READ_BYTES)
+        .clamp(1, MAX_READ_BYTES);
+    let file = fs::File::open(&path).map_err(|error| format!("Cannot open file: {error}"))?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut buffer = vec![0; max_bytes];
+    use std::io::Read;
+    let bytes_read = reader
+        .read(&mut buffer)
+        .map_err(|error| format!("Cannot read file: {error}"))?;
+    buffer.truncate(bytes_read);
+    Ok(FileContent {
+        path: relative_display(root, &path),
+        content: String::from_utf8_lossy(&buffer).into_owned(),
+        size: metadata.len(),
+        modified_ms: modified_ms(&metadata),
+    })
+}
+
+#[tauri::command]
+pub async fn write_workspace_file(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+    request: WriteFileRequest,
+) -> Result<FileWriteResult, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    write_workspace_file_at(&root, request)
+}
+
+pub(crate) fn write_workspace_file_at(
+    root: &Path,
+    request: WriteFileRequest,
+) -> Result<FileWriteResult, String> {
+    let (path, existed) =
+        resolve_write_target(root, &request.path, request.create_parents.unwrap_or(false))?;
+    let content_bytes = request.content.as_bytes();
+    if content_bytes.len() > MAX_WRITE_BYTES {
+        return Err(format!(
+            "File content exceeds size limit of {} MB",
+            MAX_WRITE_BYTES / (1024 * 1024)
+        ));
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&path)
+        .map_err(|error| format!("Cannot open destination file: {error}"))?;
+    file.write_all(content_bytes)
+        .map_err(|error| format!("Cannot write to destination file: {error}"))?;
+    Ok(FileWriteResult {
+        path: relative_display(root, &path),
+        bytes_written: content_bytes.len(),
+        created: !existed,
+    })
+}
