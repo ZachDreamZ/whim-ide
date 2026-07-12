@@ -83,6 +83,7 @@ function evidenceSummary(job: OrchestrationJob): string {
 }
 
 export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
+  const native = bridge.isNative();
   const [intent, setIntent] = useState("");
   const [mode, setMode] = useState<OrchestrationJobMode>("build");
   const [provider, setProvider] = useState("auto");
@@ -102,6 +103,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
   }, []);
 
   const refreshJobs = useCallback(async () => {
+    if (!native) return;
     try {
       const nextJobs = await bridge.listProjectOrchestrationJobs();
       setJobs(nextJobs);
@@ -110,18 +112,19 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
       const message = error instanceof Error ? error.message : "Could not load tasks.";
       showToast(message);
     }
-  }, [showToast]);
+  }, [showToast, native]);
 
   useEffect(() => {
+    if (!native) return;
     void refreshJobs();
     pollTimer.current = window.setInterval(() => void refreshJobs(), POLL_INTERVAL_MS);
     return () => {
       if (pollTimer.current !== null) window.clearInterval(pollTimer.current);
     };
-  }, [refreshJobs]);
+  }, [refreshJobs, native]);
 
   const createJob = async () => {
-    if (!intent.trim() || creating) return;
+    if (!native || !intent.trim() || creating) return;
     setCreating(true);
     try {
       const job = await bridge.createOrchestrationJob({
@@ -142,7 +145,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
   };
 
   const dispatchJob = async (jobId: string) => {
-    if (dispatching) return;
+    if (!native || dispatching) return;
     setDispatching(true);
     try {
       await bridge.dispatchOrchestrationJob({
@@ -161,6 +164,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
   };
 
   const transitionJob = async (jobId: string, action: TransitionAction) => {
+    if (!native) return;
     try {
       await bridge.transitionOrchestrationJob(workspace, jobId, action);
       await refreshJobs();
@@ -170,6 +174,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
   };
 
   const retryJob = async (jobId: string) => {
+    if (!native) return;
     try {
       await bridge.retryOrchestrationJob({
         workspace,
@@ -199,6 +204,13 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
             </div>
           </div>
 
+          {!native && (
+            <div className="inline-notice" style={{ marginBottom: "1.25rem" }}>
+              <AlertTriangle size={14} />
+              <span>Task orchestration and agent dispatch are available in the installed Whim Windows app.</span>
+            </div>
+          )}
+
           <label className="field">
             <span>Intent</span>
             <textarea
@@ -206,6 +218,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
               onChange={(event) => setIntent(event.target.value)}
               placeholder="Describe what you want Whim to build, verify, or ship."
               rows={4}
+              disabled={!native}
             />
           </label>
 
@@ -215,6 +228,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
               <select
                 value={mode}
                 onChange={(event) => setMode(event.target.value as OrchestrationJobMode)}
+                disabled={!native}
               >
                 {JOB_MODES.map((candidate) => (
                   <option key={candidate} value={candidate}>
@@ -229,6 +243,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                 value={provider}
                 onChange={(event) => setProvider(event.target.value)}
                 placeholder="auto"
+                disabled={!native}
               />
             </label>
             <label className="field">
@@ -237,6 +252,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
                 placeholder="provider default"
+                disabled={!native}
               />
             </label>
           </div>
@@ -250,6 +266,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
                 placeholder="sk-…"
+                disabled={!native}
               />
             </label>
             <label className="field">
@@ -258,6 +275,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                 value={baseUrl}
                 onChange={(event) => setBaseUrl(event.target.value)}
                 placeholder="http://localhost:11434"
+                disabled={!native}
               />
             </label>
           </details>
@@ -266,7 +284,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
             className="primary-action"
             type="button"
             onClick={() => void createJob()}
-            disabled={creating || !intent.trim()}
+            disabled={creating || !intent.trim() || !native}
           >
             {creating ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} Create task
           </button>
@@ -284,6 +302,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
               className="secondary-action"
               type="button"
               onClick={() => void refreshJobs()}
+              disabled={!native}
             >
               <RefreshCw size={13} /> Refresh
             </button>
@@ -328,7 +347,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                             className="primary-action"
                             type="button"
                             onClick={() => void dispatchJob(job.id)}
-                            disabled={dispatching}
+                            disabled={dispatching || !native}
                           >
                             {dispatching ? (
                               <LoaderCircle className="spin" size={13} />
@@ -343,6 +362,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                             className="secondary-action"
                             type="button"
                             onClick={() => void transitionJob(job.id, "pause")}
+                            disabled={!native}
                           >
                             <PauseCircle size={13} /> Pause
                           </button>
@@ -352,6 +372,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                             className="secondary-action"
                             type="button"
                             onClick={() => void transitionJob(job.id, "resume")}
+                            disabled={!native}
                           >
                             <PlayCircle size={13} /> Resume
                           </button>
@@ -361,6 +382,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                             className="secondary-action"
                             type="button"
                             onClick={() => void retryJob(job.id)}
+                            disabled={!native}
                           >
                             <RotateCcw size={13} /> Retry
                           </button>
@@ -370,6 +392,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                             className="ghost-action"
                             type="button"
                             onClick={() => void transitionJob(job.id, "cancel")}
+                            disabled={!native}
                           >
                             <Square size={13} /> Cancel
                           </button>

@@ -43,6 +43,7 @@ function classifyOutput(text: string, fallback: LogLevel): LogLevel {
 }
 
 export function ShipHub({ workspace }: ShipHubProps) {
+  const native = bridge.isNative();
   const [target, setTarget] = useState("vercel");
   const [preflightStatus, setPreflightStatus] = useState<PreflightStatus>("idle");
   const [deployStatus, setDeployStatus] = useState<DeployStatus>("idle");
@@ -96,7 +97,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
   };
 
   const selectTarget = (nextTarget: string) => {
-    if (nextTarget === target || busy) return;
+    if (nextTarget === target || busy || !native) return;
     const adapter = supportedAdapters.find((item) => item.id === nextTarget);
     setTarget(nextTarget);
     setCheckedTarget(null);
@@ -106,7 +107,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
   };
 
   const preflight = async () => {
-    if (busy) return;
+    if (busy || !native) return;
     const targetAtStart = target;
     const nameAtStart = selected.name;
     const mode = isLocal ? "local" : supportsPreview ? "preview" : "production";
@@ -135,7 +136,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
   };
 
   const deploy = async (production: boolean) => {
-    if (!ready || busy) return;
+    if (!ready || busy || !native) return;
     if (production) {
       const confirmed = window.confirm(
         `Deploy ${projectName} to production on ${selected.name}?\n\nThis can create public infrastructure, consume billing, and replace the current production release.`,
@@ -172,7 +173,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
     command: string,
     emptyMessage: string,
   ) => {
-    if (busy) return;
+    if (busy || !native) return;
     setAuxiliaryAction(action);
     appendLogs([{ level: "info", text: `Loading ${title.toLowerCase()} from ${projectName}.` }]);
     try {
@@ -228,16 +229,22 @@ export function ShipHub({ workspace }: ShipHubProps) {
 
   return (
     <main className="hub-page ship-page">
+      {!native && (
+        <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
+          <ShieldCheck size={14} />
+          <span>Workspace deployment and preflight checks are available in the installed Whim Windows app.</span>
+        </div>
+      )}
       <div className="ship-hero">
         <div className="ship-copy">
           <span className="hub-eyebrow"><Rocket size={13} /> Universal Ship Hub</span>
           <h1>From local intent<br />to <em>living software.</em></h1>
           <p>Run the selected provider’s real preflight, inspect Git changes, and deploy only when the native command reports that the target is ready.</p>
           <div className="hero-actions">
-            <button className="primary-action" onClick={preflight} disabled={busy} type="button">
+            <button className="primary-action" onClick={preflight} disabled={busy || !native} type="button">
               {checking ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />} {prepareLabel}
             </button>
-            <button className="secondary-action" type="button" onClick={reviewDiff} disabled={busy}>
+            <button className="secondary-action" type="button" onClick={reviewDiff} disabled={busy || !native}>
               {auxiliaryAction === "diff" ? <LoaderCircle className="spin" size={14} /> : <FileDiff size={14} />} Review release diff
             </button>
           </div>
@@ -266,7 +273,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
           <div className="release-target">
             <span className="target-logo" style={{ "--target-color": selected.color } as React.CSSProperties}><selected.icon size={17} /></span>
             <div><small>{isLocal ? "Local target" : supportsPreview ? "Preview target" : "Production target"}</small><strong>{selected.name}</strong></div>
-            <button type="button" onClick={() => document.getElementById("ship-targets")?.scrollIntoView({ behavior: "smooth", block: "center" })}>Change <ChevronRight size={12} /></button>
+            <button type="button" onClick={() => document.getElementById("ship-targets")?.scrollIntoView({ behavior: "smooth", block: "center" })} disabled={!native}>Change <ChevronRight size={12} /></button>
           </div>
         </div>
       </div>
@@ -286,7 +293,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
                   type="button"
                   key={adapter.id}
                   onClick={() => selectTarget(adapter.id)}
-                  disabled={busy}
+                  disabled={busy || !native}
                 >
                   <span className="target-icon" style={{ "--target-color": adapter.color } as React.CSSProperties}><Icon size={17} /></span>
                   <span><strong>{adapter.name}</strong><small>{adapter.description}</small></span>
@@ -300,7 +307,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
         <aside className="release-console">
           <div className="console-head">
             <span><TerminalSquare size={14} /> Command-backed readiness stream</span>
-            <div><button type="button" onClick={() => setLogs([])}>Clear</button></div>
+            <div><button type="button" onClick={() => setLogs([])} disabled={!native}>Clear</button></div>
           </div>
           <div className="console-body">
             {logs.length === 0 ? (
@@ -316,14 +323,14 @@ export function ShipHub({ workspace }: ShipHubProps) {
             {auxiliaryAction && <div className="log-running"><span>··</span><code><LoaderCircle className="spin" size={11} /> Running Git {auxiliaryAction === "diff" ? "diff" : "log"}</code></div>}
           </div>
           <div className="console-actions">
-            <button type="button" onClick={preflight} disabled={busy}><RefreshCw size={13} /> Recheck</button>
+            <button type="button" onClick={preflight} disabled={busy || !native}><RefreshCw size={13} /> Recheck</button>
             {supportsPreview && (
-              <button className="preview-deploy" type="button" onClick={() => deploy(false)} disabled={!ready || busy}>
+              <button className="preview-deploy" type="button" onClick={() => deploy(false)} disabled={!ready || busy || !native}>
                 <Rocket size={13} /> Deploy preview
               </button>
             )}
             {isLocal && (
-              <button className="preview-deploy" type="button" onClick={() => deploy(false)} disabled={!ready || busy}>
+              <button className="preview-deploy" type="button" onClick={() => deploy(false)} disabled={!ready || busy || !native}>
                 <Rocket size={13} /> Run locally
               </button>
             )}
@@ -338,11 +345,11 @@ export function ShipHub({ workspace }: ShipHubProps) {
           <p>{supportsProduction ? "The production command runs only after preflight passes and you confirm the target in a native prompt." : "Docker is invoked in local mode; no production deployment action is exposed for this target."}</p>
         </div>
         <div className="guard-actions">
-          <button type="button" onClick={releaseHistory} disabled={busy}>
+          <button type="button" onClick={releaseHistory} disabled={busy || !native}>
             {auxiliaryAction === "history" ? <LoaderCircle className="spin" size={13} /> : <RotateCcw size={13} />} Release history
           </button>
           {supportsProduction ? (
-            <button type="button" onClick={() => deploy(true)} disabled={!ready || busy}>
+            <button type="button" onClick={() => deploy(true)} disabled={!ready || busy || !native}>
               Deploy to production <ArrowRight size={13} />
             </button>
           ) : (

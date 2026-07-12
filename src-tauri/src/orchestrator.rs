@@ -577,7 +577,21 @@ impl DurableJobStore {
                 .as_deref()
                 .map(|value| audit_text(value, MAX_SUMMARY_CHARS))
                 .filter(|value| !value.is_empty());
-            stored.job.evidence = normalize_evidence(evidence);
+            stored.job.evidence.duration_ms = evidence.duration_ms;
+            stored.job.evidence.timed_out = evidence.timed_out;
+            stored.job.evidence.tool_call_count = stored
+                .job
+                .evidence
+                .tool_call_count
+                .max(evidence.tool_call_count);
+            stored.job.evidence.failed_tool_call_count = stored
+                .job
+                .evidence
+                .failed_tool_call_count
+                .max(evidence.failed_tool_call_count);
+            stored.job.evidence.event_count =
+                (stored.events.len() as u32).max(evidence.event_count);
+            stored.job.evidence = normalize_evidence(stored.job.evidence.clone());
             push_event(
                 stored,
                 event(
@@ -749,10 +763,20 @@ impl DurableJobStore {
             }
 
             stored.job.updated_at_ms = now_ms();
+            if message.starts_with("Completed: ") {
+                stored.job.evidence.tool_call_count =
+                    stored.job.evidence.tool_call_count.saturating_add(1);
+            } else if message.starts_with("Tool failed: ") {
+                stored.job.evidence.tool_call_count =
+                    stored.job.evidence.tool_call_count.saturating_add(1);
+                stored.job.evidence.failed_tool_call_count =
+                    stored.job.evidence.failed_tool_call_count.saturating_add(1);
+            }
             push_event(
                 stored,
                 event(JobActor::Agent, JobEventKind::Evidence, &message, None),
             );
+            stored.job.evidence.event_count = stored.events.len() as u32;
             Ok(true)
         })
     }

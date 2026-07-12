@@ -274,26 +274,10 @@ pub async fn retry_orchestration_job(
 }
 
 pub(crate) fn background_agent_evidence(result: &AgentRunResult) -> JobEvidence {
-    let mut tool_call_count = 0_u32;
-    let mut failed_tool_call_count = 0_u32;
-    for event in &result.events {
-        if event.get("type").and_then(Value::as_str) != Some("tool_use") {
-            continue;
-        }
-        tool_call_count = tool_call_count.saturating_add(1);
-        let status = event
-            .get("part")
-            .and_then(|part| part.get("state"))
-            .and_then(|state| state.get("status"))
-            .and_then(Value::as_str);
-        if matches!(status, Some("error" | "failed")) {
-            failed_tool_call_count = failed_tool_call_count.saturating_add(1);
-        }
-    }
     JobEvidence {
-        event_count: result.events.len().min(u32::MAX as usize) as u32,
-        tool_call_count,
-        failed_tool_call_count,
+        event_count: 0,
+        tool_call_count: 0,
+        failed_tool_call_count: 0,
         duration_ms: Some(result.command.duration_ms.min(u64::MAX as u128) as u64),
         timed_out: result.command.timed_out,
     }

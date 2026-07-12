@@ -64,9 +64,9 @@ fn background_evidence_keeps_counts_not_agent_payloads() {
     };
 
     let evidence = background_agent_evidence(&result);
-    assert_eq!(evidence.event_count, 3);
-    assert_eq!(evidence.tool_call_count, 2);
-    assert_eq!(evidence.failed_tool_call_count, 1);
+    assert_eq!(evidence.event_count, 0);
+    assert_eq!(evidence.tool_call_count, 0);
+    assert_eq!(evidence.failed_tool_call_count, 0);
     assert_eq!(evidence.duration_ms, Some(420));
     assert!(evidence.timed_out);
 }

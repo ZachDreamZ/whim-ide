@@ -233,6 +233,7 @@ function validRemoteUrl(value: string) {
 }
 
 export function EcosystemHub({ workspace }: EcosystemHubProps) {
+  const native = bridge.isNative();
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"All" | IntegrationKind>("All");
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
@@ -248,6 +249,10 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
   const loadVersion = useRef(0);
 
   const loadConfig = useCallback(async () => {
+    if (!native) {
+      setLoading(false);
+      return;
+    }
     const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
@@ -262,20 +267,20 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
-  }, [workspace]);
+  }, [workspace, native]);
 
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!customOpen) return;
+    if (!customOpen || !native) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && busyKey !== "custom") setCustomOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [customOpen, busyKey]);
+  }, [customOpen, busyKey, native]);
 
   const integrations = useMemo(
     () => [...officialIntegrations, ...customIntegrations(config)],
@@ -292,7 +297,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
   const kinds: Array<"All" | IntegrationKind> = ["All", "MCP", "Plugin"];
 
   const toggleIntegration = async (integration: Integration) => {
-    if (!config || loading || busyKey) return;
+    if (!config || loading || busyKey || !native) return;
     const install = !isInstalled(integration, config);
     setBusyKey(integration.key);
     setError(null);
@@ -311,6 +316,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
   };
 
   const openCustom = () => {
+    if (!native) return;
     setCustomKind("mcp");
     setCustomId("");
     setCustomValue("");
@@ -320,7 +326,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
 
   const submitCustom = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busyKey) return;
+    if (busyKey || !native) return;
     const id = customId.trim();
     const value = customValue.trim();
     if (customKind === "mcp") {
@@ -388,13 +394,19 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
 
   return (
     <main className="hub-page ecosystem-page">
+      {!native && (
+        <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
+          <Plug size={14} />
+          <span>MCP server integration and plugins are available in the installed Whim Windows app.</span>
+        </div>
+      )}
       <div className="ecosystem-heading">
         <div>
           <span className="hub-eyebrow"><Sparkles size={13} /> Whim integrations</span>
           <h1>Your whole<br /><em>vibe stack.</em></h1>
           <p>Add remote MCP servers and npm plugins to .whim/config.json. Existing unrelated settings are preserved.</p>
         </div>
-        <button className="create-plugin-card" type="button" onClick={openCustom} disabled={loading || Boolean(busyKey)}>
+        <button className="create-plugin-card" type="button" onClick={openCustom} disabled={loading || Boolean(busyKey) || !native}>
           <span><WandSparkles size={20} /></span>
           <div><small>Bring your own</small><strong>Add a custom integration</strong><p>Configure an npm plugin package or remote MCP endpoint.</p></div>
           <ChevronRight size={17} />
@@ -403,7 +415,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
 
       <section className="market-toolbar">
         <div className="market-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search configured and available integrations" aria-label="Search integrations" /></div>
-        <button className="filter-button" type="button" onClick={() => void loadConfig()} disabled={loading || Boolean(busyKey)}>
+        <button className="filter-button" type="button" onClick={() => void loadConfig()} disabled={loading || Boolean(busyKey) || !native}>
           <RefreshCw className={loading ? "spin" : ""} size={14} /> Refresh
         </button>
       </section>
@@ -448,7 +460,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
                     className={installed ? "installed" : ""}
                     type="button"
                     onClick={() => void toggleIntegration(integration)}
-                    disabled={!config || loading || Boolean(busyKey)}
+                    disabled={!config || loading || Boolean(busyKey) || !native}
                   >
                     {busy ? <LoaderCircle className="spin" size={13} /> : installed ? <Check size={13} /> : <Plus size={13} />}
                     {busy ? "Writing config…" : installed ? "Installed — Remove" : "Add to workspace"}

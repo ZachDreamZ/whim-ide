@@ -23,7 +23,7 @@ use std::{
 
 use tokio::time::sleep;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Emitter, Manager, State, WebviewWindow};
 
@@ -561,6 +561,55 @@ struct ToolCall {
     arguments: Value,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentEvent {
+    Text {
+        text: String,
+    },
+    Reasoning {
+        part: ReasoningPart,
+    },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        part: ToolUsePart,
+    },
+    Error {
+        error: AgentErrorDetail,
+    },
+    Progress {
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningPart {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUsePart {
+    pub id: String,
+    pub tool: String,
+    pub state: ToolUseState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUseState {
+    pub status: String,
+    pub input: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentErrorDetail {
+    pub code: Option<String>,
+    pub message: String,
+}
+
 /// Emit the same bounded event that will appear in the final run result. A
 /// failed desktop event delivery never changes the agent outcome: the command
 /// result remains the durable source of truth and the frontend can reconcile
@@ -569,17 +618,20 @@ fn record_agent_event<R: tauri::Runtime>(
     window: &WebviewWindow<R>,
     operation_id: &str,
     events: &mut Vec<Value>,
-    event: Value,
+    event: AgentEvent,
 ) {
-    if let Some(label) = durable_audit_label(&event) {
+    let event_val = serde_json::to_value(&event).unwrap();
+    if let Some(label) = durable_audit_label(&event_val) {
         let backend = window.app_handle().state::<BackendState>();
         crate::backend::record_orchestration_agent_evidence(&backend, operation_id, label);
     }
     let _ = window.emit(
         "whim:agent-event",
-        json!({ "operationId": operation_id, "event": event.clone() }),
+        json!({ "operationId": operation_id, "event": event_val.clone() }),
     );
-    events.push(event);
+    if !matches!(event, AgentEvent::Progress { .. }) {
+        events.push(event_val);
+    }
 }
 
 /// Lightweight live-only progress does not change the final result event
@@ -589,12 +641,11 @@ fn emit_agent_progress<R: tauri::Runtime>(
     operation_id: &str,
     message: String,
 ) {
-    let _ = window.emit(
-        "whim:agent-event",
-        json!({
-            "operationId": operation_id,
-            "event": { "type": "progress", "message": message }
-        }),
+    record_agent_event(
+        window,
+        operation_id,
+        &mut Vec::new(),
+        AgentEvent::Progress { message },
     );
 }
 
@@ -1853,7 +1904,9 @@ async fn run_native_agent<R: tauri::Runtime>(
             app,
             operation_id,
             &mut events,
-            json!({ "type": "text", "text": profile.event_summary() }),
+            AgentEvent::Text {
+                text: profile.event_summary(),
+            },
         );
     }
 
@@ -1866,13 +1919,12 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({
-                        "type": "error",
-                        "error": {
-                            "code": "ITERATION_LIMIT",
-                            "message": format!("Stopped after {tool_iteration_cap} tool iterations (possible runaway loop). Review the plan and run again.")
+                    AgentEvent::Error {
+                        error: AgentErrorDetail {
+                            code: Some("ITERATION_LIMIT".into()),
+                            message: format!("Stopped after {tool_iteration_cap} tool iterations (possible runaway loop). Review the plan and run again."),
                         }
-                    }),
+                    },
                 );
             }
             break;
@@ -1885,10 +1937,12 @@ async fn run_native_agent<R: tauri::Runtime>(
                 app,
                 operation_id,
                 &mut events,
-                json!({
-                    "type": "error",
-                    "error": { "code": "CANCELLED", "message": "Agent run cancelled by user" }
-                }),
+                AgentEvent::Error {
+                    error: AgentErrorDetail {
+                        code: Some("CANCELLED".into()),
+                        message: "Agent run cancelled by user".into(),
+                    },
+                },
             );
             break;
         }
@@ -1898,10 +1952,12 @@ async fn run_native_agent<R: tauri::Runtime>(
                 app,
                 operation_id,
                 &mut events,
-                json!({
-                    "type": "error",
-                    "error": { "code": "TIMEOUT", "message": "Agent run timed out" }
-                }),
+                AgentEvent::Error {
+                    error: AgentErrorDetail {
+                        code: Some("TIMEOUT".into()),
+                        message: "Agent run timed out".into(),
+                    },
+                },
             );
             break;
         }
@@ -1926,36 +1982,39 @@ async fn run_native_agent<R: tauri::Runtime>(
             operation_id,
             "Requesting a model response.".to_string(),
         );
-        let response = match chat_with_retry(
-            provider, base, api_key, model, &system, &messages, &tools,
-        )
-        .await
-        {
-            Ok(response) => response,
-            Err(error) => {
-                let is_client = ["400", "401", "403", "404", "422"]
-                    .iter()
-                    .any(|code| error.contains(code));
-                if !is_client && auto_continue && provider_retry < MAX_PROVIDER_RETRIES {
-                    provider_retry += 1;
-                    continue;
+        let response =
+            match chat_with_retry(provider, base, api_key, model, &system, &messages, &tools).await
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    let is_client = ["400", "401", "403", "404", "422"]
+                        .iter()
+                        .any(|code| error.contains(code));
+                    if !is_client && auto_continue && provider_retry < MAX_PROVIDER_RETRIES {
+                        provider_retry += 1;
+                        continue;
+                    }
+                    record_agent_event(
+                        app,
+                        operation_id,
+                        &mut events,
+                        AgentEvent::Error {
+                            error: AgentErrorDetail {
+                                code: Some("PROVIDER".into()),
+                                message: error,
+                            },
+                        },
+                    );
+                    break;
                 }
-                record_agent_event(
-                    app,
-                    operation_id,
-                    &mut events,
-                    json!({ "type": "error", "error": { "code": "PROVIDER", "message": error } }),
-                );
-                break;
-            }
-        };
+            };
         if let Some(text) = &response.text {
             if !text.trim().is_empty() {
                 record_agent_event(
                     app,
                     operation_id,
                     &mut events,
-                    json!({ "type": "text", "text": text }),
+                    AgentEvent::Text { text: text.clone() },
                 );
                 combined_stdout.push_str(text);
                 combined_stdout.push('\n');
@@ -1967,7 +2026,11 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({ "type": "reasoning", "part": { "text": reasoning } }),
+                    AgentEvent::Reasoning {
+                        part: ReasoningPart {
+                            text: reasoning.clone(),
+                        },
+                    },
                 );
             }
         }
@@ -2014,7 +2077,9 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({ "type": "text", "text": format!("[auto-continue] {nudge}") }),
+                    AgentEvent::Text {
+                        text: format!("[auto-continue] {nudge}"),
+                    },
                 );
                 messages.push(json!({ "role": "user", "content": nudge }));
                 recovery_count += 1;
@@ -2038,18 +2103,18 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({
-                        "type": "tool_use",
-                        "part": {
-                            "id": call.id,
-                            "tool": tool_display(&call.name),
-                            "state": {
-                                "status": "error",
-                                "input": call.arguments,
-                                "output": output
-                            }
-                        }
-                    }),
+                    AgentEvent::ToolUse {
+                        part: ToolUsePart {
+                            id: call.id.clone(),
+                            tool: tool_display(&call.name),
+                            state: ToolUseState {
+                                status: "error".into(),
+                                input: call.arguments.clone(),
+                                output: Some(Value::String(output.clone())),
+                                error: None,
+                            },
+                        },
+                    },
                 );
                 messages.push(json!({
                     "role": "tool",
@@ -2067,18 +2132,18 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({
-                        "type": "tool_use",
-                        "part": {
-                            "id": call.id,
-                            "tool": tool_display(&call.name),
-                            "state": {
-                                "status": "error",
-                                "input": call.arguments,
-                                "output": output
-                            }
-                        }
-                    }),
+                    AgentEvent::ToolUse {
+                        part: ToolUsePart {
+                            id: call.id.clone(),
+                            tool: tool_display(&call.name),
+                            state: ToolUseState {
+                                status: "error".into(),
+                                input: call.arguments.clone(),
+                                output: Some(Value::String(output.clone())),
+                                error: None,
+                            },
+                        },
+                    },
                 );
                 messages.push(json!({
                     "role": "tool",
@@ -2111,18 +2176,18 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({
-                        "type": "tool_use",
-                        "part": {
-                            "id": call.id,
-                            "tool": "Plan",
-                            "state": {
-                                "status": "completed",
-                                "input": call.arguments,
-                                "output": format!("Plan:\n{rendered}")
-                            }
-                        }
-                    }),
+                    AgentEvent::ToolUse {
+                        part: ToolUsePart {
+                            id: call.id.clone(),
+                            tool: "Plan".into(),
+                            state: ToolUseState {
+                                status: "completed".into(),
+                                input: call.arguments.clone(),
+                                output: Some(Value::String(format!("Plan:\n{rendered}"))),
+                                error: None,
+                            },
+                        },
+                    },
                 );
                 messages.push(json!({
                     "role": "tool",
@@ -2160,18 +2225,22 @@ async fn run_native_agent<R: tauri::Runtime>(
                     app,
                     operation_id,
                     &mut events,
-                    json!({
-                        "type": "tool_use",
-                        "part": {
-                            "id": call.id,
-                            "tool": "Research",
-                            "state": {
-                                "status": if is_error { "error" } else { "completed" },
-                                "input": call.arguments,
-                                "output": output
-                            }
-                        }
-                    }),
+                    AgentEvent::ToolUse {
+                        part: ToolUsePart {
+                            id: call.id.clone(),
+                            tool: "Research".into(),
+                            state: ToolUseState {
+                                status: if is_error {
+                                    "error".into()
+                                } else {
+                                    "completed".into()
+                                },
+                                input: call.arguments.clone(),
+                                output: Some(Value::String(output.clone())),
+                                error: None,
+                            },
+                        },
+                    },
                 );
                 messages.push(json!({
                     "role": "tool",
@@ -2193,18 +2262,22 @@ async fn run_native_agent<R: tauri::Runtime>(
                 app,
                 operation_id,
                 &mut events,
-                json!({
-                    "type": "tool_use",
-                    "part": {
-                        "id": call.id,
-                        "tool": tool_display(&call.name),
-                        "state": {
-                            "status": if is_error { "error" } else { "completed" },
-                            "input": call.arguments,
-                            "output": output
-                        }
-                    }
-                }),
+                AgentEvent::ToolUse {
+                    part: ToolUsePart {
+                        id: call.id.clone(),
+                        tool: tool_display(&call.name),
+                        state: ToolUseState {
+                            status: if is_error {
+                                "error".into()
+                            } else {
+                                "completed".into()
+                            },
+                            input: call.arguments.clone(),
+                            output: Some(Value::String(output.clone())),
+                            error: None,
+                        },
+                    },
+                },
             );
             messages.push(json!({
                 "role": "tool",
@@ -3074,5 +3147,89 @@ mod tests {
                         .is_some_and(|m| m.contains("timed out"))
             });
         assert!(!timed_out);
+    }
+
+    #[test]
+    fn resolve_key_regression_guard_no_terminal_fallback() {
+        // Enforce that resolve_key remains a pure function of env/session parameters,
+        // never spawning terminal CLI fallbacks for credential discovery.
+        let provider = Provider::OpenAi;
+        let env_var = provider_env_var(provider).unwrap();
+        let old_val = std::env::var(env_var).ok();
+
+        std::env::remove_var(env_var);
+        let resolved = resolve_key(provider, &None);
+        assert_eq!(
+            resolved, None,
+            "Must not fall back to CLI or spawn processes when key is missing"
+        );
+
+        if let Some(val) = old_val {
+            std::env::set_var(env_var, val);
+        }
+    }
+
+    #[test]
+    fn agent_event_serialization_regression_test() {
+        // Verify serialization output of each AgentEvent variant matches the frontend contract.
+
+        // 1. Text
+        let text_evt = AgentEvent::Text {
+            text: "hello".into(),
+        };
+        let text_json = serde_json::to_value(&text_evt).unwrap();
+        assert_eq!(text_json["type"], "text");
+        assert_eq!(text_json["text"], "hello");
+
+        // 2. Reasoning
+        let reasoning_evt = AgentEvent::Reasoning {
+            part: ReasoningPart {
+                text: "thinking".into(),
+            },
+        };
+        let reasoning_json = serde_json::to_value(&reasoning_evt).unwrap();
+        assert_eq!(reasoning_json["type"], "reasoning");
+        assert_eq!(reasoning_json["part"]["text"], "thinking");
+
+        // 3. ToolUse
+        let tool_evt = AgentEvent::ToolUse {
+            part: ToolUsePart {
+                id: "call_1".into(),
+                tool: "Bash".into(),
+                state: ToolUseState {
+                    status: "completed".into(),
+                    input: serde_json::json!({"command": "ls"}),
+                    output: Some(serde_json::json!("ok")),
+                    error: None,
+                },
+            },
+        };
+        let tool_json = serde_json::to_value(&tool_evt).unwrap();
+        assert_eq!(tool_json["type"], "tool_use");
+        assert_eq!(tool_json["part"]["id"], "call_1");
+        assert_eq!(tool_json["part"]["tool"], "Bash");
+        assert_eq!(tool_json["part"]["state"]["status"], "completed");
+        assert_eq!(tool_json["part"]["state"]["input"]["command"], "ls");
+        assert_eq!(tool_json["part"]["state"]["output"], "ok");
+
+        // 4. Error
+        let err_evt = AgentEvent::Error {
+            error: AgentErrorDetail {
+                code: Some("ITERATION_LIMIT".into()),
+                message: "runaway".into(),
+            },
+        };
+        let err_json = serde_json::to_value(&err_evt).unwrap();
+        assert_eq!(err_json["type"], "error");
+        assert_eq!(err_json["error"]["code"], "ITERATION_LIMIT");
+        assert_eq!(err_json["error"]["message"], "runaway");
+
+        // 5. Progress
+        let prog_evt = AgentEvent::Progress {
+            message: "working".into(),
+        };
+        let prog_json = serde_json::to_value(&prog_evt).unwrap();
+        assert_eq!(prog_json["type"], "progress");
+        assert_eq!(prog_json["message"], "working");
     }
 }
