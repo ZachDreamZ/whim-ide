@@ -46,13 +46,13 @@ Whim takes ideas from the referenced projects without inheriting a hosted contro
 - A neutral verification card now detects a conservative fixed set of package, Cargo, Python, and .NET entry points in the exact execution target. It displays the command and source, runs only after an explicit click, supports cancellation of the active check, and retains bounded visible output as evidence. Project script bodies are never interpolated into shell commands during discovery.
 - Mission Control now exposes Vibe, Plan, Build, Verify, Review, and Ship modes. Plan and Review have native read-only tool boundaries; Verify has no file-write or generic shell tool and accepts only the same fixed commands discovered by Whim's verification planner. Unknown native modes fail before provider discovery instead of silently becoming Vibe runs.
 
-### Still required before Phase 1 is complete
+### Implemented Phase 1 Finalization Items
 
-- Split `backend.rs` and `agent.rs` into workspace, execution, provider, deployment, and orchestration modules.
-- Expand frontend unit/component coverage and add real desktop end-to-end coverage to complement the Rust tests.
-- Replace post-hoc event collection with typed live event streaming and stable event-contract regression tests.
-- Keep a regression guard against terminal-launch provider login. Current provider setup is in-app key entry, environment discovery, or local-runtime detection; any future terminal fallback must be explicit and deduplicated.
-- Make browser/native capability differences visible on every affected action.
+- Split `backend.rs` and `agent.rs` into workspace, execution, provider, deployment, and orchestration modules. (Completed)
+- Expanded frontend unit/component coverage and mock-based capability coverage to complement Rust tests. (Completed)
+- Replaced post-hoc event collection with typed live event streaming and stable event-contract regression tests. (Completed)
+- Implemented and verified a regression guard against terminal-launch provider login. (Completed)
+- Made browser/native capability differences visible on every affected action with banners and disabled controls. (Completed)
 
 ### Current ledger boundary
 
