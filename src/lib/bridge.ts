@@ -85,6 +85,8 @@ export type AppSettings = {
     piModel: string;
     speed: "fast" | "balanced" | "thorough";
     approvalPolicy: "always" | "risky";
+    backgroundVerification: boolean;
+    autonomousJanitor: boolean;
     deferCapabilities: boolean;
     maxParallelAgents: number;
     enabledCapabilities: string[];
@@ -115,6 +117,8 @@ export const defaultAppSettings: AppSettings = {
     piModel: "opencode/big-pickle",
     speed: "balanced",
     approvalPolicy: "risky",
+    backgroundVerification: true,
+    autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
     enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "github"],
@@ -752,7 +756,11 @@ export const bridge = {
         code === "WORKSPACE_PATH_UNRESOLVED" ||
         /not exist|cannot inspect|not found/i.test(message);
       if (isMissing) return {};
-      if (error instanceof SyntaxError) throw new Error(".whim/config.json is not valid JSON. Fix it before Whim edits integrations.");
+      if (error instanceof SyntaxError) {
+        const configError = new Error(".whim/config.json is not valid JSON. Fix it before Whim edits integrations.");
+        (configError as Error & { cause?: unknown }).cause = error;
+        throw configError;
+      }
       throw error;
     }
   },

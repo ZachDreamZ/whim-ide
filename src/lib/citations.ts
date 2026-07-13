@@ -50,10 +50,10 @@ export function extractCitationSources(texts: readonly string[]): CitationSource
       const definition = /^\s*\[(\d{1,3})\]:\s*<?(https?:\/\/[^\s>]+)>?(?:\s+["'(]([^"')]+)["')])?/i.exec(line);
       if (definition) add(definition[2], definition[3], Number(definition[1]), line.replace(definition[0], ""));
     }
-    for (const match of text.matchAll(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/gi)) {
+    for (const match of text.matchAll(/\[([^\n]+?)\]\((https?:\/\/[^)\s]+)\)/gi)) {
       add(match[2], match[1], /^\d+$/.test(match[1]) ? Number(match[1]) : undefined);
     }
-    for (const match of text.matchAll(/https?:\/\/[^\s<>{}\[\]"']+/gi)) add(match[0]);
+    for (const match of text.matchAll(/https?:\/\/[^\s<>{}[\]"']+/gi)) add(match[0]);
   }
   return [...byUrl.values()].sort((left, right) => left.id - right.id);
 }

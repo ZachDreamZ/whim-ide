@@ -1024,7 +1024,7 @@ fn normalized_text(value: &str, limit: usize) -> String {
 /// Redact obvious assignment-style secrets before persisting user-provided
 /// intent. It intentionally errs toward redaction; the original text still
 /// remains in the current UI session, but not in the durable audit ledger.
-fn audit_text(value: &str, limit: usize) -> String {
+pub(crate) fn audit_text(value: &str, limit: usize) -> String {
     let cleaned = normalized_text(value, limit.saturating_mul(2));
     let redacted = cleaned
         .lines()

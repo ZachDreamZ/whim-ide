@@ -4,7 +4,10 @@ use super::deployment::{
     parse_candidate_changes, rollback_script, validate_deploy_value, validate_package_name,
     verification_plan_for_root,
 };
-use super::execution::{powershell_args, preferred_powershell, validate_slug};
+use super::execution::{
+    powershell_args, preferred_powershell, should_sanitize_verification_environment,
+    should_terminate_process_tree, validate_slug,
+};
 use super::orchestration::background_agent_evidence;
 use super::workspace::{
     ensure_inside, resolve_agent_workspace, resolve_existing, sanitize_relative,
@@ -28,6 +31,18 @@ fn relative_paths_reject_traversal_and_absolute_paths() {
     assert!(sanitize_relative("../secret.txt", false).is_err());
     assert!(sanitize_relative("C:\\Windows\\System32", false).is_err());
     assert!(sanitize_relative("/etc/passwd", false).is_err());
+}
+
+#[test]
+fn background_verification_processes_drop_provider_credentials() {
+    assert!(should_sanitize_verification_environment(Some("bg-123-1-0")));
+    assert!(should_sanitize_verification_environment(Some(
+        "janitor-verify-123"
+    )));
+    assert!(!should_sanitize_verification_environment(Some(
+        "user-command"
+    )));
+    assert!(!should_sanitize_verification_environment(None));
 }
 
 #[test]
@@ -287,12 +302,7 @@ fn agent_operation_has_pid_zero() {
         let op = ops.get_mut("op-pid-zero").unwrap();
         op.cancelled.store(true, Ordering::SeqCst);
 
-        // This is the guard check: pid==0 → skip terminate_process_tree.
-        let _termination_requested = op.pid == 0;
-        assert!(
-            op.pid == 0,
-            "pid must be 0 for agent ops, guard skipped OS kill"
-        );
+        assert!(!should_terminate_process_tree(op.pid));
     }
 
     assert!(
@@ -372,6 +382,26 @@ fn verification_plan_uses_fixed_entry_points_not_project_script_bodies() {
         .all(|check| !check.command.contains("preinstall")));
 
     fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn verification_plan_detects_nested_tauri_cargo_manifest() {
+    let root = std::env::temp_dir().join(format!("whim-tauri-plan-{}", Uuid::new_v4()));
+    fs::create_dir_all(root.join("src-tauri")).expect("create tauri fixture");
+    fs::write(
+        root.join("src-tauri").join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"",
+    )
+    .expect("write nested manifest");
+
+    let (checks, warnings) = verification_plan_for_root(&root);
+    assert!(warnings.is_empty());
+    assert!(checks.iter().any(|check| {
+        check.id == "cargo-check"
+            && check.command == "cargo check --manifest-path src-tauri/Cargo.toml"
+            && check.source == "src-tauri/Cargo.toml"
+    }));
+    fs::remove_dir_all(root).ok();
 }
 
 #[cfg(windows)]

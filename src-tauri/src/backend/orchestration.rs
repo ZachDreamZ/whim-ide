@@ -126,8 +126,8 @@ fn orchestration_workspace(
 }
 
 /// Map an orchestration mode to the string the native agent understands. The
-/// agent has no dedicated operate mode, so `Operate` falls back to `build`
-/// (full tool access) for maintenance and operations work.
+/// Operate maps to the restricted janitor role. It never inherits the broad
+/// build tool set merely because the task originated in the background.
 fn agent_mode_string(mode: JobMode) -> String {
     match mode {
         JobMode::Vibe => "vibe",
@@ -137,7 +137,7 @@ fn agent_mode_string(mode: JobMode) -> String {
         JobMode::Verify => "verify",
         JobMode::Review => "review",
         JobMode::Ship => "ship",
-        JobMode::Operate => "build",
+        JobMode::Operate => "janitor",
     }
     .to_string()
 }
@@ -254,13 +254,17 @@ pub async fn finish_orchestration_job(
             request.evidence,
         )
         .map_err(orchestration_error)?;
+    drop(store);
 
     // Observer Agent hook: automatically persist the mission summary as an Observation
     if let Some(summary) = request.summary {
         if !summary.trim().is_empty() && request.outcome == JobOutcome::Completed {
-            if let Ok(mut memory_store) = crate::memory::ObservationStore::from_workspace(&workspace) {
+            if let Ok(mut memory_store) =
+                crate::memory::ObservationStore::from_workspace(&workspace)
+            {
                 let _ = memory_store.append(summary, 5); // default importance
             }
+            let _ = crate::backend::reflector::run_reflector_if_needed(&workspace);
         }
     }
 
@@ -320,7 +324,8 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
         }
 
         let intent = {
-            let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+            let mut store =
+                lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
             let detail = store
                 .detail(&workspace, &request.job_id)
                 .map_err(orchestration_error)?;
@@ -349,9 +354,13 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
             root.clone(),
             crate::backend::deployment::CheckpointRequest {
                 operation_id: Some(Uuid::new_v4().to_string()),
-                label: Some(format!("Pre-task checkpoint: {}", intent.chars().take(30).collect::<String>())),
+                label: Some(format!(
+                    "Pre-task checkpoint: {}",
+                    intent.chars().take(30).collect::<String>()
+                )),
             },
-        ).await;
+        )
+        .await;
 
         let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
         let detail = store
@@ -404,8 +413,10 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
             }
         };
 
+        let agent_future = run_agent_prompt(app.clone(), agent_state, agent_request);
+        tokio::pin!(agent_future);
         tokio::select! {
-            result = run_agent_prompt(app.clone(), agent_state, agent_request) => {
+            result = &mut agent_future => {
                 let mut store = match lock(
                     &app.state::<BackendState>().inner().orchestration,
                     "orchestration",
@@ -434,13 +445,24 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                                 snippet.chars().take(500).collect::<String>()
                             ))
                         };
-                        let _ = store.finish(
+                        let finish = store.finish(
                             &workspace,
                             &job_id,
                             outcome,
-                            summary,
+                            summary.clone(),
                             background_agent_evidence(&run),
                         );
+                        drop(store);
+                        if finish.is_ok() && outcome == JobOutcome::Completed {
+                            if let Some(summary) = summary {
+                                if let Ok(mut memory_store) =
+                                    crate::memory::ObservationStore::from_workspace(&workspace)
+                                {
+                                    let _ = memory_store.append(summary, 5);
+                                }
+                            }
+                            let _ = crate::backend::reflector::run_reflector_if_needed(&workspace);
+                        }
                     }
                     Err(error) => {
                         let _ = store.finish(
@@ -458,6 +480,10 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                     app.state::<BackendState>(),
                     operation_id
                 ).await;
+                // Keep polling the cooperatively cancelled agent until its
+                // cleanup guard removes the workspace lease and reaps any
+                // background verification children.
+                let _ = agent_future.await;
             }
         }
     });

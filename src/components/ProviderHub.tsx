@@ -102,7 +102,7 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
     }
   };
 
-  useEffect(() => { void rescan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { void rescan(); }, []);
 
   const loadModels = (agentValue: string, apiKey: string, baseUrl: string) => {
     if (!apiKey?.trim() && agentValue !== "local" && agentValue !== "omniroute") return;

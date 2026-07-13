@@ -66,6 +66,7 @@ pub(crate) struct ProcessSpec {
     pub(crate) cwd: PathBuf,
     pub(crate) timeout_ms: u64,
     pub(crate) environment: Vec<(String, String)>,
+    pub(crate) environment_remove: Vec<String>,
 }
 
 pub(crate) fn validated_operation_id(value: Option<String>) -> Result<String, String> {
@@ -289,6 +290,14 @@ async fn terminate_process_tree(pid: u32) -> bool {
     }
 }
 
+pub(crate) fn should_terminate_process_tree(pid: u32) -> bool {
+    pid != 0
+}
+
+pub(crate) fn should_sanitize_verification_environment(operation_id: Option<&str>) -> bool {
+    operation_id.is_some_and(|id| id.starts_with("bg-") || id.starts_with("janitor-verify-"))
+}
+
 pub(crate) async fn execute_tracked(
     state: &BackendState,
     operation_id: Option<String>,
@@ -317,11 +326,15 @@ pub(crate) async fn execute_tracked(
         crate::harness::ExecutionAdapter::Container { image } => {
             let mut cmd = Command::new("docker");
             let cwd_str = spec.cwd.to_string_lossy().replace('\\', "/");
-            cmd.arg("run").arg("--rm")
-               .arg("-v").arg(format!("{cwd_str}:{cwd_str}"))
-               .arg("-w").arg(&cwd_str)
-               .arg(image)
-               .arg(&spec.program).args(&spec.args);
+            cmd.arg("run")
+                .arg("--rm")
+                .arg("-v")
+                .arg(format!("{cwd_str}:{cwd_str}"))
+                .arg("-w")
+                .arg(&cwd_str)
+                .arg(image)
+                .arg(&spec.program)
+                .args(&spec.args);
             cmd
         }
         crate::harness::ExecutionAdapter::Remote { host } => {
@@ -340,6 +353,9 @@ pub(crate) async fn execute_tracked(
         .env("NO_COLOR", "1");
     for (name, value) in &spec.environment {
         command.env(name, value);
+    }
+    for name in &spec.environment_remove {
+        command.env_remove(name);
     }
     hide_console(&mut command);
 
@@ -475,7 +491,13 @@ pub async fn cancel_operation(
         .cloned();
     if let Some(running) = running {
         running.cancelled.store(true, Ordering::SeqCst);
-        let termination_requested = terminate_process_tree(running.pid).await;
+        // Native agents use pid=0 as a cooperative-cancellation sentinel. PID
+        // zero is not an OS process and must never be passed to taskkill/kill.
+        let termination_requested = if should_terminate_process_tree(running.pid) {
+            terminate_process_tree(running.pid).await
+        } else {
+            false
+        };
         Ok(CancelResult {
             operation_id,
             found: true,
@@ -526,16 +548,24 @@ pub(crate) async fn run_powershell_command_at(
         return Err("PowerShell execution requires confirmed=true".to_string());
     }
     validate_label(&request.command, "PowerShell command", 64 * 1024)?;
-    
+
     let profile = crate::harness::HarnessProfile::parse(
-        &std::fs::read_to_string(root.join(crate::harness::HARNESS_PROFILE_PATH)).unwrap_or_default()
-    ).unwrap_or_default();
-    
+        &std::fs::read_to_string(root.join(crate::harness::HARNESS_PROFILE_PATH))
+            .unwrap_or_default(),
+    )
+    .unwrap_or_default();
+
     let adapter = crate::harness::ExecutionAdapter::NativeWindows;
     if !profile.permits_adapter(&adapter) {
-        return Err(format!("The active {} policy forbids the {:?} execution adapter.", crate::harness::HARNESS_PROFILE_PATH, adapter));
+        return Err(format!(
+            "The active {} policy forbids the {:?} execution adapter.",
+            crate::harness::HARNESS_PROFILE_PATH,
+            adapter
+        ));
     }
 
+    let sanitize_provider_environment =
+        should_sanitize_verification_environment(request.operation_id.as_deref());
     let timeout_ms = clamp_timeout(
         request.timeout_ms,
         DEFAULT_COMMAND_TIMEOUT_MS,
@@ -555,6 +585,22 @@ pub(crate) async fn run_powershell_command_at(
             cwd: root,
             timeout_ms,
             environment: Vec::new(),
+            environment_remove: if sanitize_provider_environment {
+                [
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                    "GOOGLE_API_KEY",
+                    "DEEPSEEK_API_KEY",
+                    "DASHSCOPE_API_KEY",
+                    "XIAOMI_API_KEY",
+                    "OMNIROUTE_API_KEY",
+                ]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+            } else {
+                Vec::new()
+            },
         },
     )
     .await

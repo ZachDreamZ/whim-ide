@@ -125,6 +125,15 @@ pub async fn create_git_worktree(
     state: State<'_, BackendState>,
     request: CreateGitWorktreeRequest,
 ) -> Result<GitWorktree, String> {
+    let selected = selected_workspace_path(state.inner())?;
+    create_git_worktree_at(state.inner(), selected, request).await
+}
+
+pub(crate) async fn create_git_worktree_at(
+    state: &BackendState,
+    selected: PathBuf,
+    request: CreateGitWorktreeRequest,
+) -> Result<GitWorktree, String> {
     let name =
         validate_worktree_name(&request.name).map_err(|error| whim_err("WORKTREE", &error))?;
     let base_ref = request
@@ -135,7 +144,6 @@ pub async fn create_git_worktree(
         .map_err(|error| whim_err("WORKTREE", &error))?
         .unwrap_or_else(|| "HEAD".to_string());
     let operation_id = validated_operation_id(request.operation_id)?;
-    let selected = selected_workspace_path(state.inner())?;
     let repo_root = git_repository_root(&selected)
         .await
         .map_err(|error| whim_err("WORKTREE", &error))?;
@@ -194,7 +202,7 @@ pub async fn create_git_worktree(
     }
     let branch = format!("whim/{name}-{suffix}");
     let result = execute_tracked(
-        state.inner(),
+        state,
         Some(operation_id),
         "git-worktree",
         ProcessSpec {
@@ -212,6 +220,7 @@ pub async fn create_git_worktree(
             cwd: repo_root.clone(),
             timeout_ms: 5 * 60 * 1000,
             environment: Vec::new(),
+            environment_remove: Vec::new(),
         },
     )
     .await
@@ -708,29 +717,40 @@ pub(crate) fn verification_plan_for_root(root: &Path) -> (Vec<VerificationCheck>
             Err(error) => warnings.push(format!("Cannot inspect package.json: {error}")),
         }
     }
-    if root.join("Cargo.toml").is_file() {
+    let cargo_manifest = if root.join("Cargo.toml").is_file() {
+        Some(("Cargo.toml", None))
+    } else if root.join("src-tauri").join("Cargo.toml").is_file() {
+        Some(("src-tauri/Cargo.toml", Some("src-tauri/Cargo.toml")))
+    } else {
+        None
+    };
+    if let Some((source, manifest_path)) = cargo_manifest {
+        let cargo_command = |subcommand: &str, suffix: &str| match manifest_path {
+            Some(path) => format!("cargo {subcommand} --manifest-path {path}{suffix}"),
+            None => format!("cargo {subcommand}{suffix}"),
+        };
         checks.extend([
             verification_check(
                 "cargo-format",
                 "Rust formatting",
-                "cargo fmt --all -- --check",
-                "Cargo.toml",
+                &cargo_command("fmt", " --all -- --check"),
+                source,
                 "core",
                 120_000,
             ),
             verification_check(
                 "cargo-check",
                 "Rust check",
-                "cargo check",
-                "Cargo.toml",
+                &cargo_command("check", ""),
+                source,
                 "core",
                 300_000,
             ),
             verification_check(
                 "cargo-test",
                 "Rust tests",
-                "cargo test",
-                "Cargo.toml",
+                &cargo_command("test", ""),
+                source,
                 "core",
                 600_000,
             ),
@@ -1505,6 +1525,7 @@ pub async fn deploy_workspace(
                 MAX_DEPLOY_TIMEOUT_MS,
             ),
             environment: vec![("CI".to_string(), "1".to_string())],
+            environment_remove: Vec::new(),
         },
     )
     .await?;

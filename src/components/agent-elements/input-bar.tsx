@@ -16,6 +16,8 @@ const DEFAULT_INPUT_CONFIG: InputConfig = {
   attachmentPreviewStyle: "thumbnail",
 };
 
+const MENTION_TOKEN = new RegExp(String.raw`(^|\s)@([A-Za-z0-9_./-]*)$`);
+
 import {
   IconChevronDown,
   IconChevronUp,
@@ -195,7 +197,7 @@ export const InputBar = memo(function InputBar({
     if (!el) return;
     const cursor = el.selectionStart;
     const textBefore = input.slice(0, cursor);
-    const match = textBefore.match(/(^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+    const match = textBefore.match(MENTION_TOKEN);
     if (!match) return;
 
     const replacement = `@${item.path} `;
@@ -217,7 +219,7 @@ export const InputBar = memo(function InputBar({
     setInput(val);
     const cursor = e.target.selectionStart;
     const textBefore = val.slice(0, cursor);
-    const match = textBefore.match(/(^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+    const match = textBefore.match(MENTION_TOKEN);
     if (match) {
       setMentionQuery(match[2]);
       setMentionIndex(0);

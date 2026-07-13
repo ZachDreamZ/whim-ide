@@ -55,6 +55,8 @@ pub struct AgentSettings {
     pub pi_model: String,
     pub speed: String,
     pub approval_policy: String,
+    pub background_verification: bool,
+    pub autonomous_janitor: bool,
     pub defer_capabilities: bool,
     pub max_parallel_agents: u8,
     pub enabled_capabilities: Vec<String>,
@@ -122,6 +124,8 @@ impl Default for AgentSettings {
             pi_model: "opencode/big-pickle".into(),
             speed: "balanced".into(),
             approval_policy: "risky".into(),
+            background_verification: true,
+            autonomous_janitor: true,
             defer_capabilities: true,
             max_parallel_agents: 4,
             enabled_capabilities: vec![
@@ -304,6 +308,8 @@ mod tests {
         validate_settings(&settings).unwrap();
         assert_eq!(settings.agent.approval_policy, "risky");
         assert_eq!(settings.agent.runtime, "native");
+        assert!(settings.agent.background_verification);
+        assert!(settings.agent.autonomous_janitor);
     }
 
     #[test]
