@@ -319,26 +319,45 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
             return Err("This project requires cryptographically signed profiles, which are not yet supported by this version of Whim.".to_string());
         }
 
+        let intent = {
+            let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+            let detail = store
+                .detail(&workspace, &request.job_id)
+                .map_err(orchestration_error)?;
+
+            if let Some(policy) = &profile.model_policy {
+                if policy == "local_only"
+                    && !detail
+                        .job
+                        .provider
+                        .as_deref()
+                        .unwrap_or("")
+                        .eq_ignore_ascii_case("local")
+                {
+                    return Err(
+                        "This project's harness profile restricts execution to local models only."
+                            .to_string(),
+                    );
+                }
+            }
+            detail.job.intent.clone()
+        };
+
+        // Trigger automated checkpoint before the agent begins writing code
+        let _ = crate::backend::deployment::workspace_checkpoint_at(
+            state.clone(),
+            root.clone(),
+            crate::backend::deployment::CheckpointRequest {
+                operation_id: Some(Uuid::new_v4().to_string()),
+                label: Some(format!("Pre-task checkpoint: {}", intent.chars().take(30).collect::<String>())),
+            },
+        ).await;
+
         let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
         let detail = store
             .detail(&workspace, &request.job_id)
             .map_err(orchestration_error)?;
 
-        if let Some(policy) = profile.model_policy {
-            if policy == "local_only"
-                && !detail
-                    .job
-                    .provider
-                    .as_deref()
-                    .unwrap_or("")
-                    .eq_ignore_ascii_case("local")
-            {
-                return Err(
-                    "This project's harness profile restricts execution to local models only."
-                        .to_string(),
-                );
-            }
-        }
         let started = store
             .transition(&workspace, &request.job_id, JobAction::Start)
             .map_err(orchestration_error)?;

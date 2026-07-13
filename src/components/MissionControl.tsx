@@ -11,6 +11,7 @@ import {
   Mic,
   ShieldCheck,
   Sparkles,
+  Undo2,
   WandSparkles,
 } from "lucide-react";
 import { AgentChat } from "./agent-elements/agent-chat";
@@ -165,6 +166,7 @@ export function MissionControl({
   const [taskDetail, setTaskDetail] = useState<OrchestrationJobDetail | null>(null);
   const [taskLedgerLoading, setTaskLedgerLoading] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [isRollingBack, setIsRollingBack] = useState(false);
   const [intentBrief, setIntentBrief] = useState<IntentBrief | null>(null);
   const [executionWorkspace, setExecutionWorkspace] = useState<string | null>(workspace);
   const [liveEvents, setLiveEvents] = useState<unknown[]>([]);
@@ -949,6 +951,27 @@ export function MissionControl({
           >
             <Database size={12} />
             {showMemory ? "Hide Memory" : "Memory"}
+          </button>
+
+          <button
+            onClick={async () => {
+              if (isRollingBack || !executionTarget && !workspace) return;
+              setIsRollingBack(true);
+              try {
+                await bridge.workspaceRollback();
+                setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "text", text: "✅ I have successfully reverted the workspace to its previous state before the last vibe run." }] } as UIMessage]);
+              } catch (e) {
+                setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "text", text: `❌ Failed to rollback: ${e}` }] } as UIMessage]);
+              } finally {
+                setIsRollingBack(false);
+              }
+            }}
+            disabled={isRollingBack}
+            className={`ml-2 px-2 py-1 rounded text-xs transition-colors flex items-center gap-1 text-[#a3a3a3] hover:text-white disabled:opacity-50`}
+            title="Undo the last Vibe run"
+          >
+            <Undo2 size={12} className={isRollingBack ? "animate-spin" : ""} />
+            {isRollingBack ? "Undoing..." : "Undo Run"}
           </button>
 
           <button

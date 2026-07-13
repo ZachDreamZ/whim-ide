@@ -718,6 +718,12 @@ export const bridge = {
     return fromCommand(result.command);
   },
 
+  async workspaceRollback(commit?: string, operationId = crypto.randomUUID()): Promise<{ operationId: string; restoredCommit: string; stashCreated: boolean }> {
+    return await call<{ operationId: string; restoredCommit: string; stashCreated: boolean }>("workspace_rollback", {
+      request: { commit: commit ?? null, operationId }
+    });
+  },
+
   async reveal(path: string): Promise<void> {
     if (!inTauri()) requireNative();
     await revealItemInDir(path);
