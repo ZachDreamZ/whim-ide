@@ -4,7 +4,8 @@ import { ChevronDown } from "lucide-react";
 export type ControlType = 
   | { type: "toggle"; value: boolean; onChange: (val: boolean) => void }
   | { type: "select"; value: string; options: string[]; onChange: (val: string) => void }
-  | { type: "segmented"; value: string; options: string[]; onChange: (val: string) => void };
+  | { type: "segmented"; value: string; options: string[]; onChange: (val: string) => void }
+  | { type: "custom"; node: ReactNode };
 
 export interface SettingsRowProps {
   label: string;
@@ -26,6 +27,9 @@ export function SettingsRow({ label, description, control, children, borderBotto
         {control.type === "toggle" && (
           <button
             type="button"
+            role="switch"
+            aria-checked={control.value}
+            aria-label={label}
             className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${control.value ? "bg-[#3498db]" : "bg-[#404040]"}`}
             onClick={() => control.onChange(!control.value)}
           >
@@ -63,6 +67,7 @@ export function SettingsRow({ label, description, control, children, borderBotto
             ))}
           </div>
         )}
+        {control.type === "custom" && control.node}
       </div>
     </div>
   );

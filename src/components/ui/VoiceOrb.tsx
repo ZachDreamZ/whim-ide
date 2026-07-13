@@ -7,11 +7,13 @@ type Props = {
   provider: string;
   apiKey?: string;
   baseUrl?: string;
+  voice?: string;
+  language?: string;
   onTranscript: (text: string) => void;
   speakText?: string;
 };
 
-export function VoiceOrb({ onClose, provider, apiKey, baseUrl, onTranscript, speakText }: Props) {
+export function VoiceOrb({ onClose, provider, apiKey, baseUrl, voice, language, onTranscript, speakText }: Props) {
   const [phase, setPhase] = useState<"listening" | "thinking" | "speaking" | "error">("listening");
   const [message, setMessage] = useState("Listening…");
   const [muted, setMuted] = useState(false);
@@ -64,7 +66,7 @@ export function VoiceOrb({ onClose, provider, apiKey, baseUrl, onTranscript, spe
     stream.current?.getTracks().forEach((track) => track.stop());
     try {
       const audio = [...new Uint8Array(await blob.arrayBuffer())];
-      const text = await bridge.transcribeVoice({ audio, mimeType: blob.type, provider, apiKey, baseUrl });
+      const text = await bridge.transcribeVoice({ audio, mimeType: blob.type, provider, apiKey, baseUrl, language });
       setMessage(text);
       onTranscript(text);
     } catch (cause) {
@@ -79,7 +81,7 @@ export function VoiceOrb({ onClose, provider, apiKey, baseUrl, onTranscript, spe
     setMessage("Speaking…");
     let objectUrl = "";
     try {
-      const bytes = await bridge.synthesizeVoice({ text: [...speakText].slice(0, 4_096).join(""), provider, apiKey, baseUrl });
+      const bytes = await bridge.synthesizeVoice({ text: [...speakText].slice(0, 4_096).join(""), provider, apiKey, baseUrl, voice });
       objectUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "audio/mpeg" }));
       activeAudioUrl.current = objectUrl;
       const audio = new Audio(objectUrl);

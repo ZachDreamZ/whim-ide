@@ -55,6 +55,52 @@ export type WorkspaceInfo = {
 
 export type AppContextResult = { source: "vscode" | "terminal" | "screenshot"; available: boolean; message: string; content?: string | null; path?: string | null; contentKind?: "text" | "image" };
 
+export type AppSettings = {
+  version: number;
+  general: {
+    showBottomPanel: boolean;
+    suggestedPrompts: boolean;
+  };
+  appearance: {
+    accent: string;
+    uiFont: string;
+    codeFont: string;
+    contrast: number;
+  };
+  voice: {
+    voice: "alloy" | "ash" | "ballad" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer" | "verse";
+    language: "auto" | "en" | "es" | "fr" | "de" | "ja" | "zh";
+  };
+  computerUse: { screenCapture: boolean; appContext: boolean };
+  agent: {
+    runtime: "native" | "pi";
+    piModel: string;
+    speed: "fast" | "balanced" | "thorough";
+    approvalPolicy: "always" | "risky";
+    deferCapabilities: boolean;
+    maxParallelAgents: number;
+    enabledCapabilities: string[];
+  };
+};
+
+export type AgentCapability = {
+  id: string;
+  description: string;
+  instructions: string;
+  tools: string[];
+  deferLoading: boolean;
+  enabled: boolean;
+};
+
+export const defaultAppSettings: AppSettings = {
+  version: 1,
+  general: { showBottomPanel: true, suggestedPrompts: true },
+  appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60 },
+  voice: { voice: "alloy", language: "auto" },
+  computerUse: { screenCapture: true, appContext: true },
+  agent: { runtime: "native", piModel: "opencode/big-pickle", speed: "balanced", approvalPolicy: "risky", deferCapabilities: true, maxParallelAgents: 4, enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation"] },
+};
+
 /** A Git-reported execution folder. `managed` means Whim created it under
  * the repository's `.whim-worktrees` sibling directory. */
 export type GitWorktree = {
@@ -312,6 +358,20 @@ function fromCommand(command: BackendCommand): NativeResult {
 export const bridge = {
   isNative: inTauri,
 
+  async appSettings(): Promise<AppSettings> {
+    if (!inTauri()) return structuredClone(defaultAppSettings);
+    return call<AppSettings>("get_app_settings");
+  },
+
+  async saveAppSettings(settings: AppSettings): Promise<AppSettings> {
+    return call<AppSettings>("save_app_settings", { settings });
+  },
+
+  async agentCapabilities(mode = "vibe"): Promise<AgentCapability[]> {
+    if (!inTauri()) return [];
+    return call<AgentCapability[]>("list_agent_capabilities", { mode });
+  },
+
   async environment(): Promise<EnvironmentReport> {
     if (!inTauri()) return { platform: "Browser preview (native features unavailable)", tools: [] };
     const report = await call<BackendEnvironment>("discover_environment");
@@ -415,7 +475,7 @@ export const bridge = {
     return call<AppContextResult>("capture_app_context", { request: { source } });
   },
 
-  async transcribeVoice(input: { audio: number[]; mimeType: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string }): Promise<string> {
+  async transcribeVoice(input: { audio: number[]; mimeType: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string; language?: string }): Promise<string> {
     const result = await call<{ text: string }>("transcribe_voice", { request: input }); return result.text;
   },
 

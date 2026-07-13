@@ -1,5 +1,6 @@
 mod agent;
 mod backend;
+mod capabilities;
 mod harness;
 mod orchestrator;
 mod worktrees;
@@ -24,6 +25,9 @@ pub fn run() {
             backend::workspace::read_workspace_file,
             backend::workspace::write_workspace_file,
             backend::context::capture_app_context,
+            backend::settings::get_app_settings,
+            backend::settings::save_app_settings,
+            capabilities::list_agent_capabilities,
             backend::voice::transcribe_voice,
             backend::voice::synthesize_voice,
             backend::execution::run_powershell_command,

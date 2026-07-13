@@ -13,6 +13,7 @@ pub mod deployment;
 pub mod execution;
 pub mod orchestration;
 pub mod provider;
+pub mod settings;
 pub mod voice;
 pub mod workspace;
 
@@ -58,6 +59,7 @@ pub struct BackendState {
     pub(crate) selected_workspace: Mutex<Option<PathBuf>>,
     pub(crate) operations: Mutex<HashMap<String, RunningOperation>>,
     pub(crate) orchestration: Mutex<DurableJobStore>,
+    pub(crate) settings: Mutex<settings::AppSettings>,
 }
 
 impl Default for BackendState {
@@ -66,6 +68,7 @@ impl Default for BackendState {
             selected_workspace: Mutex::new(None),
             operations: Mutex::new(HashMap::new()),
             orchestration: Mutex::new(DurableJobStore::default()),
+            settings: Mutex::new(settings::load_settings_from_disk()),
         }
     }
 }

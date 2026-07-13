@@ -21,6 +21,15 @@ The routing/orchestration layer now also has production seams instead of provide
 - OmniRoute endpoints are secured at the Rust boundary: loopback HTTP is allowed, remote gateways require HTTPS, and embedded URL credentials are rejected.
 - The main UI was flattened into a graphite instrument panel with one mint state accent. The decorative brand orbits, gradient/glow router, large voice orb, and fabricated "38 checks" preview card were removed; the preview now shows actual durable job evidence.
 
+The 2026-07-13 agent-runtime pass also replaces the newly introduced mock Settings surface with native behavior:
+
+- Pydantic AI v2's stable capability/spec architecture is integrated in Rust. `capabilities.rs` owns the serializable capability catalog; enabled capabilities remove tools from the runtime schema, while compact inactive guidance reduces prompt use without adding a Python sidecar.
+- Settings are versioned, validated, persisted under the user's Whim config directory, and loaded into `BackendState`. React changes are serialized so fast edits cannot save out of order.
+- Agent runtime, reasoning depth, approval posture, capability enablement, and research concurrency all change actual execution behavior. The `always` approval posture withholds mutation tools until a resumable approval UI exists.
+- Pi 0.80.6 is a selectable alternate runtime. It runs in a hidden, bounded subprocess with role-specific tool allowlists, capped output, random temporary prompt files, cancellation, timeout, and Pi-owned credentials. Gemini CLI was not detected and is not falsely advertised.
+- Computer-use switches are checked by Rust before UI Automation or screenshot capture. Voice and language settings flow into the real transcription/TTS requests. Accent, fonts, contrast, suggested prompts, and the status panel update the actual window.
+- The fabricated profile, random activity chart, dead mock interpreter, inert settings search, and twelve unfinished sidebar categories were deleted. Research findings and primary sources live in `docs/agent-runtime-research.md`.
+
 ## Important files
 
 - `src/components/CanvasWorkspace.tsx`
@@ -34,15 +43,18 @@ The routing/orchestration layer now also has production seams instead of provide
 - `src-tauri/src/backend/workspace.rs`
 - `src-tauri/src/backend/context.rs`
 - `src-tauri/src/backend/voice.rs`
+- `src-tauri/src/backend/settings.rs`
+- `src-tauri/src/capabilities.rs`
 - `src-tauri/src/agent.rs`
 - `src-tauri/src/orchestrator.rs`
 
 ## Verification from this run
 
 - `npm run build` — passed (`tsc` strict check plus Vite production build); LangGraph is emitted as a separate lazy chunk.
-- `npm test` — 17 files, 44 tests passed, including mission lifecycle ordering, failure finalization, cancellation, and role-aware routing.
-- `cargo test` — 69 tests passed, including OmniRoute route selection and endpoint validation.
+- `npm test` — 18 files, 46 tests passed, including native settings/runtime updates, mission lifecycle ordering, failure finalization, cancellation, and role-aware routing.
+- `cargo test` — 74 tests passed, including capability/tool gating, settings validation, approval posture, OmniRoute route selection, and endpoint validation.
 - `cargo check` — passed.
+- `cargo clippy --all-targets --all-features -- -D warnings` — passed.
 - `npm audit --audit-level=low` — zero known vulnerabilities after pinning patched DOMPurify transitively.
 - Browser smoke check at 1264x625 confirmed the restrained empty state, execution spine, navigation, composer, and status bar render without layout overflow.
 

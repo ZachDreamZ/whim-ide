@@ -315,13 +315,12 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
 
         if let Some(policy) = profile.model_policy {
             if policy == "local_only"
-                && detail
+                && !detail
                     .job
                     .provider
                     .as_deref()
                     .unwrap_or("")
-                    .to_ascii_lowercase()
-                    != "local"
+                    .eq_ignore_ascii_case("local")
             {
                 return Err(
                     "This project's harness profile restricts execution to local models only."

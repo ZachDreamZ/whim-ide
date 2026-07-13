@@ -21,12 +21,13 @@ import { AutopilotHub } from "./components/AutopilotHub";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
-import { ProfileSettings } from "./components/settings/pages/ProfileSettings";
 import { AppearanceSettings } from "./components/settings/pages/AppearanceSettings";
 import { VoiceSettings } from "./components/settings/pages/VoiceSettings";
 import { ComputerUseSettings } from "./components/settings/pages/ComputerUseSettings";
 import {
   bridge,
+  defaultAppSettings,
+  type AppSettings,
   type CredentialReport,
   type EnvironmentReport,
   type LocalProviderStatus,
@@ -44,6 +45,8 @@ type ReadOnlyFile = { path: string; content: string };
 function App() {
   const [view, setView] = useState<ViewId>("build");
   const [activeSettingsCategory, setActiveSettingsCategory] = useState("general");
+  const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
@@ -69,11 +72,46 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const booted = useRef(false);
   const fileRequest = useRef(0);
+  const settingsRevision = useRef(0);
+  const settingsSaveChain = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => { localStorage.setItem("whim:agent:provider", agentProvider); }, [agentProvider]);
   // API key is session-memory only; never persisted to localStorage.
   useEffect(() => { localStorage.setItem("whim:agent:baseUrl", agentBaseUrl); }, [agentBaseUrl]);
   useEffect(() => { localStorage.setItem("whim:agent:model", agentModel); }, [agentModel]);
+
+  const updateAppSettings = useCallback((next: AppSettings) => {
+    setAppSettings(next);
+    if (!bridge.isNative()) return;
+    const revision = ++settingsRevision.current;
+    setSettingsSaving(true);
+    settingsSaveChain.current = settingsSaveChain.current
+      .catch(() => undefined)
+      .then(() => bridge.saveAppSettings(next))
+      .then((saved) => {
+        if (revision === settingsRevision.current) setAppSettings(saved);
+      })
+      .catch((error) => {
+        if (revision === settingsRevision.current) {
+          setToast(`Settings were not saved: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      })
+      .finally(() => {
+        if (revision === settingsRevision.current) setSettingsSaving(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const contrast = Math.max(0, Math.min(100, appSettings.appearance.contrast));
+    root.style.setProperty("--primary", appSettings.appearance.accent);
+    root.style.setProperty("--ring", appSettings.appearance.accent);
+    root.style.setProperty("--mint", appSettings.appearance.accent);
+    root.style.setProperty("--font-body", `"${appSettings.appearance.uiFont}", "Segoe UI Variable", sans-serif`);
+    root.style.setProperty("--font-code", `"${appSettings.appearance.codeFont}", Consolas, monospace`);
+    root.style.setProperty("--border", `rgba(255, 255, 255, ${(0.035 + contrast * 0.00115).toFixed(3)})`);
+    root.style.setProperty("--line-strong", `rgba(255, 255, 255, ${(0.08 + contrast * 0.0014).toFixed(3)})`);
+  }, [appSettings.appearance]);
 
   const workspacePath = workspace?.path ?? null;
   const projectName = workspace?.name ?? "No workspace";
@@ -185,6 +223,7 @@ function App() {
     // Remove any stale API key that was previously persisted to localStorage
     localStorage.removeItem("whim:agent:apiKey");
     void (async () => {
+      setAppSettings(await bridge.appSettings().catch(() => defaultAppSettings));
       // Provider detection (PowerShell probes for Ollama/LM Studio, environment
       // discovery) runs in parallel with workspace activation so slow or
       // unreachable provider endpoints never block file reads.
@@ -267,16 +306,10 @@ function App() {
           onCategoryChange={setActiveSettingsCategory}
           onClose={() => setView("build")}
         >
-          {activeSettingsCategory === "general" && <GeneralSettings />}
-          {activeSettingsCategory === "profile" && <ProfileSettings />}
-          {activeSettingsCategory === "appearance" && <AppearanceSettings />}
-          {activeSettingsCategory === "voice" && <VoiceSettings />}
-          {activeSettingsCategory === "computer" && <ComputerUseSettings />}
-          {!["general", "profile", "appearance", "voice", "computer"].includes(activeSettingsCategory) && (
-            <div className="flex items-center justify-center h-full text-[#a3a3a3]">
-              Setting section under construction.
-            </div>
-          )}
+          {activeSettingsCategory === "general" && <GeneralSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "appearance" && <AppearanceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "voice" && <VoiceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "computer" && <ComputerUseSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
         </SettingsLayout>
       )}
       <Titlebar projectName={projectName} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProjectClick={openWorkspace} />
@@ -315,6 +348,9 @@ function App() {
                     provider={agentProvider}
                     apiKey={agentApiKey}
                     baseUrl={agentBaseUrl}
+                    voice={appSettings.voice.voice}
+                    voiceLanguage={appSettings.voice.language}
+                    showSuggestedPrompts={appSettings.general.suggestedPrompts}
                     onRunComplete={() => void refreshWorkspace()}
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                   />
@@ -357,7 +393,7 @@ function App() {
           workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")
         )}
       </div>
-      <footer className="statusbar">
+      {appSettings.general.showBottomPanel && <footer className="statusbar">
         <div>
           <span><GitBranch size={11} /> {branch ?? (workspace?.gitRepository ? "Git" : "No repository")}</span>
           <span><Check size={11} /> {changes.length} change{changes.length === 1 ? "" : "s"}</span>
@@ -368,7 +404,7 @@ function App() {
           <span><CloudOff size={11} /> Local workspace</span>
           <span><Sparkles size={11} /> Whim 0.4</span>
         </div>
-      </footer>
+      </footer>}
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}
     </div>

@@ -7,7 +7,7 @@ use std::{
 };
 use tauri::State;
 
-use super::{workspace::selected_workspace_path, BackendState};
+use super::{lock, workspace::selected_workspace_path, BackendState};
 
 const MAX_CONTEXT_CHARS: usize = 16_000;
 
@@ -159,9 +159,16 @@ pub fn capture_app_context(
     state: State<'_, BackendState>,
     request: AppContextRequest,
 ) -> Result<AppContextResult, String> {
+    let permissions = lock(&state.settings, "settings")?.computer_use.clone();
     match request.source.as_str() {
-        "vscode" | "terminal" => read_window(&request.source),
-        "screenshot" => capture_screenshot(&selected_workspace_path(state.inner())?),
+        "vscode" | "terminal" if permissions.app_context => read_window(&request.source),
+        "vscode" | "terminal" => {
+            Err("App context is disabled in Whim Settings > Computer use".into())
+        }
+        "screenshot" if permissions.screen_capture => {
+            capture_screenshot(&selected_workspace_path(state.inner())?)
+        }
+        "screenshot" => Err("Screen capture is disabled in Whim Settings > Computer use".into()),
         _ => Err("Unknown desktop context source".into()),
     }
 }

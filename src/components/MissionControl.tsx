@@ -59,6 +59,9 @@ type MissionControlProps = {
   provider: string;
   apiKey?: string;
   baseUrl?: string;
+  voice?: string;
+  voiceLanguage?: string;
+  showSuggestedPrompts?: boolean;
   onRunComplete?: () => void;
   onActivityChange?: (running: boolean) => void;
 };
@@ -131,6 +134,9 @@ export function MissionControl({
   provider,
   apiKey,
   baseUrl,
+  voice = "alloy",
+  voiceLanguage = "auto",
+  showSuggestedPrompts = true,
   onRunComplete,
   onActivityChange,
 }: MissionControlProps) {
@@ -729,7 +735,7 @@ export function MissionControl({
 
   return (
     <div className="flex w-full h-full overflow-hidden">
-      {showVoiceMode && <VoiceOrb provider={provider} apiKey={apiKey} baseUrl={baseUrl} speakText={latestAssistantText} onTranscript={(text) => { setShowVoiceMode(false); void send({ role: "user", content: text }); }} onClose={() => setShowVoiceMode(false)} />}
+      {showVoiceMode && <VoiceOrb provider={provider} apiKey={apiKey} baseUrl={baseUrl} voice={voice} language={voiceLanguage} speakText={latestAssistantText} onTranscript={(text) => { setShowVoiceMode(false); void send({ role: "user", content: text }); }} onClose={() => setShowVoiceMode(false)} />}
       <aside className={`mission-control flex-1 ${(showPreview || mode === "implementer") ? "mission-control-split" : ""}`}>
         {/* Top Header */}
         <header className="mission-header">
@@ -846,12 +852,12 @@ export function MissionControl({
               </div>
             </div>
           }
-          suggestions={[
+          suggestions={showSuggestedPrompts ? [
             { id: "explore", label: "Explore and understand code", value: "Explore and understand code in this workspace." },
             { id: "build", label: "Build a new feature, app, or tool", value: "Build a new feature, app, or tool." },
             { id: "review", label: "Review code and suggest changes", value: "Review code and suggest changes." },
             { id: "fix", label: "Fix issues and failures", value: "Fix issues and failures." },
-          ]}
+          ] : []}
           attachments={{
             onAttach: () => {
               const id = crypto.randomUUID();

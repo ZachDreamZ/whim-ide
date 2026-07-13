@@ -13,6 +13,7 @@ pub struct TranscribeRequest {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub model: Option<String>,
+    pub language: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,9 +181,18 @@ pub async fn transcribe_voice(request: TranscribeRequest) -> Result<Transcript, 
         .file_name(format!("voice.{ext}"))
         .mime_str(mime)
         .map_err(|error| error.to_string())?;
-    let form = reqwest::multipart::Form::new()
+    let mut form = reqwest::multipart::Form::new()
         .part("file", part)
         .text("model", request.model.unwrap_or_else(|| "whisper-1".into()));
+    if let Some(language) = request
+        .language
+        .filter(|language| !language.trim().is_empty() && language != "auto")
+    {
+        if !["en", "es", "fr", "de", "ja", "zh"].contains(&language.as_str()) {
+            return Err("Unsupported transcription language".into());
+        }
+        form = form.text("language", language);
+    }
     let mut builder = client(&base, &provider)
         .await?
         .post(endpoint(&base, "audio/transcriptions"))

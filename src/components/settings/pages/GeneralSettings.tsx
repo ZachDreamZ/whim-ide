@@ -1,96 +1,72 @@
-import { useState } from "react";
+import { Bot, Gauge, Layers3, ShieldCheck } from "lucide-react";
+import type { AppSettings } from "../../../lib/bridge";
 import { SettingsRow } from "../SettingsRow";
 
-export function GeneralSettings() {
-  const [defaultPermissions, setDefaultPermissions] = useState(false);
-  const [autoReview, setAutoReview] = useState(true);
-  const [fullAccess, setFullAccess] = useState(false);
+type Props = {
+  settings: AppSettings;
+  onChange: (next: AppSettings) => void;
+  saving: boolean;
+};
 
-  const [fileOpenDest, setFileOpenDest] = useState("VS Code");
-  const [agentEnv, setAgentEnv] = useState("Windows native");
-  const [terminalShell, setTerminalShell] = useState("PowerShell");
-  const [language, setLanguage] = useState("Auto detect");
-  const [bottomPanel, setBottomPanel] = useState(true);
-  const [terminalLocation, setTerminalLocation] = useState("Bottom");
-  const [speed, setSpeed] = useState("Fast");
-  const [suggestedPrompts, setSuggestedPrompts] = useState(true);
+const capabilityLabels: Record<string, { label: string; description: string }> = {
+  research: { label: "Research fan-out", description: "Allow bounded, read-only parallel investigations with durable child tasks." },
+  coding: { label: "Workspace coding", description: "Expose scoped write, edit, checkpoint, and rollback tools in mutating roles." },
+  verification: { label: "Native verification", description: "Expose project-discovered checks and local preview evidence." },
+  "pi-delegation": { label: "Pi delegation", description: "Allow the installed Pi runtime and its global subagent tooling." },
+};
 
-  return (
-    <div className="max-w-[700px] mx-auto px-10 py-12">
-      <h1 className="text-2xl font-medium text-white mb-10">General</h1>
+export function GeneralSettings({ settings, onChange, saving }: Props) {
+  const updateAgent = (patch: Partial<AppSettings["agent"]>) => onChange({ ...settings, agent: { ...settings.agent, ...patch } });
+  const updateGeneral = (patch: Partial<AppSettings["general"]>) => onChange({ ...settings, general: { ...settings.general, ...patch } });
+  const toggleCapability = (id: string, enabled: boolean) => {
+    const current = settings.agent.enabledCapabilities;
+    updateAgent({ enabledCapabilities: enabled ? [...new Set([...current, id])] : current.filter((item) => item !== id) });
+  };
 
-      <div className="mb-10">
-        <h2 className="text-sm font-semibold text-[#ececf1] mb-3">Permissions</h2>
-        <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
-          <SettingsRow 
-            label="Default permissions" 
-            description="By default, Whim IDE can read and edit files in its workspace. It can ask for additional access when needed"
-            control={{ type: "toggle", value: defaultPermissions, onChange: setDefaultPermissions }}
+  return <div className="max-w-[760px] mx-auto px-10 py-12">
+    <header className="mb-9">
+      <h1 className="text-2xl font-medium text-white">Agent runtime</h1>
+      <p className="mt-2 text-sm text-white/50">Every control below is persisted by Rust and changes the actual execution boundary.</p>
+    </header>
+
+    <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Bot size={15}/> Runtime</div>
+      <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
+        <SettingsRow label="Execution engine" description={settings.agent.runtime === "pi" ? "Runs the installed Pi CLI as a hidden, cancellable subprocess using Pi's own credential store." : "Runs Whim's provider-neutral Rust agent loop and native tool boundary."} control={{ type: "select", value: settings.agent.runtime, options: ["native", "pi"], onChange: (runtime) => updateAgent({ runtime: runtime as AppSettings["agent"]["runtime"] }) }}/>
+        {settings.agent.runtime === "pi" && (
+          <SettingsRow
+            label="Pi model"
+            description="A model currently exposed by the installed Pi provider catalog."
+            control={{
+              type: "select",
+              value: settings.agent.piModel,
+              options: ["opencode/big-pickle", "opencode/hy3-free", "opencode/deepseek-v4-flash-free"],
+              onChange: (piModel) => updateAgent({ piModel }),
+            }}
           />
-          <SettingsRow 
-            label="Auto-review" 
-            description="Whim IDE automatically reviews requests for additional access. Auto-review can make mistakes."
-            control={{ type: "toggle", value: autoReview, onChange: setAutoReview }}
-          >
-            <a href="#" className="text-[#3498db] hover:underline">Learn more</a> about elevated risks.
-          </SettingsRow>
-          <SettingsRow 
-            label="Full access" 
-            description="When Whim IDE runs with full access, it can edit any file on your computer and run commands with network, without your approval. This significantly increases the risk of data loss, leaks, or unexpected behavior."
-            control={{ type: "toggle", value: fullAccess, onChange: setFullAccess }}
-            borderBottom={false}
-          >
-            <a href="#" className="text-[#3498db] hover:underline">Learn more</a> about elevated risks.
-          </SettingsRow>
-        </div>
+        )}
+        <SettingsRow label="Execution depth" description="Changes native tool-iteration limits and Pi reasoning effort." control={{ type: "select", value: settings.agent.speed, options: ["fast", "balanced", "thorough"], onChange: (speed) => updateAgent({ speed: speed as AppSettings["agent"]["speed"] }) }}/>
+        <SettingsRow label="Sensitive tool policy" description={settings.agent.approvalPolicy === "always" ? "Mutating tools are withheld until Whim has a resumable approval UI." : "Workspace edits are allowed, while destructive commands and external side effects remain blocked natively."} control={{ type: "select", value: settings.agent.approvalPolicy, options: ["risky", "always"], onChange: (approvalPolicy) => updateAgent({ approvalPolicy: approvalPolicy as AppSettings["agent"]["approvalPolicy"] }) }}/>
+        <SettingsRow label="Compact capability catalog" description="Send inactive capabilities as one-line descriptions instead of full runtime guidance to reduce context use." control={{ type: "toggle", value: settings.agent.deferCapabilities, onChange: (deferCapabilities) => updateAgent({ deferCapabilities }) }}/>
+        <SettingsRow label="Parallel research limit" description="Hard cap for independent child investigations spawned by one research call." control={{ type: "segmented", value: String(settings.agent.maxParallelAgents), options: ["1", "2", "4", "8"], onChange: (value) => updateAgent({ maxParallelAgents: Number(value) }) }} borderBottom={false}/>
       </div>
+    </section>
 
-      <div className="mb-10">
-        <h2 className="text-sm font-semibold text-[#ececf1] mb-3">General</h2>
-        <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
-          <SettingsRow 
-            label="Default file open destination" 
-            description="Where files and folders open by default"
-            control={{ type: "select", value: fileOpenDest, options: ["VS Code", "Cursor", "System default"], onChange: setFileOpenDest }}
-          />
-          <SettingsRow 
-            label="Agent environment" 
-            description="Choose where the agent runs on Windows"
-            control={{ type: "select", value: agentEnv, options: ["Windows native", "WSL", "Docker"], onChange: setAgentEnv }}
-          />
-          <SettingsRow 
-            label="Integrated terminal shell" 
-            description="Choose which shell opens in the integrated terminal."
-            control={{ type: "select", value: terminalShell, options: ["PowerShell", "Command Prompt", "Git Bash"], onChange: setTerminalShell }}
-          />
-          <SettingsRow 
-            label="Language" 
-            description="Language for the app UI"
-            control={{ type: "select", value: language, options: ["Auto detect", "English", "Spanish", "French"], onChange: setLanguage }}
-          />
-          <SettingsRow 
-            label="Bottom panel" 
-            description="Show the bottom panel control in the app header"
-            control={{ type: "toggle", value: bottomPanel, onChange: setBottomPanel }}
-          />
-          <SettingsRow 
-            label="Default terminal location" 
-            description="Choose where the terminal shortcut and environment actions open terminal tabs"
-            control={{ type: "segmented", value: terminalLocation, options: ["Bottom", "Right"], onChange: setTerminalLocation }}
-          />
-          <SettingsRow 
-            label="Speed" 
-            description="Choose how quickly Whim runs across tasks, subagents, and compaction"
-            control={{ type: "select", value: speed, options: ["Fast", "Balanced", "Thorough"], onChange: setSpeed }}
-          />
-          <SettingsRow 
-            label="Suggested prompts" 
-            description="Suggest what to do next by searching project files and connected apps"
-            control={{ type: "toggle", value: suggestedPrompts, onChange: setSuggestedPrompts }}
-            borderBottom={false}
-          />
-        </div>
+    <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Layers3 size={15}/> Capabilities</div>
+      <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
+        {Object.entries(capabilityLabels).map(([id, item], index, entries) => <SettingsRow key={id} label={item.label} description={item.description} control={{ type: "toggle", value: settings.agent.enabledCapabilities.includes(id), onChange: (enabled) => toggleCapability(id, enabled) }} borderBottom={index !== entries.length - 1}/>) }
       </div>
-    </div>
-  );
+    </section>
+
+    <section>
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Gauge size={15}/> Interface</div>
+      <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
+        <SettingsRow label="Suggested prompts" description="Show repository-aware starter prompts in an empty Mission Control session." control={{ type: "toggle", value: settings.general.suggestedPrompts, onChange: (suggestedPrompts) => updateGeneral({ suggestedPrompts }) }}/>
+        <SettingsRow label="Bottom status panel" description="Show live Git, native runtime, and workspace status at the bottom of Whim." control={{ type: "toggle", value: settings.general.showBottomPanel, onChange: (showBottomPanel) => updateGeneral({ showBottomPanel }) }} borderBottom={false}/>
+      </div>
+    </section>
+
+    <p className="mt-5 flex items-center gap-2 text-xs text-white/40"><ShieldCheck size={13}/>{saving ? "Saving native configuration…" : "Saved in the local Whim application config directory."}</p>
+  </div>;
 }
