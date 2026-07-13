@@ -526,6 +526,16 @@ pub(crate) async fn run_powershell_command_at(
         return Err("PowerShell execution requires confirmed=true".to_string());
     }
     validate_label(&request.command, "PowerShell command", 64 * 1024)?;
+    
+    let profile = crate::harness::HarnessProfile::parse(
+        &std::fs::read_to_string(root.join(crate::harness::HARNESS_PROFILE_PATH)).unwrap_or_default()
+    ).unwrap_or_default();
+    
+    let adapter = crate::harness::ExecutionAdapter::NativeWindows;
+    if !profile.permits_adapter(&adapter) {
+        return Err(format!("The active {} policy forbids the {:?} execution adapter.", crate::harness::HARNESS_PROFILE_PATH, adapter));
+    }
+
     let timeout_ms = clamp_timeout(
         request.timeout_ms,
         DEFAULT_COMMAND_TIMEOUT_MS,
@@ -536,7 +546,7 @@ pub(crate) async fn run_powershell_command_at(
         request.operation_id,
         "powershell",
         ProcessSpec {
-            adapter: crate::harness::ExecutionAdapter::NativeWindows,
+            adapter,
             program: preferred_powershell(),
             args: powershell_args(request.command, false),
             display_command: request

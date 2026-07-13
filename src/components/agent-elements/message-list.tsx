@@ -6,12 +6,12 @@ import React, {
   useCallback,
   useState,
   useMemo,
+  Suspense,
 } from "react";
 import type { UIMessage, ChatStatus } from "ai";
 import { cn } from "./utils/cn";
 
 import { UserMessage } from "./user-message";
-import { Markdown } from "./markdown";
 import { ErrorMessage } from "./error-message";
 import type { CustomToolRendererProps } from "./types";
 import { ToolRowBase } from "./tools/tool-row-base";
@@ -19,6 +19,8 @@ import { IconCopy, IconCheck } from "@tabler/icons-react";
 import { ToolRenderer as DefaultToolRenderer } from "./tools/tool-renderer";
 import { normalizeAssistantToolParts } from "./utils/tool-part-normalizer";
 import { SpiralLoader } from "./spiral-loader";
+
+const Markdown = React.lazy(() => import("./markdown").then(m => ({ default: m.Markdown })));
 
 export type MessageListProps = {
   messages: UIMessage[];
@@ -701,10 +703,12 @@ function AssistantParts({
               key={`${msg.id}-text-${i}`}
               className="group/assistant-text text-[14px]"
             >
-              <Markdown
-                content={text}
-                className="leading-relaxed [&_p]:leading-relaxed"
-              />
+              <Suspense fallback={null}>
+                <Markdown
+                  content={text}
+                  className="leading-relaxed [&_p]:leading-relaxed"
+                />
+              </Suspense>
             </div>,
           );
         }

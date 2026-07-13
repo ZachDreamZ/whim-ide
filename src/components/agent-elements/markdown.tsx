@@ -43,6 +43,8 @@ export type MarkdownProps = {
   textContrast?: "normal" | "high";
 };
 
+import { CitationChip } from "../ui/SourcesSidebar";
+
 const code = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
@@ -169,6 +171,12 @@ export function Markdown({ content, className }: MarkdownProps) {
         {children}
       </td>
     ),
+    cite: ({ "data-citation": citationId, ...props }: any) => {
+      if (citationId) {
+        return <CitationChip id={Number(citationId)} />;
+      }
+      return <cite {...props} />;
+    },
   };
 
   return (

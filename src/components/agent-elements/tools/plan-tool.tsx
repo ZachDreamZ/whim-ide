@@ -1,10 +1,10 @@
-import { memo, useState } from "react";
+import React, { memo, useState, Suspense } from "react";
 import {
   IconChevronsDown,
   IconChevronsUp,
   IconFileDescription,
 } from "@tabler/icons-react";
-import { Markdown } from "../markdown";
+const Markdown = React.lazy(() => import("../markdown").then(m => ({ default: m.Markdown })));
 import { IconSpinner } from "../icons";
 import { areToolPropsEqual, getToolStatus } from "../utils/format-tool";
 import { cn } from "../utils/cn";
@@ -104,7 +104,9 @@ export const PlanTool = memo(function PlanTool({
                   !isExpanded && "max-h-[94px] overflow-hidden",
                 )}
               >
-                <Markdown content={summary} className="text-sm" />
+                <Suspense fallback={null}>
+                  <Markdown content={summary} className="text-sm" />
+                </Suspense>
               </div>
 
               {!isExpanded && (

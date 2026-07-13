@@ -2,6 +2,7 @@ mod agent;
 mod backend;
 mod capabilities;
 mod harness;
+mod memory;
 mod orchestrator;
 mod worktrees;
 
@@ -59,6 +60,7 @@ pub fn run() {
             backend::orchestration::record_verification_result,
             agent::run_agent_prompt,
             agent::list_provider_models,
+            memory::get_observational_memory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Whim IDE");

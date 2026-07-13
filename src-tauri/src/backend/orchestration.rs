@@ -245,15 +245,26 @@ pub async fn finish_orchestration_job(
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .map_err(orchestration_error)?;
     let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
-    store
+    let job = store
         .finish(
             &workspace,
             &request.job_id,
             request.outcome,
-            request.summary,
+            request.summary.clone(),
             request.evidence,
         )
-        .map_err(orchestration_error)
+        .map_err(orchestration_error)?;
+
+    // Observer Agent hook: automatically persist the mission summary as an Observation
+    if let Some(summary) = request.summary {
+        if !summary.trim().is_empty() && request.outcome == JobOutcome::Completed {
+            if let Ok(mut memory_store) = crate::memory::ObservationStore::from_workspace(&workspace) {
+                let _ = memory_store.append(summary, 5); // default importance
+            }
+        }
+    }
+
+    Ok(job)
 }
 
 #[tauri::command]

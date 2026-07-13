@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Database,
   GitCompareArrows,
   LoaderCircle,
   Mic,
@@ -22,6 +23,7 @@ import { LivePreviewCanvas } from "./LivePreviewCanvas";
 import { CanvasWorkspace } from "./CanvasWorkspace";
 import { VoiceOrb } from "./ui/VoiceOrb";
 import { SourcesSidebar } from "./ui/SourcesSidebar";
+import { MemoryLedgerSidebar } from "./MemoryLedgerSidebar";
 import { AppContextMenu } from "./AppContextMenu";
 import {
   agentEventsToParts,
@@ -146,6 +148,7 @@ export function MissionControl({
   const [showPreview, setShowPreview] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [showSources, setShowSources] = useState(false);
+  const [showMemory, setShowMemory] = useState(false);
   const [activeCitation, setActiveCitation] = useState<number | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const [lastDuration, setLastDuration] = useState<number | null>(null);
@@ -941,6 +944,14 @@ export function MissionControl({
           </button>
 
           <button
+            onClick={() => { setShowMemory(!showMemory); setShowSources(false); setShowPreview(false); }}
+            className={`ml-2 px-2 py-1 rounded text-xs transition-colors flex items-center gap-1 ${showMemory ? "bg-white/10 text-white" : "text-[#a3a3a3] hover:text-white"}`}
+          >
+            <Database size={12} />
+            {showMemory ? "Hide Memory" : "Memory"}
+          </button>
+
+          <button
             onClick={() => setShowPreview(!showPreview)}
             className={`ml-2 px-2 py-1 rounded text-xs transition-colors ${showPreview ? "bg-white/10 text-white" : "text-[#a3a3a3] hover:text-white"}`}
           >
@@ -973,6 +984,9 @@ export function MissionControl({
     )}
     {showSources && (
       <SourcesSidebar sources={citationSources} activeId={activeCitation} onClose={() => setShowSources(false)} />
+    )}
+    {showMemory && (executionTarget ?? workspace) && (
+      <MemoryLedgerSidebar workspace={(executionTarget ?? workspace)!} onClose={() => setShowMemory(false)} />
     )}
     </div>
   );

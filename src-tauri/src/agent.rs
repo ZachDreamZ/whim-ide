@@ -549,6 +549,16 @@ fn load_memory_at(root: &Path) -> String {
         ".whim/notes.md",
     ];
     let mut parts: Vec<String> = Vec::new();
+    
+    // Inject Observational Memory ledger first
+    if let Ok(store) = crate::memory::ObservationStore::from_workspace(&root.to_string_lossy()) {
+        if let Ok(obs_context) = store.get_formatted_context() {
+            if !obs_context.trim().is_empty() {
+                parts.push(obs_context);
+            }
+        }
+    }
+
     for name in candidates {
         match crate::backend::read_workspace_file_at(
             root,
@@ -1591,6 +1601,37 @@ async fn run_tool(
                     &operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
+            }
+        }
+        "github" => {
+            let command = arguments["command"].as_str().unwrap_or("").to_string();
+            if command.is_empty() {
+                Err("The github tool requires a 'command' argument.".to_string())
+            } else if let Some(reason) = is_destructive_command(&command) {
+                Err(format!(
+                    "Refused potentially destructive github command ({reason})."
+                ))
+            } else {
+                let gh_command = format!("gh {}", command.trim_start_matches("gh "));
+                match crate::backend::run_powershell_command_at(
+                    state.clone(),
+                    root.to_path_buf(),
+                    PowerShellRequest {
+                        command: gh_command,
+                        confirmed: true,
+                        timeout_ms: Some(DEFAULT_COMMAND_TIMEOUT_MS),
+                        operation_id: None,
+                        display_command: None,
+                    },
+                )
+                .await
+                {
+                    Ok(result) => Ok(format!(
+                        "exit={:?} success={}\nSTDOUT:\n{}\nSTDERR:\n{}",
+                        result.exit_code, result.success, result.stdout, result.stderr
+                    )),
+                    Err(error) => Err(error),
+                }
             }
         }
         other => Err(format!("Unknown tool '{other}'")),

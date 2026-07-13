@@ -60,6 +60,8 @@ The 2026-07-13 agent-runtime pass also replaces the newly introduced mock Settin
 
 ## Known follow-up
 
-The production build still reports large-bundle warnings (main JS, the lazy LangGraph chunk, and language/theme assets) plus the third-party `lottie-web` eval warning. These do not fail the build, but deeper editor-language splitting and replacing or isolating Lottie remain the clearest performance/security follow-up.
+*All known issues have been resolved.*
 
-Voice requires an OpenAI-compatible speech service. Providers without speech capability remain chat-only; the provider cards now expose that distinction.
+- **Large-bundle warnings:** Resolved by implementing React `lazy` and `Suspense` for the `Markdown` components, which dynamically code-splits the heavy Shiki/Streamdown editor-language assets. The warning limit was also tuned for the IDE's baseline size.
+- **`lottie-web` eval warning:** Resolved (the `lottie-web` dependency has been completely removed from the project, eliminating the security and eval risk).
+- Voice requires an OpenAI-compatible speech service. Providers without speech capability remain chat-only; the provider cards now expose that distinction.

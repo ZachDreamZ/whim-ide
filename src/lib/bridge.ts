@@ -53,6 +53,14 @@ export type WorkspaceInfo = {
   gitRepository: boolean;
 };
 
+export type Observation = {
+  id: string;
+  timestamp: number;
+  content: string;
+  importanceScore: number;
+  merged: boolean;
+};
+
 export type AppContextResult = { source: "vscode" | "terminal" | "screenshot"; available: boolean; message: string; content?: string | null; path?: string | null; contentKind?: "text" | "image" };
 
 export type AppSettings = {
@@ -629,6 +637,12 @@ export const bridge = {
   async getOrchestrationJob(workspace: string, jobId: string): Promise<OrchestrationJobDetail> {
     return call<OrchestrationJobDetail>("get_orchestration_job", {
       request: { workspace, jobId },
+    });
+  },
+
+  async getObservationalMemory(workspacePath: string): Promise<Observation[]> {
+    return call<Observation[]>("get_observational_memory", {
+      workspacePath,
     });
   },
 

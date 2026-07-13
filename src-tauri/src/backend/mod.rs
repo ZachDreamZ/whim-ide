@@ -13,6 +13,7 @@ pub mod deployment;
 pub mod execution;
 pub mod orchestration;
 pub mod provider;
+pub mod reflector;
 pub mod settings;
 pub mod voice;
 pub mod workspace;

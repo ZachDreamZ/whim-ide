@@ -73,8 +73,10 @@ pub struct HarnessProfile {
     #[serde(default)]
     pub require_signed_profiles: Option<bool>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub recovery_procedures: Option<Vec<String>>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub evaluator_visible_snapshots: Option<bool>,
 }
 
@@ -197,6 +199,13 @@ impl HarnessProfile {
             }
         }
         Ok(())
+    }
+
+    pub fn permits_adapter(&self, adapter: &ExecutionAdapter) -> bool {
+        match &self.environment_adapters {
+            Some(allowed) => allowed.contains(adapter),
+            None => true,
+        }
     }
 
     pub fn permits_tool(&self, tool: &str) -> bool {
