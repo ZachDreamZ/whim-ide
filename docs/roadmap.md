@@ -78,15 +78,14 @@ Whim can create and target real Git worktrees, and the task ledger, intent brief
 
 Verification discovery recognizes a small fixed list of conventional commands and does not read or execute arbitrary script bodies until the user explicitly clicks a displayed command. The native Verify agent mode uses that same allowlist after the user explicitly starts a Verify task; it cannot issue a generic shell command or edit files. This is still a local native process check, not a browser, accessibility, security, visual-regression, migration-safety, or deployment verifier. A passed package script remains evidence of that script's result, not a guarantee that every user journey or production environment is correct.
 
-## Phase 2 — core vibe loop
+## Phase 2 — core vibe loop (Chat-First & Canvas-First)
 
-Build the loop that moves from a vague request to a reviewable, working preview:
+Build the loop that moves from a vague request to a reviewable, working preview, integrating deeply with the ChatGPT-style interface:
 
-1. Extend the implemented text intent brief into materially useful extraction and review, then add voice, image, URL, Figma, screenshot, document, and structured-requirement intake.
-2. Create a durable plan and checkpoint before broad changes.
-3. Add a live preview canvas with element selection, annotation, responsive views, visual variants, and before/after comparison.
-4. Produce semantic diffs: user-facing intent, files, dependency impact, risk, and test evidence.
-5. Expand the initial path inventory into an incremental content/symbol index for routes, schemas, tests, design tokens, freshness, and reviewed project memory.
+1. **Multimodal Attachment Menu**: Extend the input bar with a `+` attachment menu to support image, URL, Figma, document, and structured-requirement intake directly into the chat context.
+2. **Context-Aware Mentions**: Expand the initial path inventory into a `@workspace` and `@file` mention system in the chat input for instant semantic index retrieval.
+3. **Canvas Enhancements**: Expand the split-pane Canvas with visual variants, before/after layout comparisons, and deeper semantic diffs.
+4. **Durable Planning**: Create a durable plan and checkpoint before broad changes, exposed as a "Plan" step in the Data Analysis block.
 
 ## Phase 3 — durable agent harness
 
@@ -97,19 +96,21 @@ Build the loop that moves from a vague request to a reviewable, working preview:
 - Expand the implemented per-project `whim.harness.json` restriction profile with environment adapters, model policy, recovery procedures, signed reviewed profile changes, and evaluator-visible profile snapshots.
 - Evaluation pipeline using real issue fixtures, representative greenfield tasks, security cases, trajectory evidence, and harness variant comparisons.
 
-## Phase 4 — full application platform
+## Phase 4 — application platform (Integrated Chat Workflows)
 
-- Provider-neutral backend/service provisioning for data, auth, storage, queues, cron, email, payments, analytics, and environment configuration.
-- Versioned deployment manifest plus adapters for preview, staging, production, rollback, teardown, domains, health checks, and observed runtime evidence.
-- Real plugin/MCP runtime with signed packages, lifecycle controls, isolated execution, one permission model, version pinning, and rollback.
-- GitHub issue/PR flows, reviews, team handoffs, comments, shared policies, and local-first operation without a cloud account.
+Heavy platform features exposed naturally through the chat and Canvas interface:
+
+- **Dynamic Search & Analysis**: Real plugin/MCP runtime powering the Search and Data Analysis blocks. The agent can dynamically load plugins (e.g., database clients, auth providers) and render results natively in the chat.
+- **Canvas "Ship It" Deployments**: Versioned deployment manifest plus adapters (preview, staging, production) executed via a "Ship It" button directly in the Canvas Workspace.
+- **GitHub Integrations**: PR flows, reviews, and team handoffs managed via chat commands and Canvas comments, avoiding complex DevOps dashboards.
+- Provider-neutral backend/service provisioning (data, auth, storage) via chat-driven scaffolding.
 
 ## Phase 5 — all-around vibe-coding workspace
 
-- Voice, image, URL, Figma, and direct-canvas workflows.
-- PWA, React Native/Expo, Tauri, Android, and iOS delivery using shared tokens and backend contracts.
-- Operations: logs, traces, health, incident diagnosis, rollback, release notes, and continuously reviewed project knowledge.
-- Team/enterprise governance, remote agents, cloud runners, marketplace distribution, and outcome benchmarks across quality, safety, portability, recovery, and cost.
+- **Flawless Voice Mode**: Perfect the real-time Voice Orb experience for hands-free local coding.
+- **Deep Research Subagents**: Scale the researcher mode to spawn and visualize dozens of parallel subagents for massive codebase refactors.
+- Multi-platform delivery (PWA, React Native/Expo, Tauri, Android, iOS) using shared tokens and backend contracts.
+- Operations tooling: logs, traces, and incident diagnosis streamed directly into the Data Analysis block for real-time debugging.
 
 ## Success gates
 
