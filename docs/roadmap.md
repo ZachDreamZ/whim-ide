@@ -78,7 +78,7 @@ Whim can create and target real Git worktrees, and the task ledger, intent brief
 
 Verification discovery recognizes a small fixed list of conventional commands and does not read or execute arbitrary script bodies until the user explicitly clicks a displayed command. The native Verify agent mode uses that same allowlist after the user explicitly starts a Verify task; it cannot issue a generic shell command or edit files. This is still a local native process check, not a browser, accessibility, security, visual-regression, migration-safety, or deployment verifier. A passed package script remains evidence of that script's result, not a guarantee that every user journey or production environment is correct.
 
-## Phase 2 — core vibe loop (Chat-First & Canvas-First)
+## Phase 2 — core vibe loop (Chat-First & Canvas-First) (Implemented)
 
 Build the loop that moves from a vague request to a reviewable, working preview, integrating deeply with the ChatGPT-style interface:
 
@@ -87,7 +87,7 @@ Build the loop that moves from a vague request to a reviewable, working preview,
 3. **Canvas Enhancements**: Expand the split-pane Canvas with visual variants, before/after layout comparisons, and deeper semantic diffs.
 4. **Durable Planning**: Create a durable plan and checkpoint before broad changes, exposed as a "Plan" step in the Data Analysis block.
 
-## Phase 3 — durable agent harness
+## Phase 3 — durable agent harness (Implemented)
 
 - Scheduler, queues, retries, budgets, cancellation, and recovery built on the task ledger contract.
 - Specialist roles: planner, researcher, implementer, reviewer, tester, security reviewer, designer, debugger, and release agent.

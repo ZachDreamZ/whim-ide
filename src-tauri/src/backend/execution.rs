@@ -59,6 +59,7 @@ pub struct CancelResult {
 }
 
 pub(crate) struct ProcessSpec {
+    pub(crate) adapter: crate::harness::ExecutionAdapter,
     pub(crate) program: String,
     pub(crate) args: Vec<String>,
     pub(crate) display_command: String,
@@ -299,9 +300,38 @@ pub(crate) async fn execute_tracked(
         return Err(format!("Operation '{operation_id}' is already running"));
     }
 
-    let mut command = Command::new(&spec.program);
+    let mut command = match &spec.adapter {
+        crate::harness::ExecutionAdapter::NativeWindows => {
+            let mut cmd = Command::new(&spec.program);
+            cmd.args(&spec.args);
+            cmd
+        }
+        crate::harness::ExecutionAdapter::Wsl { distro } => {
+            let mut cmd = Command::new("wsl.exe");
+            if let Some(d) = distro {
+                cmd.arg("-d").arg(d);
+            }
+            cmd.arg("--").arg(&spec.program).args(&spec.args);
+            cmd
+        }
+        crate::harness::ExecutionAdapter::Container { image } => {
+            let mut cmd = Command::new("docker");
+            let cwd_str = spec.cwd.to_string_lossy().replace('\\', "/");
+            cmd.arg("run").arg("--rm")
+               .arg("-v").arg(format!("{cwd_str}:{cwd_str}"))
+               .arg("-w").arg(&cwd_str)
+               .arg(image)
+               .arg(&spec.program).args(&spec.args);
+            cmd
+        }
+        crate::harness::ExecutionAdapter::Remote { host } => {
+            let mut cmd = Command::new("ssh");
+            cmd.arg(host).arg("--").arg(&spec.program).args(&spec.args);
+            cmd
+        }
+    };
+
     command
-        .args(&spec.args)
         .current_dir(&spec.cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -506,6 +536,7 @@ pub(crate) async fn run_powershell_command_at(
         request.operation_id,
         "powershell",
         ProcessSpec {
+            adapter: crate::harness::ExecutionAdapter::NativeWindows,
             program: preferred_powershell(),
             args: powershell_args(request.command, false),
             display_command: request

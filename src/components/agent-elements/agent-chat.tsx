@@ -30,6 +30,7 @@ export function AgentChat({
   style,
   leftActions,
   rightActions,
+  mentionContextPaths,
 }: AgentChatProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
@@ -86,6 +87,7 @@ export function AgentChat({
       suggestions={showInputSuggestions ? suggestions : []}
       leftActions={leftActions}
       rightActions={rightActions}
+      mentionContextPaths={mentionContextPaths}
       questionBar={
         pendingQuestion
           ? {

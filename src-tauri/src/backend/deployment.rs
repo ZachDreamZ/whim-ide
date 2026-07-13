@@ -198,6 +198,7 @@ pub async fn create_git_worktree(
         Some(operation_id),
         "git-worktree",
         ProcessSpec {
+            adapter: crate::harness::ExecutionAdapter::NativeWindows,
             program: "git".to_string(),
             args: vec![
                 "worktree".to_string(),
@@ -1490,6 +1491,7 @@ pub async fn deploy_workspace(
         request.operation_id,
         &format!("deploy-{}", preflight.cli_name),
         ProcessSpec {
+            adapter: crate::harness::ExecutionAdapter::NativeWindows,
             program: preferred_powershell(),
             args: powershell_args(tool_script(&cli_path, &args), false),
             display_command: preflight

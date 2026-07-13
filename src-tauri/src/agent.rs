@@ -163,9 +163,13 @@ impl AgentRole {
 
     fn permits_tool(self, name: &str) -> bool {
         match self {
-            Self::Planner | Self::Researcher | Self::Reviewer | Self::SecurityReviewer => matches!(
+            Self::Planner | Self::Researcher | Self::SecurityReviewer => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research"
+            ),
+            Self::Reviewer => matches!(
+                name,
+                "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "github"
             ),
             Self::Tester => matches!(
                 name,

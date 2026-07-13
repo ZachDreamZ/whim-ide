@@ -5,7 +5,6 @@ import { GenericTool } from "./generic-tool";
 import { BashTool } from "./bash-tool";
 import { EditTool } from "./edit-tool";
 import { TodoTool } from "./todo-tool";
-import { PlanTool } from "./plan-tool";
 import { ToolGroup } from "./tool-group";
 import { McpTool, unwrapMcpOutput } from "./mcp-tool";
 import { ThinkingTool } from "./thinking-tool";
@@ -51,8 +50,19 @@ export const ToolRenderer = memo(function ToolRenderer({
     case "tool-Grep":
     case "tool-Glob":
       return <SearchTool part={part} />;
-    case "tool-PlanWrite":
-      return <PlanTool part={part} chatStatus={chatStatus} />;
+    case "tool-PlanWrite": {
+      const plan = part.input?.plan;
+      const code = plan ? `${plan.title}\n\n${plan.summary || ""}`.trim() : "";
+      const { isPending, isError } = getToolStatus(part, chatStatus);
+      return (
+        <DataAnalysisBlock
+          type="plan"
+          code={code}
+          language="markdown"
+          status={isPending ? "running" : isError ? "error" : "success"}
+        />
+      );
+    }
     case "tool-TodoWrite":
       return <TodoTool part={part} chatStatus={chatStatus} />;
     case "tool-Question":

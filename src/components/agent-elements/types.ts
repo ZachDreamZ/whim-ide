@@ -136,6 +136,9 @@ export type AgentChatProps = {
     isDragOver?: boolean;
   };
 
+  /** Context paths for @mentions */
+  mentionContextPaths?: string[];
+
   /** Show copy toolbar on text turns */
   showCopyToolbar?: boolean;
 

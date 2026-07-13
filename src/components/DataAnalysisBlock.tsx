@@ -2,13 +2,14 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Terminal, CheckCircle2, LoaderCircle, Copy, Check } from "lucide-react";
 
 type DataAnalysisBlockProps = {
+  type?: "analysis" | "plan";
   code: string;
   output?: string;
   status: "running" | "success" | "error";
   language?: string;
 };
 
-export function DataAnalysisBlock({ code, output, status, language = "python" }: DataAnalysisBlockProps) {
+export function DataAnalysisBlock({ type = "analysis", code, output, status, language = "python" }: DataAnalysisBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -17,6 +18,8 @@ export function DataAnalysisBlock({ code, output, status, language = "python" }:
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const isPlan = type === "plan";
 
   return (
     <div className="my-3 rounded-xl border border-white/10 bg-[#1a1a1a] overflow-hidden">
@@ -35,7 +38,10 @@ export function DataAnalysisBlock({ code, output, status, language = "python" }:
             <Terminal size={14} className="text-red-400 shrink-0" />
           )}
           <span className="text-xs font-medium text-white/80">
-            {status === "running" ? "Analyzing..." : status === "success" ? "Analysis complete" : "Execution error"}
+            {isPlan 
+              ? (status === "running" ? "Planning..." : status === "success" ? "Plan created" : "Plan failed")
+              : (status === "running" ? "Analyzing..." : status === "success" ? "Analysis complete" : "Execution error")
+            }
           </span>
           <span className="text-[10px] text-white/30 font-mono uppercase tracking-wider">{language}</span>
         </div>

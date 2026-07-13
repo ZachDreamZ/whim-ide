@@ -53,6 +53,22 @@ export function GeneralSettings({ settings, onChange, saving }: Props) {
     </section>
 
     <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Layers3 size={15}/> Execution Environment</div>
+      <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
+        <SettingsRow label="Default Adapter" description="The execution environment where local tools are run." control={{ type: "select", value: settings.agent.defaultAdapter || "native", options: ["native", "wsl", "container", "remote"], onChange: (defaultAdapter) => updateAgent({ defaultAdapter }) }}/>
+        {settings.agent.defaultAdapter === "wsl" && (
+          <SettingsRow label="WSL Distro" description="The name of the WSL distribution to use (e.g., Ubuntu)." control={{ type: "input", value: settings.agent.wslDistro || "", onChange: (wslDistro) => updateAgent({ wslDistro }) }} />
+        )}
+        {settings.agent.defaultAdapter === "container" && (
+          <SettingsRow label="Container Image" description="The docker image to run the environment in." control={{ type: "input", value: settings.agent.containerImage || "", onChange: (containerImage) => updateAgent({ containerImage }) }} />
+        )}
+        {settings.agent.defaultAdapter === "remote" && (
+          <SettingsRow label="Remote Host" description="The SSH connection string for the remote host." control={{ type: "input", value: settings.agent.remoteHost || "", onChange: (remoteHost) => updateAgent({ remoteHost }) }} borderBottom={false} />
+        )}
+      </div>
+    </section>
+
+    <section className="mb-8">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Layers3 size={15}/> Capabilities</div>
       <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
         {Object.entries(capabilityLabels).map(([id, item], index, entries) => <SettingsRow key={id} label={item.label} description={item.description} control={{ type: "toggle", value: settings.agent.enabledCapabilities.includes(id), onChange: (enabled) => toggleCapability(id, enabled) }} borderBottom={index !== entries.length - 1}/>) }

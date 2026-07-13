@@ -5,6 +5,7 @@ export type ControlType =
   | { type: "toggle"; value: boolean; onChange: (val: boolean) => void }
   | { type: "select"; value: string; options: string[]; onChange: (val: string) => void }
   | { type: "segmented"; value: string; options: string[]; onChange: (val: string) => void }
+  | { type: "input"; value: string; onChange: (val: string) => void; placeholder?: string }
   | { type: "custom"; node: ReactNode };
 
 export interface SettingsRowProps {
@@ -66,6 +67,15 @@ export function SettingsRow({ label, description, control, children, borderBotto
               </button>
             ))}
           </div>
+        )}
+        {control.type === "input" && (
+          <input
+            type="text"
+            value={control.value}
+            onChange={(e) => control.onChange(e.target.value)}
+            placeholder={control.placeholder}
+            className="appearance-none bg-white/5 border border-white/10 hover:border-white/20 focus:border-white/30 rounded-md px-3 py-1.5 text-sm outline-none transition-colors text-[#ececf1] min-w-[200px]"
+          />
         )}
         {control.type === "custom" && control.node}
       </div>

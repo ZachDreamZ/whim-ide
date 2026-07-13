@@ -58,6 +58,10 @@ pub struct AgentSettings {
     pub defer_capabilities: bool,
     pub max_parallel_agents: u8,
     pub enabled_capabilities: Vec<String>,
+    pub default_adapter: String,
+    pub wsl_distro: String,
+    pub container_image: String,
+    pub remote_host: String,
 }
 
 impl Default for AppSettings {
@@ -127,6 +131,10 @@ impl Default for AgentSettings {
                 "verification".into(),
                 "pi-delegation".into(),
             ],
+            default_adapter: "native".into(),
+            wsl_distro: "Ubuntu".into(),
+            container_image: "ubuntu:latest".into(),
+            remote_host: "user@localhost".into(),
         }
     }
 }

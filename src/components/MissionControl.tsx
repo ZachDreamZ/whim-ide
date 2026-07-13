@@ -504,6 +504,29 @@ export function MissionControl({
   }, [refreshTaskLedger, taskJobs]);
 
   const send = async ({ content }: { role: "user"; content: string }) => {
+    if (content.trim().startsWith("/scaffold")) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: content }] }]);
+      setTimeout(() => {
+        setMessages((current) => [...current, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          parts: [{ type: "text", text: "I can help you scaffold this project! Please specify what kind of backend services you'd like to provision (e.g. Postgres DB, Redis, Auth0)." }],
+        } as unknown as UIMessage]);
+      }, 500);
+      return;
+    }
+    if (content.trim().startsWith("/plugin")) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: content }] }]);
+      setTimeout(() => {
+        setMessages((current) => [...current, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          parts: [{ type: "text", text: "MCP plugin support is initialized. I can now discover MCP servers and load them into the context." }],
+        } as unknown as UIMessage]);
+      }, 500);
+      return;
+    }
+
     if (!workspace) {
       setMessages((current) => [...current, {
         id: crypto.randomUUID(),

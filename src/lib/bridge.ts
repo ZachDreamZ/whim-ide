@@ -80,6 +80,10 @@ export type AppSettings = {
     deferCapabilities: boolean;
     maxParallelAgents: number;
     enabledCapabilities: string[];
+    defaultAdapter: string;
+    wslDistro: string;
+    containerImage: string;
+    remoteHost: string;
   };
 };
 
@@ -98,7 +102,19 @@ export const defaultAppSettings: AppSettings = {
   appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60 },
   voice: { voice: "alloy", language: "auto" },
   computerUse: { screenCapture: true, appContext: true },
-  agent: { runtime: "native", piModel: "opencode/big-pickle", speed: "balanced", approvalPolicy: "risky", deferCapabilities: true, maxParallelAgents: 4, enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation"] },
+  agent: {
+    runtime: "native",
+    piModel: "opencode/big-pickle",
+    speed: "balanced",
+    approvalPolicy: "risky",
+    deferCapabilities: true,
+    maxParallelAgents: 4,
+    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "github"],
+    defaultAdapter: "native",
+    wslDistro: "Ubuntu",
+    containerImage: "ubuntu:latest",
+    remoteHost: "user@localhost",
+  },
 };
 
 /** A Git-reported execution folder. `managed` means Whim created it under

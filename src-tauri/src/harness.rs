@@ -35,7 +35,17 @@ const KNOWN_TOOLS: &[&str] = &[
     "rollback",
     "preview",
     "tunnel",
+    "github",
 ];
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ExecutionAdapter {
+    NativeWindows,
+    Wsl { distro: Option<String> },
+    Container { image: String },
+    Remote { host: String },
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,32 +56,26 @@ pub struct HarnessProfile {
     pub name: Option<String>,
     #[serde(default)]
     pub instructions: Option<String>,
-    /// An allow-list that can remove built-in tools; omitted means no extra
-    /// restriction. Values are checked against `KNOWN_TOOLS` on load.
     #[serde(default)]
     pub allowed_tools: Option<Vec<String>>,
-    /// Prefix allow-list for Whim's direct write/edit tools. Shell commands
-    /// are independently controlled by `allowedTools`; this is not a process
-    /// sandbox and is described as such in the profile context.
     #[serde(default)]
     pub allowed_write_paths: Option<Vec<String>>,
-    /// Suggested, visible commands for the agent to consider. They are never
-    /// automatically executed merely because they appear in the profile.
     #[serde(default)]
     pub verification_commands: Vec<String>,
-    /// A profile may lower, but never raise, the native maximum iteration cap.
     #[serde(default)]
     pub max_tool_iterations: Option<usize>,
-    /// A profile may lower, but never raise, a task's requested timeout.
     #[serde(default)]
     pub max_duration_ms: Option<u64>,
     #[serde(default)]
-    #[allow(dead_code)]
-    pub environment_adapters: Option<Vec<String>>,
+    pub environment_adapters: Option<Vec<ExecutionAdapter>>,
     #[serde(default)]
     pub model_policy: Option<String>,
     #[serde(default)]
     pub require_signed_profiles: Option<bool>,
+    #[serde(default)]
+    pub recovery_procedures: Option<Vec<String>>,
+    #[serde(default)]
+    pub evaluator_visible_snapshots: Option<bool>,
 }
 
 impl Default for HarnessProfile {
@@ -88,6 +92,8 @@ impl Default for HarnessProfile {
             environment_adapters: None,
             model_policy: None,
             require_signed_profiles: None,
+            recovery_procedures: None,
+            evaluator_visible_snapshots: None,
         }
     }
 }

@@ -7,7 +7,7 @@ describe("GeneralSettings", () => {
   it("emits a persisted runtime change", () => {
     const onChange = vi.fn();
     render(<GeneralSettings settings={structuredClone(defaultAppSettings)} onChange={onChange} saving={false} />);
-    fireEvent.change(screen.getByDisplayValue("native"), { target: { value: "pi" } });
+    fireEvent.change(screen.getAllByDisplayValue("native")[0], { target: { value: "pi" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ agent: expect.objectContaining({ runtime: "pi" }) }));
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback, useRef, useEffect } from "react";
+import { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { ChatStatus } from "ai";
 import { cn } from "./utils/cn";
 
@@ -32,6 +32,7 @@ import type {
   QuestionAnswer,
   QuestionConfig,
 } from "./question/question-prompt";
+import { MentionMenu, type MentionItem } from "./input/mention-menu";
 
 export type AttachedImage = {
   id: string;
@@ -120,6 +121,9 @@ export type InputBarProps = {
   leftActions?: React.ReactNode;
   /** Content rendered on the right of the toolbar, before the send button. */
   rightActions?: React.ReactNode;
+
+  /** Context paths for @mentions */
+  mentionContextPaths?: string[];
 };
 
 export const InputBar = memo(function InputBar({
@@ -146,6 +150,7 @@ export const InputBar = memo(function InputBar({
   questionBar,
   leftActions,
   rightActions,
+  mentionContextPaths = [],
 }: InputBarProps) {
   const [internalInput, setInternalInput] = useState("");
   const [isInfoBarOpen, setIsInfoBarOpen] = useState(true);
@@ -170,6 +175,56 @@ export const InputBar = memo(function InputBar({
 
   const isStreaming = status === "streaming" || status === "submitted";
   const isTyping = typingAnimation?.isActive ?? false;
+
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const mentionOptions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const query = mentionQuery.toLowerCase();
+    const options: MentionItem[] = [
+      { type: "workspace", path: "Workspace" },
+      ...mentionContextPaths.map(p => ({ type: "file" as const, path: p }))
+    ];
+    if (!query) return options;
+    return options.filter(o => o.path.toLowerCase().includes(query));
+  }, [mentionQuery, mentionContextPaths]);
+
+  const handleMentionSelect = useCallback((item: MentionItem) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const cursor = el.selectionStart;
+    const textBefore = input.slice(0, cursor);
+    const match = textBefore.match(/(^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+    if (!match) return;
+
+    const replacement = `@${item.path} `;
+    const startIdx = cursor - match[2].length - 1;
+    const newText = input.slice(0, startIdx) + replacement + input.slice(cursor);
+    setInput(newText);
+    setMentionQuery(null);
+    setMentionIndex(0);
+    
+    requestAnimationFrame(() => {
+      el.focus();
+      const newCursor = startIdx + replacement.length;
+      el.setSelectionRange(newCursor, newCursor);
+    });
+  }, [input, setInput]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+    const cursor = e.target.selectionStart;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/(^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+    if (match) {
+      setMentionQuery(match[2]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }, [setInput]);
 
   const { displayedText, showImage } = useInputTyping(
     typingAnimation?.text ?? "",
@@ -369,12 +424,34 @@ export const InputBar = memo(function InputBar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (mentionQuery !== null) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setMentionIndex(i => (i + 1) % mentionOptions.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setMentionIndex(i => (i - 1 + mentionOptions.length) % mentionOptions.length);
+          return;
+        }
+        if (e.key === "Enter" && mentionOptions[mentionIndex]) {
+          e.preventDefault();
+          handleMentionSelect(mentionOptions[mentionIndex]);
+          return;
+        }
+        if (e.key === "Escape") {
+          setMentionQuery(null);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit],
+    [handleSubmit, mentionQuery, mentionOptions, mentionIndex, handleMentionSelect],
   );
 
   const hasInput = input.trim().length > 0;
@@ -495,7 +572,17 @@ export const InputBar = memo(function InputBar({
             )}
 
             {/* Text input or typing animation text */}
-            <div className="pt-3 pb-0 pr-3 pl-3.5 min-h-[44px]">
+            <div className="pt-3 pb-0 pr-3 pl-3.5 min-h-[44px] relative">
+              {mentionQuery !== null && (
+                <div className="absolute bottom-full left-3 z-50">
+                  <MentionMenu
+                    items={mentionOptions}
+                    selectedIndex={mentionIndex}
+                    onSelect={handleMentionSelect}
+                    onClose={() => setMentionQuery(null)}
+                  />
+                </div>
+              )}
               {isTyping ? (
                 <div className="w-full text-[14px] leading-[1.6] text-an-foreground-muted">
                   <span>{displayedText}</span>
@@ -506,7 +593,7 @@ export const InputBar = memo(function InputBar({
                   <textarea
                     ref={textareaRef}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     onPaste={onPaste}
                     placeholder={effectivePlaceholder}
