@@ -9,6 +9,9 @@ export type IntentBrief = {
   designDirection: string;
   integrations: string[];
   risks: string[];
+  attachments: Array<{ type: string; url: string; name?: string }>;
+  mode: "vibe" | "agentic";
+  verificationStrategy: string;
   updatedAtMs: number;
 };
 
@@ -76,6 +79,9 @@ export function createIntentBrief(
     designDirection: text(input.designDirection, MAX_DETAIL_LENGTH, true),
     integrations: lines(input.integrations),
     risks: lines(input.risks),
+    attachments: Array.isArray(input.attachments) ? input.attachments as Array<{ type: string; url: string; name?: string }> : [],
+    mode: input.mode === "agentic" ? "agentic" : "vibe",
+    verificationStrategy: text(input.verificationStrategy, MAX_DETAIL_LENGTH, true),
     updatedAtMs: Number.isFinite(updatedAtMs) && updatedAtMs > 0 ? Math.round(updatedAtMs) : Date.now(),
   };
 }
@@ -89,7 +95,9 @@ export function hasIntentBriefContent(brief: IntentBrief | null | undefined) {
       brief.acceptanceCriteria.length ||
       brief.designDirection ||
       brief.integrations.length ||
-      brief.risks.length
+      brief.risks.length ||
+      brief.attachments.length ||
+      brief.verificationStrategy
     ),
   );
 }
@@ -106,6 +114,9 @@ export function parseIntentBrief(serialized: string): IntentBrief | null {
       designDirection: value.designDirection,
       integrations: value.integrations,
       risks: value.risks,
+      attachments: value.attachments,
+      mode: value.mode,
+      verificationStrategy: value.verificationStrategy,
     }, typeof value.updatedAtMs === "number" ? value.updatedAtMs : Date.now());
     return hasIntentBriefContent(brief) ? brief : null;
   } catch {
@@ -136,6 +147,9 @@ export function intentBriefForAgent(brief: IntentBrief | null | undefined) {
     brief?.designDirection ? `Design direction:\n${brief.designDirection}` : "",
     bulletSection("Integrations", brief?.integrations ?? []),
     bulletSection("Risks to preserve", brief?.risks ?? []),
+    brief?.verificationStrategy ? `Verification Strategy:\n${brief.verificationStrategy}` : "",
+    `Development Mode: ${brief?.mode || "vibe"}`,
+    bulletSection("Attachments", brief?.attachments?.map(a => `${a.name ? a.name + ' ' : ''}(${a.type}): ${a.url}`) ?? []),
     "[END USER-REVIEWED PROJECT INTENT]",
   ].filter(Boolean);
   return sections.join("\n\n");

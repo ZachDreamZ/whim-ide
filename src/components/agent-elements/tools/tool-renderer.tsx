@@ -11,6 +11,7 @@ import { McpTool, unwrapMcpOutput } from "./mcp-tool";
 import { ThinkingTool } from "./thinking-tool";
 import { SearchTool } from "./search-tool";
 import { QuestionTool } from "../question/question-tool";
+import { DataAnalysisBlock } from "../../DataAnalysisBlock";
 import type { CustomToolRendererProps } from "../types";
 
 export type ToolRendererProps = {
@@ -72,6 +73,27 @@ export const ToolRenderer = memo(function ToolRenderer({
       );
     case "tool-Thinking":
       return <ThinkingTool part={part} />;
+    case "tool-CodeExecution":
+    case "tool-DataAnalysis":
+    case "tool-RunCode": {
+      const input = (part.input ?? {}) as Record<string, unknown>;
+      const code = String(input.code ?? input.script ?? input.source ?? "");
+      const lang = String(input.language ?? input.lang ?? "python");
+      const output = part.output
+        ? typeof part.output === "string"
+          ? part.output
+          : JSON.stringify(part.output, null, 2)
+        : undefined;
+      const { isPending, isError } = getToolStatus(part, chatStatus);
+      return (
+        <DataAnalysisBlock
+          code={code}
+          output={output}
+          language={lang}
+          status={isPending ? "running" : isError ? "error" : "success"}
+        />
+      );
+    }
   }
 
   // MCP tools

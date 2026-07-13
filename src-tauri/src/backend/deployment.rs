@@ -1521,6 +1521,24 @@ pub struct ProviderStatus {
     pub has_key: bool,
     pub base_url: Option<String>,
     pub note: Option<String>,
+    pub capabilities: ProviderCapabilities,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCapabilities {
+    pub chat: bool,
+    pub speech_to_text: bool,
+    pub text_to_speech: bool,
+}
+
+fn capabilities(provider: &str) -> ProviderCapabilities {
+    let openai_voice = matches!(provider, "openai" | "compatible");
+    ProviderCapabilities {
+        chat: true,
+        speech_to_text: openai_voice,
+        text_to_speech: openai_voice,
+    }
 }
 
 fn tcp_reachable(host: &str, port: u16) -> bool {
@@ -1533,6 +1551,7 @@ fn tcp_reachable(host: &str, port: u16) -> bool {
 
 #[tauri::command]
 pub fn discover_providers() -> Vec<ProviderStatus> {
+    let omniroute = tcp_reachable("127.0.0.1", 20128);
     let ollama = tcp_reachable("127.0.0.1", 11434);
     let lm_studio = tcp_reachable("127.0.0.1", 1234);
     let local_base = if ollama {
@@ -1556,7 +1575,26 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         } else {
             None
         },
+        capabilities: capabilities("local"),
     }];
+    out.push(ProviderStatus {
+        provider: "omniroute".to_string(),
+        label: "OmniRoute".to_string(),
+        kind: "gateway".to_string(),
+        available: omniroute,
+        has_key: std::env::var("OMNIROUTE_API_KEY")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false),
+        base_url: Some("http://127.0.0.1:20128/v1".to_string()),
+        note: Some(if omniroute {
+            "Local routing gateway detected on :20128; endpoint key is optional unless OmniRoute requires one."
+                .to_string()
+        } else {
+            "Start OmniRoute to enable automatic free, cheap, fast, and coding routes."
+                .to_string()
+        }),
+        capabilities: capabilities("omniroute"),
+    });
     let cloud: &[(&str, &str, &str)] = &[
         ("openai", "OPENAI_API_KEY", "OpenAI"),
         ("anthropic", "ANTHROPIC_API_KEY", "Anthropic"),
@@ -1575,6 +1613,7 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
             has_key: has,
             base_url: None,
             note: None,
+            capabilities: capabilities(provider),
         });
     }
     out

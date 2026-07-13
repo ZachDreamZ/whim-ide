@@ -184,6 +184,7 @@ fn credential_provider(name: &str) -> Option<&'static str> {
         "ANTHROPIC_API_KEY" => Some("anthropic"),
         "GOOGLE_GENERATIVE_AI_API_KEY" | "GEMINI_API_KEY" | "GOOGLE_API_KEY" => Some("google"),
         "OPENROUTER_API_KEY" => Some("openrouter"),
+        "OMNIROUTE_API_KEY" => Some("omniroute"),
         "OPENCODE_API_KEY" => Some("opencode"),
         "VERCEL_AI_GATEWAY_API_KEY" | "AI_GATEWAY_API_KEY" => Some("vercel"),
         "GROQ_API_KEY" => Some("groq"),
@@ -433,6 +434,9 @@ pub async fn discover_local_ai_providers(
     let lm_studio_tool = resolve_tool("lms", selected.as_deref())
         .await
         .unwrap_or_else(|_| unavailable_tool("lms"));
+    let omniroute_tool = resolve_tool("omniroute", selected.as_deref())
+        .await
+        .unwrap_or_else(|_| unavailable_tool("omniroute"));
     let ollama_available = ollama_tool.available;
     let _ollama_cli_path = if ollama_available {
         ollama_tool.path.clone()
@@ -505,6 +509,27 @@ pub async fn discover_local_ai_providers(
     lm_studio_models.dedup_by(|left, right| left.id == right.id);
     let lm_studio_reachable = lm_studio_json.is_some();
 
+    let omniroute_endpoint = "http://127.0.0.1:20128/v1/models".to_string();
+    let (omniroute_json, omniroute_detail) =
+        fetch_local_json(&omniroute_endpoint, timeout_ms).await;
+    let mut omniroute_models = omniroute_json
+        .as_ref()
+        .and_then(|value| value.get("data"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|model| {
+            let id = model.get("id").and_then(Value::as_str)?;
+            (!id.trim().is_empty()).then(|| LocalModel {
+                id: id.to_string(),
+                name: id.to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    omniroute_models.sort_by(|left, right| left.id.cmp(&right.id));
+    omniroute_models.dedup_by(|left, right| left.id == right.id);
+    let omniroute_reachable = omniroute_json.is_some();
+
     Ok(LocalProvidersResult {
         providers: vec![
             LocalProviderStatus {
@@ -534,6 +559,20 @@ pub async fn discover_local_ai_providers(
                 },
                 models: lm_studio_models,
                 detail: lm_studio_detail,
+            },
+            LocalProviderStatus {
+                id: "omniroute".to_string(),
+                name: "OmniRoute".to_string(),
+                detected: omniroute_tool.available || omniroute_reachable,
+                reachable: omniroute_reachable,
+                endpoint: omniroute_endpoint,
+                cli_path: if omniroute_tool.available {
+                    omniroute_tool.path
+                } else {
+                    None
+                },
+                models: omniroute_models,
+                detail: omniroute_detail,
             },
         ],
     })

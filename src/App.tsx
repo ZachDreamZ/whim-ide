@@ -10,9 +10,8 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { Titlebar } from "./components/Titlebar";
-import { WorkspaceRail, type ViewId } from "./components/WorkspaceRail";
+import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-import { OrchestrationRibbon } from "./components/OrchestrationRibbon";
 import { MissionControl } from "./components/MissionControl";
 import { OrchestrationPanel } from "./components/OrchestrationPanel";
 import { ProviderHub } from "./components/ProviderHub";
@@ -20,6 +19,12 @@ import { EcosystemHub } from "./components/EcosystemHub";
 import { ShipHub } from "./components/ShipHub";
 import { AutopilotHub } from "./components/AutopilotHub";
 import { CommandPalette } from "./components/CommandPalette";
+import { SettingsLayout } from "./components/settings/SettingsLayout";
+import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
+import { ProfileSettings } from "./components/settings/pages/ProfileSettings";
+import { AppearanceSettings } from "./components/settings/pages/AppearanceSettings";
+import { VoiceSettings } from "./components/settings/pages/VoiceSettings";
+import { ComputerUseSettings } from "./components/settings/pages/ComputerUseSettings";
 import {
   bridge,
   type CredentialReport,
@@ -38,6 +43,7 @@ type ReadOnlyFile = { path: string; content: string };
 
 function App() {
   const [view, setView] = useState<ViewId>("build");
+  const [activeSettingsCategory, setActiveSettingsCategory] = useState("general");
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
@@ -46,7 +52,7 @@ function App() {
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [model] = useState("auto");
+
   const [models] = useState<string[]>([]);
   const [agentProvider, setAgentProvider] = useState(() => localStorage.getItem("whim:agent:provider") ?? "auto");
   const [agentApiKey, setAgentApiKey] = useState("");
@@ -58,7 +64,7 @@ function App() {
   const [profile, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
-  const [activity, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
+  const [, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const booted = useRef(false);
@@ -74,7 +80,7 @@ function App() {
 
   const runModel = agentModel;
   const onRunModelChange = setAgentModel;
-  const agentReady = agentProvider === "auto" || agentProvider === "local" || agentApiKey.trim().length > 0;
+  const agentReady = agentProvider === "auto" || agentProvider === "local" || agentProvider === "omniroute" || agentApiKey.trim().length > 0;
 
   const refreshProviders = useCallback(async (_root?: string | null, _refreshCatalog = false) => {
     const [environmentResult, credentialsResult, localResult] = await Promise.allSettled([
@@ -234,7 +240,7 @@ function App() {
     [refreshProviders, workspacePath],
   );
 
-  const modelLabel = useMemo(() => model === "auto" ? "Provider default" : model.split("/").slice(1).join("/").replace(/[-_]/g, " ") || model, [model]);
+
   const contextItems = useMemo(() => [
     ...(profile.framework ? [{ id: "framework", label: profile.framework, tone: "violet" as const }] : []),
     ...(profile.packageManager ? [{ id: "packages", label: profile.packageManager, tone: "mint" as const }] : []),
@@ -254,13 +260,32 @@ function App() {
   );
 
   return (
-    <div className="whim-app">
-      <Titlebar projectName={projectName} model={modelLabel} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProviderClick={() => setView("providers")} onProjectClick={openWorkspace} />
+    <div className="whim-app relative">
+      {view === "settings" && (
+        <SettingsLayout
+          activeCategory={activeSettingsCategory}
+          onCategoryChange={setActiveSettingsCategory}
+          onClose={() => setView("build")}
+        >
+          {activeSettingsCategory === "general" && <GeneralSettings />}
+          {activeSettingsCategory === "profile" && <ProfileSettings />}
+          {activeSettingsCategory === "appearance" && <AppearanceSettings />}
+          {activeSettingsCategory === "voice" && <VoiceSettings />}
+          {activeSettingsCategory === "computer" && <ComputerUseSettings />}
+          {!["general", "profile", "appearance", "voice", "computer"].includes(activeSettingsCategory) && (
+            <div className="flex items-center justify-center h-full text-[#a3a3a3]">
+              Setting section under construction.
+            </div>
+          )}
+        </SettingsLayout>
+      )}
+      <Titlebar projectName={projectName} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProjectClick={openWorkspace} />
       <div className="app-body">
-        <WorkspaceRail active={view} onChange={setView} changeCount={changes.length} onSourceControl={() => setView("build")} />
-        {view === "build" ? (
+        {view === "build" || view === "providers" || view === "ecosystem" || view === "orchestrate" || view === "ship" ? (
           <div className="build-workspace">
             <ProjectSidebar
+              activeView={view}
+              onViewChange={setView}
               workspace={workspacePath ?? "No workspace open"}
               activeFile={activeFile}
               entries={entries}
@@ -277,27 +302,39 @@ function App() {
               onOpenBrief={readme ? () => void chooseFile(readme.path) : undefined}
             />
             <div className="workbench">
-              <OrchestrationRibbon
-                workspaceOpen={Boolean(workspacePath)}
-                state={activity}
-                detail={activity === "agent" ? "Whim agent is working in this workspace" : profile.framework ? `${profile.framework} project detected` : undefined}
-                onPause={() => window.dispatchEvent(new Event("whim:stop-agent"))}
-              />
               <div className="workbench-main agent-first">
-                <MissionControl
-                  workspace={workspacePath}
-                  workspaceEntries={entries}
-                  model={runModel}
-                  models={models}
-                  onModelChange={onRunModelChange}
-                  hasProvider={agentReady}
-                  onOpenProviders={() => setView("providers")}
-                  provider={agentProvider}
-                  apiKey={agentApiKey}
-                  baseUrl={agentBaseUrl}
-                  onRunComplete={() => void refreshWorkspace()}
-                  onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
-                />
+                {view === "build" ? (
+                  <MissionControl
+                    workspace={workspacePath}
+                    workspaceEntries={entries}
+                    model={runModel}
+                    models={models}
+                    onModelChange={onRunModelChange}
+                    hasProvider={agentReady}
+                    onOpenProviders={() => setView("providers")}
+                    provider={agentProvider}
+                    apiKey={agentApiKey}
+                    baseUrl={agentBaseUrl}
+                    onRunComplete={() => void refreshWorkspace()}
+                    onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
+                  />
+                ) : view === "providers" ? (
+                  <ProviderHub workspace={workspacePath} credentials={credentials} localProviders={localProviders} onRefresh={refreshCurrentProviders}
+                    agentProvider={agentProvider} agentApiKey={agentApiKey} agentBaseUrl={agentBaseUrl} agentModel={agentModel}
+                    onAgentProfileChange={(patch) => {
+                      if (patch.provider !== undefined) setAgentProvider(patch.provider);
+                      if (patch.apiKey !== undefined) setAgentApiKey(patch.apiKey);
+                      if (patch.baseUrl !== undefined) setAgentBaseUrl(patch.baseUrl);
+                      if (patch.model !== undefined) setAgentModel(patch.model);
+                    }}
+                  />
+                ) : view === "ecosystem" ? (
+                  workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")
+                ) : view === "orchestrate" ? (
+                  workspacePath ? <OrchestrationPanel workspace={workspacePath} /> : workspaceGate("Orchestrate needs a workspace")
+                ) : view === "ship" ? (
+                  workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")
+                ) : null}
                 {readOnlyFile && (
                   <section className="read-only-file" aria-label="File viewer">
                     <header className="read-only-file-header">
@@ -316,22 +353,6 @@ function App() {
               </div>
             </div>
           </div>
-        ) : view === "providers" ? (
-          <ProviderHub workspace={workspacePath} credentials={credentials} localProviders={localProviders} onRefresh={refreshCurrentProviders}
-            agentProvider={agentProvider} agentApiKey={agentApiKey} agentBaseUrl={agentBaseUrl} agentModel={agentModel}
-            onAgentProfileChange={(patch) => {
-              if (patch.provider !== undefined) setAgentProvider(patch.provider);
-              if (patch.apiKey !== undefined) setAgentApiKey(patch.apiKey);
-              if (patch.baseUrl !== undefined) setAgentBaseUrl(patch.baseUrl);
-              if (patch.model !== undefined) setAgentModel(patch.model);
-            }}
-          />
-        ) : view === "ecosystem" ? (
-          workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")
-        ) : view === "orchestrate" ? (
-          workspacePath ? <OrchestrationPanel workspace={workspacePath} /> : workspaceGate("Orchestrate needs a workspace")
-        ) : view === "ship" ? (
-          workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")
         ) : (
           workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")
         )}
@@ -345,7 +366,7 @@ function App() {
         <div>
           <span className="native-status"><Radio size={10} /> {bridge.isNative() ? "Windows native" : "Native app required"}</span>
           <span><CloudOff size={11} /> Local workspace</span>
-          <span><Sparkles size={11} /> Whim 0.2</span>
+          <span><Sparkles size={11} /> Whim 0.4</span>
         </div>
       </footer>
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />

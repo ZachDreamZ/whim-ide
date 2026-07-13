@@ -8,10 +8,12 @@ use std::{
     },
 };
 
+pub mod context;
 pub mod deployment;
 pub mod execution;
 pub mod orchestration;
 pub mod provider;
+pub mod voice;
 pub mod workspace;
 
 #[cfg(test)]
@@ -157,6 +159,20 @@ pub(crate) fn finish_operation(state: &BackendState, operation_id: &str) {
 /// API key is present in the environment is chosen; as a final fallback we
 /// assume a local Ollama instance so a run can still be attempted.
 pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
+    let omniroute = "127.0.0.1:20128"
+        .parse()
+        .ok()
+        .and_then(|address| {
+            std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(250))
+                .ok()
+        })
+        .is_some();
+    if omniroute {
+        return Some((
+            "omniroute".to_string(),
+            Some("http://127.0.0.1:20128/v1".to_string()),
+        ));
+    }
     if std::env::var("OLLAMA_HOST").is_ok() || std::env::var("LM_STUDIO_BASE_URL").is_ok() {
         return Some((
             "local".to_string(),

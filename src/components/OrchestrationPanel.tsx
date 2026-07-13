@@ -31,6 +31,7 @@ type CardAction = TransitionAction | "retry";
 const JOB_MODES: OrchestrationJobMode[] = [
   "vibe",
   "plan",
+  "research",
   "build",
   "verify",
   "review",

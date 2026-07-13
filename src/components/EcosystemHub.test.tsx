@@ -27,7 +27,7 @@ describe("EcosystemHub", () => {
     expect(screen.getByText("MCP server integration and plugins are available in the installed Whim Windows app.")).toBeVisible();
 
     // Add custom integration card/button should be disabled
-    expect(screen.getByRole("button", { name: /add a custom integration/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /add custom/i })).toBeDisabled();
 
     // Toolbar refresh should be disabled
     expect(screen.getByRole("button", { name: /refresh/i })).toBeDisabled();

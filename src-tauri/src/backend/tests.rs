@@ -8,7 +8,7 @@ use super::execution::{powershell_args, preferred_powershell, validate_slug};
 use super::orchestration::background_agent_evidence;
 use super::workspace::{
     ensure_inside, resolve_agent_workspace, resolve_existing, sanitize_relative,
-    selected_workspace_path,
+    selected_workspace_path, write_workspace_file_at, WriteFileRequest,
 };
 use super::{
     finish_operation, is_operation_cancelled, register_agent_operation, whim_err, AgentRunResult,
@@ -872,4 +872,28 @@ fn read_path_fails_without_selected_workspace() {
         err.contains("No workspace is selected"),
         "Expected no-workspace error, got: {err}"
     );
+}
+
+#[test]
+fn canvas_write_rejects_a_stale_disk_version() {
+    let root = std::env::temp_dir().join(format!("whim-canvas-conflict-{}", Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "original").unwrap();
+    let error = write_workspace_file_at(
+        &root,
+        WriteFileRequest {
+            path: "notes.txt".into(),
+            content: "replacement".into(),
+            create_parents: Some(false),
+            overwrite: Some(true),
+            expected_modified_ms: Some(0),
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("WORKSPACE_FILE_CONFLICT"));
+    assert_eq!(
+        fs::read_to_string(root.join("notes.txt")).unwrap(),
+        "original"
+    );
+    let _ = fs::remove_dir_all(root);
 }

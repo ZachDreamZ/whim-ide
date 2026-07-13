@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::agent::run_agent_prompt;
 use crate::orchestrator::{
-    CreateJobInput, JobAction, JobEvidence, JobMode, JobOutcome, OrchestrationJob,
+    CreateJobInput, JobAction, JobEvidence, JobMode, JobOutcome, JobStatus, OrchestrationJob,
     OrchestrationJobDetail,
 };
 
@@ -132,6 +132,7 @@ fn agent_mode_string(mode: JobMode) -> String {
     match mode {
         JobMode::Vibe => "vibe",
         JobMode::Plan => "plan",
+        JobMode::Research => "researcher",
         JobMode::Build => "build",
         JobMode::Verify => "verify",
         JobMode::Review => "review",
@@ -298,10 +299,36 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
         .map_err(orchestration_error)?;
 
     let (started, agent_request) = {
+        let root = dunce::canonicalize(std::path::Path::new(&workspace))
+            .map_err(|error| format!("Cannot resolve workspace: {error}"))?;
+        let (profile, _) = crate::agent::load_harness_profile(&root)
+            .map_err(|error| format!("Cannot load harness profile: {error}"))?;
+
+        if profile.require_signed_profiles.unwrap_or(false) {
+            return Err("This project requires cryptographically signed profiles, which are not yet supported by this version of Whim.".to_string());
+        }
+
         let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
         let detail = store
             .detail(&workspace, &request.job_id)
             .map_err(orchestration_error)?;
+
+        if let Some(policy) = profile.model_policy {
+            if policy == "local_only"
+                && detail
+                    .job
+                    .provider
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    != "local"
+            {
+                return Err(
+                    "This project's harness profile restricts execution to local models only."
+                        .to_string(),
+                );
+            }
+        }
         let started = store
             .transition(&workspace, &request.job_id, JobAction::Start)
             .map_err(orchestration_error)?;
@@ -324,58 +351,108 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
     };
 
     let app = window.clone();
+    let cancel_app = app.clone();
+    let job_id = request.job_id.clone();
+    let workspace_check = workspace.clone();
+    let operation_id = agent_request.operation_id.clone();
+
     tauri::async_runtime::spawn(async move {
         let agent_state = app.state::<BackendState>();
-        let result = run_agent_prompt(app.clone(), agent_state, agent_request).await;
-        let mut store = match lock(
-            &app.state::<BackendState>().inner().orchestration,
-            "orchestration",
-        ) {
-            Ok(store) => store,
-            Err(_) => return,
-        };
-        match result {
-            Ok(run) => {
-                let outcome = if run.command.success {
-                    JobOutcome::Completed
-                } else {
-                    JobOutcome::Failed
-                };
-                let summary = if run.command.success {
-                    Some("Agent run completed through the orchestration task.".to_string())
-                } else {
-                    let fallback = run.command.stderr.trim();
-                    let snippet = if fallback.is_empty() {
-                        run.command.stdout.trim()
-                    } else {
-                        fallback
-                    };
-                    Some(format!(
-                        "Agent run failed: {}",
-                        snippet.chars().take(500).collect::<String>()
-                    ))
-                };
-                let _ = store.finish(
-                    &workspace,
-                    &request.job_id,
-                    outcome,
-                    summary,
-                    background_agent_evidence(&run),
-                );
+
+        let cancel_future = async {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                if let Ok(mut store) = lock(
+                    &cancel_app.state::<BackendState>().inner().orchestration,
+                    "orchestration",
+                ) {
+                    if let Ok(detail) = store.detail(&workspace_check, &job_id) {
+                        if detail.job.status == JobStatus::Cancelled {
+                            return;
+                        }
+                    }
+                }
             }
-            Err(error) => {
-                let _ = store.finish(
-                    &workspace,
-                    &request.job_id,
-                    JobOutcome::Failed,
-                    Some(format!("Orchestration dispatch failed: {error}")),
-                    JobEvidence::default(),
-                );
+        };
+
+        tokio::select! {
+            result = run_agent_prompt(app.clone(), agent_state, agent_request) => {
+                let mut store = match lock(
+                    &app.state::<BackendState>().inner().orchestration,
+                    "orchestration",
+                ) {
+                    Ok(store) => store,
+                    Err(_) => return,
+                };
+                match result {
+                    Ok(run) => {
+                        let outcome = if run.command.success {
+                            JobOutcome::Completed
+                        } else {
+                            JobOutcome::Failed
+                        };
+                        let summary = if run.command.success {
+                            Some("Agent run completed through the orchestration task.".to_string())
+                        } else {
+                            let fallback = run.command.stderr.trim();
+                            let snippet = if fallback.is_empty() {
+                                run.command.stdout.trim()
+                            } else {
+                                fallback
+                            };
+                            Some(format!(
+                                "Agent run failed: {}",
+                                snippet.chars().take(500).collect::<String>()
+                            ))
+                        };
+                        let _ = store.finish(
+                            &workspace,
+                            &job_id,
+                            outcome,
+                            summary,
+                            background_agent_evidence(&run),
+                        );
+                    }
+                    Err(error) => {
+                        let _ = store.finish(
+                            &workspace,
+                            &job_id,
+                            JobOutcome::Failed,
+                            Some(format!("Orchestration dispatch failed: {error}")),
+                            JobEvidence::default(),
+                        );
+                    }
+                }
+            }
+            _ = cancel_future => {
+                let _ = crate::backend::execution::cancel_operation(
+                    app.state::<BackendState>(),
+                    operation_id
+                ).await;
             }
         }
     });
 
     Ok(started)
+}
+
+pub fn start_orchestration_worker(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let state = app.state::<BackendState>();
+            let mut _store = match lock(&state.inner().orchestration, "orchestration") {
+                Ok(store) => store,
+                Err(_) => continue,
+            };
+
+            // Note: Since jobs belong to workspaces, we'd need to iterate across
+            // all jobs, or just check the active workspace's queued jobs.
+            // For now, we omit an aggressive global drain to avoid conflicts with
+            // the explicit dispatch_orchestration_job logic, which acts as the
+            // active dispatch mechanism requested by the user.
+        }
+    });
 }
 
 #[cfg(test)]

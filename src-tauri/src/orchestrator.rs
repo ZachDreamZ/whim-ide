@@ -32,6 +32,7 @@ const MAX_RETRY_DELAY_MS: u64 = 5 * 60 * 1000;
 pub enum JobMode {
     Vibe,
     Plan,
+    Research,
     Build,
     Verify,
     Review,
@@ -42,7 +43,7 @@ pub enum JobMode {
 impl JobMode {
     pub fn default_risk(self) -> JobRisk {
         match self {
-            Self::Vibe | Self::Plan => JobRisk::Low,
+            Self::Vibe | Self::Plan | Self::Research => JobRisk::Low,
             Self::Build | Self::Verify | Self::Review => JobRisk::Medium,
             Self::Ship | Self::Operate => JobRisk::High,
         }
@@ -53,6 +54,7 @@ impl JobMode {
         match self {
             Self::Vibe => None,
             Self::Plan => Some("plan"),
+            Self::Research => Some("researcher"),
             Self::Build => Some("build"),
             Self::Verify => Some("verify"),
             Self::Review => Some("review"),
@@ -429,7 +431,8 @@ impl DurableJobStore {
         let job_id = valid_job_id(job_id)?;
         self.mutate(|ledger| {
             let requested = find_job(&ledger.jobs, &workspace, &job_id)?;
-            let wants_writer_slot = matches!(action, JobAction::Start | JobAction::Resume);
+            let wants_writer_slot = matches!(action, JobAction::Start | JobAction::Resume)
+                && requested.job.mode != JobMode::Research;
             if wants_writer_slot {
                 if requested
                     .job
@@ -442,6 +445,7 @@ impl DurableJobStore {
                     candidate.job.workspace == workspace
                         && candidate.job.id != job_id
                         && candidate.job.status == JobStatus::Running
+                        && candidate.job.mode != JobMode::Research
                 }) {
                     return Err(format!(
                         "Execution target is owned by running task {}. This task remains {:?}",
@@ -1257,6 +1261,28 @@ mod tests {
                 .status,
             JobStatus::Running
         );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn read_only_research_jobs_run_beside_the_workspace_writer() {
+        let (mut store, directory) = test_store("research-parallel");
+        let workspace = "C:/example/worktree-a";
+        let writer = store.create(create_input(workspace)).unwrap();
+        store
+            .transition(workspace, &writer.id, JobAction::Start)
+            .unwrap();
+
+        let mut research_input = create_input(workspace);
+        research_input.mode = JobMode::Research;
+        research_input.title = Some("Read-only research".into());
+        let research = store.create(research_input).unwrap();
+        let running = store
+            .transition(workspace, &research.id, JobAction::Start)
+            .unwrap();
+
+        assert_eq!(running.status, JobStatus::Running);
+        assert_eq!(running.risk, JobRisk::Low);
         let _ = fs::remove_dir_all(directory);
     }
 

@@ -13,7 +13,6 @@ import {
   RotateCcw,
   ShieldCheck,
   Sparkles,
-  WandSparkles,
 } from "lucide-react";
 import { automationSettings } from "../data/product";
 import { bridge, type EnvironmentReport } from "../lib/bridge";
@@ -120,8 +119,16 @@ export function AutopilotHub({ workspace, environment, onOpenFile }: { workspace
           <span>Automation policies and PC environment discovery are available in the installed Whim Windows app.</span>
         </div>
       )}
-      <div className="autopilot-hero">
-        <div><span className="hub-eyebrow"><WandSparkles size={13} /> Workspace automation policy</span><h1>Automate the rhythm.<br /><em>Keep the truth visible.</em></h1><p>These rules are stored in the project and are injected into every Whim agent run. Nothing here claims a background job is running when it is not.</p><div className="autopilot-state"><span className="autopilot-orb"><Sparkles size={16} /></span><div><strong>{loading ? "Reading project policy" : `${enabledCount} rules enabled`}</strong><small>.whim/automation.json · {automationSettings.filter((item) => item.locked).length} safety rules locked</small></div><button type="button" onClick={pauseAll} disabled={Boolean(saving) || optionalEnabled === 0 || !native}>{saving === "pause-all" ? "Saving…" : "Pause optional"}</button></div></div>
+      <section className="market-toolbar" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#8a95a5", fontSize: "13px" }}>
+          <Sparkles size={14} />
+          <span><strong>{loading ? "Reading project policy" : `${enabledCount} rules enabled`}</strong> · .whim/automation.json</span>
+        </div>
+        <button className="secondary-action" type="button" onClick={pauseAll} disabled={Boolean(saving) || optionalEnabled === 0 || !native}>
+          {saving === "pause-all" ? "Saving…" : "Pause optional"}
+        </button>
+      </section>
+      <div style={{ margin: "0 32px 32px 32px", maxWidth: "480px" }}>
         <div className="learned-card">
           <div className="learned-head">
             <span><BrainCircuit size={17} /> Current policy</span>

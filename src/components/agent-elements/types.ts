@@ -154,6 +154,8 @@ export type AgentChatProps = {
    * and images inside user messages.
    */
   enableImagePreview?: boolean;
+  leftActions?: React.ReactNode;
+  rightActions?: React.ReactNode;
 
   suggestions?: InputSuggestions;
 
@@ -171,6 +173,8 @@ export type AgentChatProps = {
       answer: QuestionAnswer;
     }) => void;
   };
+
+  greeting?: React.ReactNode;
 
   className?: string;
   style?: React.CSSProperties;

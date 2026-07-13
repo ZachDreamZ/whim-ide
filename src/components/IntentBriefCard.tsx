@@ -1,4 +1,4 @@
-import { ChevronDown, FileText, LoaderCircle, Save, ShieldCheck } from "lucide-react";
+import { ChevronDown, FileText, LoaderCircle, Save, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   type IntentBrief,
@@ -21,6 +21,9 @@ type BriefDraft = {
   designDirection: string;
   integrations: string;
   risks: string;
+  attachments: Array<{ type: string; url: string; name?: string }>;
+  mode: "vibe" | "agentic";
+  verificationStrategy: string;
 };
 
 function draftFromBrief(brief: IntentBrief | null): BriefDraft {
@@ -32,6 +35,9 @@ function draftFromBrief(brief: IntentBrief | null): BriefDraft {
     designDirection: brief?.designDirection ?? "",
     integrations: brief?.integrations.join("\n") ?? "",
     risks: brief?.risks.join("\n") ?? "",
+    attachments: brief?.attachments ?? [],
+    mode: brief?.mode ?? "vibe",
+    verificationStrategy: brief?.verificationStrategy ?? "",
   };
 }
 
@@ -44,6 +50,9 @@ function inputFromDraft(draft: BriefDraft): IntentBriefInput {
     designDirection: draft.designDirection,
     integrations: draft.integrations.split("\n"),
     risks: draft.risks.split("\n"),
+    attachments: draft.attachments,
+    mode: draft.mode,
+    verificationStrategy: draft.verificationStrategy,
   };
 }
 
@@ -57,7 +66,7 @@ export function IntentBriefCard({ native, workspaceOpen, brief, onSave }: Intent
     setDraft(draftFromBrief(brief));
   }, [brief]);
 
-  const update = (field: keyof BriefDraft, value: string) => {
+  const update = (field: keyof BriefDraft, value: string | Array<{ type: string; url: string; name?: string }>) => {
     setDraft((current) => ({ ...current, [field]: value }));
     setError(null);
   };
@@ -109,8 +118,41 @@ export function IntentBriefCard({ native, workspaceOpen, brief, onSave }: Intent
             <label>Constraints<textarea aria-label="Constraints" value={draft.constraints} onChange={(event) => update("constraints", event.target.value)} rows={2} placeholder="One per line" /></label>
             <label>Integrations<textarea aria-label="Integrations" value={draft.integrations} onChange={(event) => update("integrations", event.target.value)} rows={2} placeholder="One per line" /></label>
           </div>
+          <div className="intent-brief-grid">
+            <label>Mode
+              <select aria-label="Mode" value={draft.mode} onChange={(event) => update("mode", event.target.value as "vibe" | "agentic")}>
+                <option value="vibe">Vibe Coding (Fast, Prototype)</option>
+                <option value="agentic">Agentic Engineering (Robust, Production)</option>
+              </select>
+            </label>
+            <label>Verification Strategy<textarea aria-label="Verification Strategy" value={draft.verificationStrategy} onChange={(event) => update("verificationStrategy", event.target.value)} rows={2} placeholder="How will we verify success?" /></label>
+          </div>
           <label>Design direction<textarea aria-label="Design direction" value={draft.designDirection} onChange={(event) => update("designDirection", event.target.value)} rows={2} placeholder="Tone, layout, references, or interaction direction" /></label>
           <label>Risks to preserve<textarea aria-label="Risks to preserve" value={draft.risks} onChange={(event) => update("risks", event.target.value)} rows={2} placeholder="Security, data, compatibility, or delivery risks" /></label>
+          <div className="intent-brief-attachments">
+            <label>Attachments (URLs, Figma, Images)</label>
+            <div className="attachment-list">
+              {draft.attachments.map((att, i) => (
+                <div key={i} className="attachment-item">
+                  <span className="attachment-type">{att.type}</span>
+                  <a href={att.url} target="_blank" rel="noreferrer" className="attachment-url">{att.name || att.url}</a>
+                  <button type="button" onClick={() => update("attachments", draft.attachments.filter((_, idx) => idx !== i))}><X size={12} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="attachment-input-row" style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <input type="text" id="new-attachment-url" placeholder="Paste URL (https://..., figma.com/...)" style={{ flex: 1 }} />
+              <button type="button" onClick={() => {
+                const input = document.getElementById("new-attachment-url") as HTMLInputElement;
+                const url = input.value.trim();
+                if (url) {
+                  const type = url.includes("figma.com") ? "figma" : url.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? "image" : "url";
+                  update("attachments", [...draft.attachments, { type, url }]);
+                  input.value = "";
+                }
+              }}>Add</button>
+            </div>
+          </div>
           {error && <p className="intent-brief-error" role="alert">{error}</p>}
           <div className="intent-brief-actions"><small><ShieldCheck size={10} /> Ordinary JSON in your project</small><button type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={11} /> : <Save size={11} />}{saving ? "Saving" : "Save brief"}</button></div>
         </form>

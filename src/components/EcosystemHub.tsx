@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Check,
-  ChevronRight,
   CircleDot,
   Clock3,
   LoaderCircle,
@@ -13,8 +12,6 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  Sparkles,
-  WandSparkles,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -400,24 +397,18 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
           <span>MCP server integration and plugins are available in the installed Whim Windows app.</span>
         </div>
       )}
-      <div className="ecosystem-heading">
-        <div>
-          <span className="hub-eyebrow"><Sparkles size={13} /> Whim integrations</span>
-          <h1>Your whole<br /><em>vibe stack.</em></h1>
-          <p>Add remote MCP servers and npm plugins to .whim/config.json. Existing unrelated settings are preserved.</p>
-        </div>
-        <button className="create-plugin-card" type="button" onClick={openCustom} disabled={loading || Boolean(busyKey) || !native}>
-          <span><WandSparkles size={20} /></span>
-          <div><small>Bring your own</small><strong>Add a custom integration</strong><p>Configure an npm plugin package or remote MCP endpoint.</p></div>
-          <ChevronRight size={17} />
-        </button>
-      </div>
+
 
       <section className="market-toolbar">
         <div className="market-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search configured and available integrations" aria-label="Search integrations" /></div>
-        <button className="filter-button" type="button" onClick={() => void loadConfig()} disabled={loading || Boolean(busyKey) || !native}>
-          <RefreshCw className={loading ? "spin" : ""} size={14} /> Refresh
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button className="secondary-action" type="button" onClick={() => void loadConfig()} disabled={loading || Boolean(busyKey) || !native}>
+            <RefreshCw className={loading ? "spin" : ""} size={14} /> Refresh
+          </button>
+          <button className="primary-action" type="button" onClick={openCustom} disabled={loading || Boolean(busyKey) || !native}>
+            <Plus size={14} /> Add custom
+          </button>
+        </div>
       </section>
 
       {error && <div className="inline-notice"><ShieldCheck size={14} /><span>{error}</span><button type="button" onClick={() => void loadConfig()} disabled={loading}>Retry</button></div>}

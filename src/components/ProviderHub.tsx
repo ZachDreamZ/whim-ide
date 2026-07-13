@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Bot,
   Check,
   ChevronRight,
   Cpu,
   LoaderCircle,
-  Network,
   RefreshCw,
-  Route,
   ShieldCheck,
   Sparkles,
-  Zap,
 } from "lucide-react";
 import { bridge, type DiscoveredProvider } from "../lib/bridge";
+
+const OMNIROUTE_ROUTES = ["auto", "auto/coding", "auto/fast", "auto/cheap", "auto/offline", "auto/smart"];
 
 type ProviderHubProps = {
   workspace: string | null;
@@ -95,7 +93,7 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
       setDiscovered(list);
       if (agentProvider !== "auto") {
         const active = list.find((item) => item.provider === agentProvider);
-        if (active?.hasKey) loadModels(active.provider, agentApiKey, active.baseUrl ?? agentBaseUrl);
+        if (active?.hasKey || active?.available) loadModels(active.provider, agentApiKey, active.baseUrl ?? agentBaseUrl);
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Provider scan failed.");
@@ -107,11 +105,15 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
   useEffect(() => { void rescan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const loadModels = (agentValue: string, apiKey: string, baseUrl: string) => {
-    if (!apiKey?.trim()) return;
+    if (!apiKey?.trim() && agentValue !== "local" && agentValue !== "omniroute") return;
     setModelLoading(true);
     bridge.listProviderModels(agentValue, apiKey, baseUrl)
-      .then((ids) => { if (Array.isArray(ids)) setModelOptions(ids); })
-      .catch(() => { /* keep free-text fallback */ })
+      .then((ids) => {
+        if (!Array.isArray(ids)) return;
+        const routes = agentValue === "omniroute" ? OMNIROUTE_ROUTES : [];
+        setModelOptions([...new Set([...routes, ...ids])]);
+      })
+      .catch(() => { if (agentValue === "omniroute") setModelOptions(OMNIROUTE_ROUTES); })
       .finally(() => setModelLoading(false));
   };
 
@@ -124,43 +126,27 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
     if (provider.kind === "local") {
       onAgentProfileChange({ provider: "local", baseUrl: provider.baseUrl ?? "", apiKey: "" });
     } else {
-      const patch: { provider?: string; apiKey?: string } = { provider: provider.provider };
+      const patch: { provider?: string; apiKey?: string; baseUrl?: string; model?: string } = {
+        provider: provider.provider,
+        baseUrl: provider.baseUrl ?? "",
+      };
       // Clear any previously typed key when switching to a different cloud
       // provider so a key for one vendor is never sent to another.
       if (agentProvider !== "auto" && agentProvider !== provider.provider && !provider.hasKey) {
         patch.apiKey = "";
       }
+      if (provider.provider === "omniroute") patch.model = "";
       onAgentProfileChange(patch);
     }
     setModelOptions([]);
-    if (provider.hasKey) loadModels(provider.provider, agentApiKey, provider.baseUrl ?? agentBaseUrl);
+    if (provider.hasKey || provider.available) loadModels(provider.provider, provider.provider === agentProvider ? agentApiKey : "", provider.baseUrl ?? agentBaseUrl);
   };
 
-  const availableCount = discovered.filter((item) => item.available).length;
-  const connectedCount = discovered.filter((item) => item.hasKey).length;
-  const best = discovered.find((item) => item.available) ?? discovered.find((item) => item.hasKey) ?? null;
-  const activeLabel = agentProvider === "auto"
-    ? (best ? `Auto · ${best.label}` : "Auto (no runtime found)")
-    : (discovered.find((item) => item.provider === agentProvider)?.label ?? agentProvider);
+  const connectedCount = discovered.filter((item) => item.hasKey || (item.kind !== "cloud" && item.available)).length;
 
   return (
     <main className="hub-page provider-page">
-      <div className="hub-hero provider-hero">
-        <div>
-          <span className="hub-eyebrow"><Network size={13} /> Provider-neutral agent harness</span>
-          <h1>Zero-config.<br /><em>The agent picks the model.</em></h1>
-          <p>Whim auto-detects a local model (Ollama / LM Studio) or a cloud API key in your environment. You describe the outcome — the agent handles the rest.</p>
-          <div className="hero-actions">
-            <button className="secondary-action" type="button" onClick={rescan} disabled={loading}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />} Rescan</button>
-          </div>
-        </div>
-        <div className="router-visual" aria-label="Whim agent core">
-          <div className="router-core"><span><Route size={24} /></span><strong>Whim</strong><small>native agent</small></div>
-          <div className="router-node node-private"><ShieldCheck size={15} /><span><strong>{activeLabel}</strong><small>{agentProvider === "auto" ? "auto-detected runtime" : "selected provider"}</small></span></div>
-          <div className="router-node node-speed"><Zap size={15} /><span><strong>{availableCount} available</strong><small>detected runtimes</small></span></div>
-          <div className="router-node node-quality"><Bot size={15} /><span><strong>{connectedCount}</strong><small>with credentials</small></span></div>
-        </div>
-      </div>
+
 
       <section className="provider-status-strip">
         <span className="status-good"><Check size={13} /> Whim native agent ready</span>
@@ -172,7 +158,7 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
       {notice && <div className="inline-notice"><Sparkles size={14} /><span>{notice}</span><button type="button" onClick={() => setNotice(null)}>Dismiss</button></div>}
 
       <section className="provider-catalog">
-        <div className="section-heading-row"><div><span className="section-kicker">Detected runtimes</span><h2>What Whim can use right now</h2></div></div>
+        {/* Hero heading removed for minimalistic design */}
         <div className="provider-grid">
           {discovered.map((provider) => {
             const status = provider.available ? (provider.hasKey ? "connected" : "detected") : "available";
@@ -183,11 +169,12 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
                 key={provider.provider}
               >
                 <div className="provider-card-top">
-                  <span className="provider-logo" style={{ "--provider-color": provider.kind === "local" ? "#73d9ae" : "#9c8cff" } as React.CSSProperties}>{provider.kind === "local" ? <Cpu size={18} /> : <span>{provider.label[0]}</span>}</span>
+                  <span className={`provider-logo provider-logo-${provider.kind}`}>{provider.kind === "local" || provider.kind === "gateway" ? <Cpu size={18} /> : <span>{provider.label[0]}</span>}</span>
                   <div><span className={`provider-status ${status}`}>{status === "connected" && <Check size={10} />}{status}</span></div>
                 </div>
                 <h3>{provider.label}</h3>
                 <p>{provider.note ?? ""}</p>
+                <small>{provider.capabilities.speechToText && provider.capabilities.textToSpeech ? "Chat · transcription · speech" : "Chat"}</small>
                 {isActive && (
                   <div className="provider-card-model">
                     <span className="active-dot" aria-hidden="true" />
@@ -197,7 +184,7 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
                     ) : modelOptions.length ? (
                       <ModelDropdown
                         value={agentModel}
-                        options={["auto", ...modelOptions]}
+                        options={[...new Set(["auto", ...modelOptions])]}
                         placeholder="auto (agent chooses)"
                         onChange={(id) => onAgentProfileChange({ provider: agentProvider, model: id === "auto" ? "" : id })}
                       />
@@ -213,11 +200,11 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
                       <span className="provider-card-hint">In-session only — never saved to disk</span>
                     </label>
                     <input id={`key-${provider.provider}`} type="password" value={agentApiKey} placeholder="Paste your API key" autoComplete="off" spellCheck={false} onChange={(event) => onKeyChange(event.target.value)} />
-                    {(provider.provider === "compatible" || provider.provider === "qwen") && (
+                    {(provider.provider === "compatible" || provider.provider === "qwen" || provider.provider === "omniroute") && (
                       <label htmlFor={`base-${provider.provider}`}>Base URL</label>
                     )}
-                    {(provider.provider === "compatible" || provider.provider === "qwen") && (
-                      <input id={`base-${provider.provider}`} value={agentBaseUrl} placeholder={provider.provider === "qwen" ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : "https://api.your-host/v1"} autoComplete="off" spellCheck={false} onChange={(event) => onAgentProfileChange({ provider: agentProvider, baseUrl: event.target.value })} />
+                    {(provider.provider === "compatible" || provider.provider === "qwen" || provider.provider === "omniroute") && (
+                      <input id={`base-${provider.provider}`} value={agentBaseUrl} placeholder={provider.provider === "qwen" ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : provider.provider === "omniroute" ? "http://127.0.0.1:20128/v1" : "https://api.your-host/v1"} autoComplete="off" spellCheck={false} onChange={(event) => onAgentProfileChange({ provider: agentProvider, baseUrl: event.target.value })} />
                     )}
                   </div>
                 )}

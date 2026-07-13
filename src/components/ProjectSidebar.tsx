@@ -11,8 +11,12 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCw,
+  Rocket,
   Search,
   Sparkles,
+  Blocks,
+  Bot,
+  Settings2,
 } from "lucide-react";
 import {
   normalizeWorkspacePath,
@@ -27,6 +31,8 @@ import type {
 } from "../types/workbench";
 
 export type ProjectSidebarProps = {
+  activeView?: string;
+  onViewChange?: (view: any) => void;
   workspace: string;
   activeFile: string;
   entries?: readonly WorkspaceEntry[];
@@ -60,6 +66,8 @@ function safeStatusClass(status: string) {
 }
 
 export function ProjectSidebar({
+  activeView,
+  onViewChange,
   workspace,
   activeFile,
   entries = [],
@@ -161,22 +169,25 @@ export function ProjectSidebar({
   }, []);
 
   return (
-    <aside className="project-sidebar">
-      <div className="sidebar-heading">
-        <div>
-          <span className="sidebar-eyebrow">Workspace</span>
-          <strong title={workspace}>{projectName}</strong>
+    <aside className="w-[280px] h-full bg-[#11141b] border-r border-white/5 flex flex-col overflow-hidden shrink-0 select-none">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-[#161a23]/30 shrink-0">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-[#8a95a5]">Workspace</span>
+          <strong className="text-[#dfe3eb] text-sm font-semibold truncate" title={workspace}>{projectName}</strong>
         </div>
-        <div className="sidebar-actions">
+        <div className="flex items-center gap-1.5 text-[#8a95a5]">
           <button
+            className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/5 hover:text-[#dfe3eb] transition-all cursor-pointer"
             type="button"
             aria-label="Refresh files"
             onClick={onRefresh}
             disabled={!onRefresh || loading}
           >
-            <RefreshCw className={loading ? "spin" : ""} size={13} />
+            <RefreshCw className={loading ? "animate-spin" : ""} size={13} />
           </button>
           <button
+            className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/5 hover:text-[#dfe3eb] transition-all cursor-pointer"
             type="button"
             aria-label="New file"
             onClick={onCreateFile}
@@ -185,6 +196,7 @@ export function ProjectSidebar({
             <Plus size={14} />
           </button>
           <button
+            className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/5 hover:text-[#dfe3eb] transition-all cursor-pointer"
             type="button"
             aria-label="More workspace actions"
             onClick={onOpenActions}
@@ -195,68 +207,96 @@ export function ProjectSidebar({
         </div>
       </div>
 
+      {/* Primary Navigation (ChatGPT Clone Style) */}
+      {onViewChange && (
+        <div className="flex flex-col gap-0.5 px-3 mb-2">
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "build" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("build")}>
+            <Sparkles size={16} /> Chat
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "orchestrate" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("orchestrate")}>
+            <CircleDot size={16} /> Scheduled tasks
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "providers" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("providers")}>
+            <Blocks size={16} /> Models & Providers
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "ecosystem" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("ecosystem")}>
+            <Bot size={16} /> Ecosystem plugins
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "ship" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("ship")}>
+            <Rocket size={16} /> Deployment
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "settings" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("settings")}>
+            <Settings2 size={16} /> Settings
+          </button>
+        </div>
+      )}
+
+      {/* Living Brief */}
       {livingBrief && (
         <button
-          className="intent-brief"
+          className="m-3 p-3 bg-gradient-to-r from-[#202735] to-[#171c26] border border-white/5 rounded-xl flex items-center gap-3 text-left hover:border-white/10 hover:shadow-md transition-all cursor-pointer shrink-0"
           type="button"
           onClick={onOpenBrief}
           disabled={!onOpenBrief}
         >
-          <span className="intent-icon">
-            <Sparkles size={14} />
+          <span className="w-8 h-8 rounded-lg bg-[#ff6f4c]/10 text-[#ff6f4c] flex items-center justify-center shrink-0">
+            <Sparkles size={14} className="animate-pulse" />
           </span>
-          <span>
-            <small>{livingBrief.eyebrow || "Living brief"}</small>
-            <strong>{livingBrief.title}</strong>
-          </span>
-          <ChevronRight size={14} />
+          <div className="flex-1 min-w-0">
+            <small className="block text-[9px] uppercase font-bold tracking-widest text-[#8a95a5]">{livingBrief.eyebrow || "Living brief"}</small>
+            <strong className="block text-xs font-medium text-[#dfe3eb] truncate">{livingBrief.title}</strong>
+          </div>
+          <ChevronRight size={14} className="text-[#8a95a5]" />
         </button>
       )}
 
-      <div className="sidebar-search">
+      {/* Search Input */}
+      <div className="mx-3 mb-2 px-3 py-1.5 bg-[#151922] border border-white/5 rounded-lg flex items-center gap-2 text-[#8a95a5] shrink-0">
         <Search size={13} />
         <input
           ref={filterRef}
+          className="flex-1 bg-transparent border-none outline-none text-[#dfe3eb] text-xs placeholder-[#707a8b] p-0"
           aria-label="Filter files"
-          placeholder="Filter files"
+          placeholder="Filter files..."
           value={currentFilter}
           onChange={(event) => updateFilter(event.currentTarget.value)}
         />
-        {filterShortcut && <kbd>{filterShortcut}</kbd>}
+        {filterShortcut && <kbd className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 font-mono text-[#8a95a5]">{filterShortcut}</kbd>}
       </div>
 
-      <div className="file-section">
-        <div className="file-section-label">
-          <span>
+      {/* File Tree Container */}
+      <div className="flex-1 overflow-auto flex flex-col">
+        {/* Section Header */}
+        <div className="flex items-center justify-between px-4 py-1.5 bg-white/[0.01] border-y border-white/5 text-[10px] uppercase font-bold tracking-wider text-[#8a95a5] shrink-0">
+          <span className="flex items-center gap-1">
             <ChevronDown size={12} /> Files
           </span>
           {branch && (
-            <span className="branch-label">
-              <CircleDot size={10} /> {branch}
+            <span className="flex items-center gap-1 text-[#ff6f4c]/85">
+              <CircleDot size={9} /> {branch}
             </span>
           )}
         </div>
-        <div className="file-tree" role="tree" aria-busy={loading}>
+
+        {/* Tree Entries */}
+        <div className="flex-grow py-1" role="tree" aria-busy={loading}>
           {loading && entries.length === 0 && (
-            <div className="file-row" role="status">
-              <span className="file-chevron" />
-              <LoaderCircle className="spin file-icon" size={13} />
+            <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-[#8a95a5]" role="status">
+              <LoaderCircle className="animate-spin text-[#ff6f4c]" size={13} />
               <span>Loading workspace…</span>
             </div>
           )}
 
           {!loading && error && (
-            <div className="file-row" role="alert" title={error}>
-              <span className="file-chevron" />
-              <CircleDot className="file-icon" size={13} />
+            <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-[#ff756f] break-all" role="alert" title={error}>
+              <CircleDot size={13} />
               <span>{error}</span>
             </div>
           )}
 
           {!loading && !error && visibleEntries.length === 0 && (
-            <div className="file-row" role="status">
-              <span className="file-chevron" />
-              <File className="file-icon" size={13} />
+            <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-[#8a95a5]" role="status">
+              <File size={13} />
               <span>
                 {currentFilter ? "No matching files" : "Workspace is empty"}
               </span>
@@ -275,11 +315,19 @@ export function ProjectSidebar({
                 ? FileCode2
                 : File;
             const selected = path === normalizedActiveFile;
+
+            // Resolve file status styling
+            const status = entry.status ? safeStatusClass(entry.status) : null;
+            let statusColor = "text-[#8a95a5]";
+            if (status === "added" || status === "staged" || status === "created") statusColor = "bg-green-500/10 text-green-400 border-green-500/20";
+            if (status === "modified" || status === "edited") statusColor = "bg-[#ff6f4c]/10 text-[#ff6f4c] border-[#ff6f4c]/20";
+            if (status === "deleted") statusColor = "bg-red-500/10 text-red-400 border-red-500/20";
+
             return (
               <button
                 key={path}
-                className={`file-row ${selected ? "selected" : ""}`}
-                style={{ paddingLeft: 10 + workspaceEntryDepth(entry) * 13 }}
+                className={`w-full flex items-center gap-1.5 py-1 pr-4 text-left text-xs transition-all hover:bg-white/[0.02] cursor-pointer ${selected ? "bg-white/5 text-[#dfe3eb]" : "text-[#8a95a5] hover:text-[#dfe3eb]"}`}
+                style={{ paddingLeft: 12 + workspaceEntryDepth(entry) * 12 }}
                 type="button"
                 onClick={() =>
                   folder ? toggleFolder(path) : onFileSelect(path)
@@ -291,22 +339,21 @@ export function ProjectSidebar({
               >
                 {folder ? (
                   expanded ? (
-                    <ChevronDown className="file-chevron" size={11} />
+                    <ChevronDown className="text-white/40 shrink-0" size={12} />
                   ) : (
-                    <ChevronRight className="file-chevron" size={11} />
+                    <ChevronRight className="text-white/40 shrink-0" size={12} />
                   )
                 ) : (
-                  <span className="file-chevron" />
+                  <span className="w-3 shrink-0" />
                 )}
                 <Icon
-                  size={13}
-                  className={folder ? "folder-icon" : "file-icon"}
+                  size={14}
+                  className={`shrink-0 ${folder ? "text-[#ff6f4c]/75" : selected ? "text-[#9c8cff]" : "text-[#8a95a5]"}`}
                 />
-                <span>{workspaceEntryName(entry)}</span>
+                <span className="truncate flex-1 min-w-0">{workspaceEntryName(entry)}</span>
+
                 {entry.status && (
-                  <em
-                    className={`file-status status-${safeStatusClass(entry.status)}`}
-                  >
+                  <em className={`text-[9px] uppercase px-1 border rounded scale-90 ${statusColor}`}>
                     {entry.status}
                   </em>
                 )}
@@ -316,25 +363,27 @@ export function ProjectSidebar({
         </div>
       </div>
 
-      <div className="sidebar-spacer" />
+      {/* Sidebar Footer Context */}
       {(contextItems.length > 0 || truncated) && (
-        <div className="sidebar-context">
+        <div className="px-4 py-2 border-t border-white/5 bg-black/10 flex flex-col gap-1 shrink-0">
           {contextItems.map((item) => (
-            <div className="context-row" key={item.id}>
-              <span className={`context-dot ${item.tone || "neutral"}`} />
+            <div className="flex items-center gap-2 text-[10px] text-[#8a95a5]" key={item.id}>
+              <span className={`w-1.5 h-1.5 rounded-full ${item.tone === "violet" ? "bg-[#9c8cff]" : item.tone === "mint" ? "bg-green-400" : "bg-neutral-500"}`} />
               {item.label}
             </div>
           ))}
           {truncated && (
-            <div className="context-row">
-              <span className="context-dot coral" />
+            <div className="flex items-center gap-2 text-[10px] text-red-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
               File list truncated
             </div>
           )}
         </div>
       )}
+
+      {/* Open workspace folder button */}
       <button
-        className="open-workspace"
+        className="w-full py-3 bg-[#161a23]/30 hover:bg-[#161a23]/60 border-t border-white/5 text-[#8a95a5] hover:text-[#dfe3eb] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
         type="button"
         onClick={onOpenWorkspace}
       >

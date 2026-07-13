@@ -85,8 +85,8 @@ pub struct WriteFileRequest {
     pub path: String,
     pub content: String,
     pub create_parents: Option<bool>,
-    #[allow(dead_code)]
     pub overwrite: Option<bool>,
+    pub expected_modified_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,6 +95,7 @@ pub struct FileWriteResult {
     pub path: String,
     pub bytes_written: usize,
     pub created: bool,
+    pub modified_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,6 +164,11 @@ pub(crate) async fn resolve_agent_workspace(
             .map(|path| path == requested)
             .unwrap_or(false)
     }) {
+        let managed_root = crate::worktrees::managed_worktree_root(&repo_root)
+            .map_err(|error| format!("Cannot verify managed worktree: {error}"))?;
+        if !crate::worktrees::is_managed_worktree(&requested, &managed_root) {
+            return Err("Agents are strictly confined to managed worktrees. Direct execution on the primary branch or unmanaged worktrees is forbidden.".to_string());
+        }
         Ok(requested)
     } else {
         Err("The requested execution folder is not a registered worktree of the selected repository".to_string())
@@ -556,6 +562,20 @@ pub(crate) fn write_workspace_file_at(
 ) -> Result<FileWriteResult, String> {
     let (path, existed) =
         resolve_write_target(root, &request.path, request.create_parents.unwrap_or(false))?;
+    if existed && !request.overwrite.unwrap_or(true) {
+        return Err("Write target already exists and overwrite was not allowed".to_string());
+    }
+    if let Some(expected) = request.expected_modified_ms {
+        let actual = fs::symlink_metadata(&path)
+            .ok()
+            .and_then(|metadata| modified_ms(&metadata));
+        if actual != Some(expected) {
+            return Err(whim_err(
+                "WORKSPACE_FILE_CONFLICT",
+                "The file changed on disk after Canvas loaded it; reload before saving",
+            ));
+        }
+    }
     let content_bytes = request.content.as_bytes();
     if content_bytes.len() > MAX_WRITE_BYTES {
         return Err(format!(
@@ -571,9 +591,16 @@ pub(crate) fn write_workspace_file_at(
         .map_err(|error| format!("Cannot open destination file: {error}"))?;
     file.write_all(content_bytes)
         .map_err(|error| format!("Cannot write to destination file: {error}"))?;
+    file.flush()
+        .map_err(|error| format!("Cannot flush destination file: {error}"))?;
+    let modified_ms = file
+        .metadata()
+        .ok()
+        .and_then(|metadata| modified_ms(&metadata));
     Ok(FileWriteResult {
         path: relative_display(root, &path),
         bytes_written: content_bytes.len(),
         created: !existed,
+        modified_ms,
     })
 }

@@ -9,6 +9,10 @@ use backend::BackendState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            backend::orchestration::start_orchestration_worker(app.handle().clone());
+            Ok(())
+        })
         .manage(BackendState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -19,6 +23,9 @@ pub fn run() {
             backend::workspace::list_workspace_tree,
             backend::workspace::read_workspace_file,
             backend::workspace::write_workspace_file,
+            backend::context::capture_app_context,
+            backend::voice::transcribe_voice,
+            backend::voice::synthesize_voice,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,

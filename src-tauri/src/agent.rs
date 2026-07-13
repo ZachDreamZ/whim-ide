@@ -21,6 +21,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use futures::future::join_all;
 use tokio::time::sleep;
 
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,7 @@ enum Provider {
     DeepSeek,
     Xiaomi,
     Qwen,
+    OmniRoute,
     Compatible,
 }
 
@@ -68,10 +70,25 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
         "deepseek" => Ok(Provider::DeepSeek),
         "xiaomi" => Ok(Provider::Xiaomi),
         "qwen" => Ok(Provider::Qwen),
+        "omniroute" | "omni-route" | "omni" => Ok(Provider::OmniRoute),
         "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, qwen, deepseek, xiaomi, local, compatible"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, qwen, deepseek, xiaomi, local, omniroute, compatible"
         )),
+    }
+}
+
+fn provider_name(provider: Provider) -> &'static str {
+    match provider {
+        Provider::OpenAi => "openai",
+        Provider::Anthropic => "anthropic",
+        Provider::Google => "google",
+        Provider::Local => "local",
+        Provider::DeepSeek => "deepseek",
+        Provider::Xiaomi => "xiaomi",
+        Provider::Qwen => "qwen",
+        Provider::OmniRoute => "omniroute",
+        Provider::Compatible => "compatible",
     }
 }
 
@@ -80,26 +97,34 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
 /// Whim's fixed, project-discovered verification commands. Build, vibe, and
 /// ship retain the broader native tool set subject to the harness profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AgentMode {
+enum AgentRole {
     Vibe,
-    Plan,
-    Build,
-    Verify,
-    Review,
-    Ship,
+    Planner,
+    Researcher,
+    Implementer,
+    Reviewer,
+    Tester,
+    SecurityReviewer,
+    Designer,
+    Debugger,
+    ReleaseAgent,
 }
 
-impl AgentMode {
+impl AgentRole {
     fn parse(value: Option<&str>) -> Result<Self, String> {
         match value.unwrap_or("vibe").trim().to_ascii_lowercase().as_str() {
             "vibe" => Ok(Self::Vibe),
-            "plan" => Ok(Self::Plan),
-            "build" => Ok(Self::Build),
-            "verify" => Ok(Self::Verify),
-            "review" => Ok(Self::Review),
-            "ship" => Ok(Self::Ship),
+            "plan" | "planner" => Ok(Self::Planner),
+            "research" | "researcher" => Ok(Self::Researcher),
+            "build" | "implementer" => Ok(Self::Implementer),
+            "verify" | "tester" => Ok(Self::Tester),
+            "review" | "reviewer" => Ok(Self::Reviewer),
+            "security" | "securityreviewer" => Ok(Self::SecurityReviewer),
+            "design" | "designer" => Ok(Self::Designer),
+            "debug" | "debugger" => Ok(Self::Debugger),
+            "ship" | "releaseagent" => Ok(Self::ReleaseAgent),
             other => Err(format!(
-                "Unsupported agent mode '{other}'. Supported: vibe, plan, build, verify, review, ship"
+                "Unsupported agent role '{other}'. Supported: vibe, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent"
             )),
         }
     }
@@ -107,25 +132,33 @@ impl AgentMode {
     fn as_str(self) -> &'static str {
         match self {
             Self::Vibe => "vibe",
-            Self::Plan => "plan",
-            Self::Build => "build",
-            Self::Verify => "verify",
-            Self::Review => "review",
-            Self::Ship => "ship",
+            Self::Planner => "planner",
+            Self::Researcher => "researcher",
+            Self::Implementer => "implementer",
+            Self::Reviewer => "reviewer",
+            Self::Tester => "tester",
+            Self::SecurityReviewer => "securityreviewer",
+            Self::Designer => "designer",
+            Self::Debugger => "debugger",
+            Self::ReleaseAgent => "releaseagent",
         }
     }
 
     fn permits_tool(self, name: &str) -> bool {
         match self {
-            Self::Plan | Self::Review => matches!(
+            Self::Planner | Self::Researcher | Self::Reviewer | Self::SecurityReviewer => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research"
             ),
-            Self::Verify => matches!(
+            Self::Tester => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "verify"
             ),
-            Self::Vibe | Self::Build | Self::Ship => true,
+            Self::Vibe
+            | Self::Implementer
+            | Self::Designer
+            | Self::Debugger
+            | Self::ReleaseAgent => true,
         }
     }
 }
@@ -141,6 +174,7 @@ fn default_base(provider: Provider) -> &'static str {
         Provider::DeepSeek => "https://api.deepseek.com",
         Provider::Xiaomi => "https://api.xiaomi.com/v1",
         Provider::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        Provider::OmniRoute => "http://127.0.0.1:20128/v1",
         Provider::Compatible => "",
     }
 }
@@ -154,6 +188,7 @@ fn provider_label(provider: Provider) -> &'static str {
         Provider::DeepSeek => "DeepSeek",
         Provider::Xiaomi => "Xiaomi",
         Provider::Qwen => "Qwen",
+        Provider::OmniRoute => "OmniRoute",
         Provider::Local => "Local (Ollama / LM Studio)",
         Provider::Compatible => "OpenAI-Compatible",
     }
@@ -170,8 +205,13 @@ fn provider_env_var(provider: Provider) -> Option<&'static str> {
         Provider::DeepSeek => "DEEPSEEK_API_KEY",
         Provider::Qwen => "DASHSCOPE_API_KEY",
         Provider::Xiaomi => "XIAOMI_API_KEY",
+        Provider::OmniRoute => "OMNIROUTE_API_KEY",
         Provider::Local | Provider::Compatible => return None,
     })
+}
+
+fn provider_requires_key(provider: Provider) -> bool {
+    !matches!(provider, Provider::Local | Provider::OmniRoute)
 }
 
 /// Resolve the API key to use: prefer the explicit in-session key, otherwise
@@ -193,7 +233,7 @@ fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
 
 /// Sensible default model per provider so vibecoding needs no configuration
 /// when the user has not named a specific model.
-fn default_model(provider: Provider) -> &'static str {
+fn default_model(provider: Provider, role: AgentRole) -> &'static str {
     match provider {
         Provider::OpenAi => "gpt-4o-mini",
         Provider::Anthropic => "claude-3-5-sonnet-latest",
@@ -202,8 +242,36 @@ fn default_model(provider: Provider) -> &'static str {
         Provider::Xiaomi => "mixtral-8x7b-instruct",
         Provider::Qwen => "qwen-plus",
         Provider::Local => "llama3",
+        Provider::OmniRoute => match role {
+            AgentRole::Planner
+            | AgentRole::Researcher
+            | AgentRole::Reviewer
+            | AgentRole::Tester
+            | AgentRole::SecurityReviewer => "auto/cheap",
+            _ => "auto/coding",
+        },
         Provider::Compatible => "local-model",
     }
+}
+
+/// OmniRoute is local by default. Plain HTTP is permitted only for an explicit
+/// loopback host; remote gateways must use HTTPS so prompts and endpoint keys
+/// cannot be sent over cleartext by a forged renderer request.
+fn validate_omniroute_base(base: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(base.trim())
+        .map_err(|error| format!("Invalid OmniRoute base URL: {error}"))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("OmniRoute base URL must not contain embedded credentials".to_string());
+    }
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let loopback = matches!(host.as_str(), "127.0.0.1" | "::1" | "localhost");
+    if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
+        return Err(
+            "OmniRoute must use loopback HTTP (127.0.0.1/localhost) or a remote HTTPS endpoint"
+                .to_string(),
+        );
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
 async fn first_local_model(base: &str) -> Option<String> {
@@ -355,14 +423,15 @@ fn tool_defs() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "research",
-            description: "Delegate a READ-ONLY investigation to a sub-agent (it can read/list/grep but never writes or runs commands). Use for broad codebase exploration so the main context stays lean. Returns a concise summary.",
+            description: "Spawn one or more parallel READ-ONLY research sub-agents. Give independent questions in `questions` for deep research; each can read/list/grep but never writes or runs commands.",
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "question": { "type": "string", "description": "What to investigate" },
+                    "question": { "type": "string", "description": "One investigation (backward-compatible)" },
+                    "questions": { "type": "array", "items": { "type": "string" }, "description": "Independent investigations to run concurrently (max 4)" },
                     "path": { "type": "string", "description": "Optional relative scope" }
                 },
-                "required": ["question"]
+                "anyOf": [{ "required": ["question"] }, { "required": ["questions"] }]
             }),
         },
         ToolDef {
@@ -389,7 +458,7 @@ fn tool_defs() -> Vec<ToolDef> {
 }
 
 /// Read-only tool set used by research sub-agents.
-fn tool_defs_for_profile(profile: &HarnessProfile, mode: AgentMode) -> Vec<ToolDef> {
+fn tool_defs_for_profile(profile: &HarnessProfile, mode: AgentRole) -> Vec<ToolDef> {
     tool_defs()
         .into_iter()
         .filter(|tool| profile.permits_tool(tool.name) && mode.permits_tool(tool.name))
@@ -462,7 +531,7 @@ fn load_memory_at(root: &Path) -> String {
 /// A project may commit `whim.harness.json` to constrain its own agent runs.
 /// Missing profiles are optional; malformed or escaping profiles fail closed
 /// instead of silently weakening the expected execution policy.
-fn load_harness_profile(root: &Path) -> Result<(HarnessProfile, bool), String> {
+pub(crate) fn load_harness_profile(root: &Path) -> Result<(HarnessProfile, bool), String> {
     let path = root.join(HARNESS_PROFILE_PATH);
     if !path.exists() {
         return Ok((HarnessProfile::default(), false));
@@ -486,16 +555,20 @@ fn build_system_prompt(
     harness_profile: Option<&HarnessProfile>,
 ) -> String {
     let mode_note = match mode {
-        "plan" => "This is a PLAN task: inspect the repository and produce a concrete, reviewable plan.",
-        "build" => "This is a BUILD task: favor maintainable, tested software. Run the relevant tests and type checks before declaring done.",
-        "verify" => "This is a VERIFY task: inspect and test the current workspace without editing it.",
-        "review" => "This is a REVIEW task: explain risks, change impact, and recommended next steps without editing the workspace.",
-        "ship" => "This is a SHIP task: prepare the requested outcome for release. Make only necessary changes, run relevant readiness checks, and do not perform a public or production deployment.",
+        "plan" | "planner" => "This is a PLAN task: inspect the repository and produce a concrete, reviewable plan.",
+        "researcher" => "This is a RESEARCH task: investigate the repository without mutating it, and summarize your findings.",
+        "build" | "implementer" => "This is a BUILD task: write robust code and tests to solve the problem.",
+        "review" | "reviewer" => "This is a REVIEW task: explain risks, change impact, and recommended next steps without editing the workspace.",
+        "verify" | "tester" => "This is a VERIFY task: inspect and test the current workspace without editing it.",
+        "securityreviewer" => "This is a SECURITY REVIEW task: look for vulnerabilities, bad practices, and insecure dependencies.",
+        "designer" => "This is a DESIGN task: craft beautiful UI components and polish styles.",
+        "debugger" => "This is a DEBUG task: locate the root cause of issues and propose minimal fixes.",
+        "ship" | "releaseagent" => "This is a SHIP task: prepare the requested outcome for release. Make only necessary changes, run relevant readiness checks.",
         _ => "This is an exploratory or prototype task (vibe mode): a working demo is the goal, but still verify it actually runs.",
     };
     let mode_guard = match mode {
-        "plan" | "review" => "Native mode policy: this run is read-only. File writes, shell commands, checkpoints, previews, tunnels, and rollbacks are unavailable. Do not claim that any implementation or verification ran.",
-        "verify" => "Native mode policy: this run cannot edit files. The only command capability is `verify`, restricted to Whim-discovered project checks. Do not use run_command or claim a broader production guarantee from one check.",
+        "plan" | "planner" | "researcher" | "review" | "reviewer" | "securityreviewer" => "Native mode policy: this run is read-only. File writes, shell commands, checkpoints, previews, tunnels, and rollbacks are unavailable. Do not claim that any implementation or verification ran.",
+        "verify" | "tester" => "Native mode policy: this run cannot edit files. The only command capability is `verify`, restricted to Whim-discovered project checks. Do not use run_command or claim a broader production guarantee from one check.",
         _ => "Native mode policy: use only the scoped tools exposed by Whim and the active project harness profile.",
     };
     let harness_context = harness_profile
@@ -752,6 +825,7 @@ async fn chat(
         | Provider::DeepSeek
         | Provider::Xiaomi
         | Provider::Qwen
+        | Provider::OmniRoute
         | Provider::Compatible => {
             chat_openai_style(base, &resolved_key, model, system, messages, tools).await
         }
@@ -1231,7 +1305,7 @@ async fn run_tool(
     arguments: &Value,
     root: &Path,
     profile: &HarnessProfile,
-    mode: AgentMode,
+    mode: AgentRole,
 ) -> (String, bool) {
     if !mode.permits_tool(name) {
         return (
@@ -1274,6 +1348,7 @@ async fn run_tool(
                         content,
                         create_parents: Some(true),
                         overwrite: Some(true),
+                        expected_modified_ms: None,
                     },
                 ) {
                     Ok(outcome) => Ok(format!(
@@ -1356,7 +1431,7 @@ async fn run_tool(
             let timeout = arguments["timeout_ms"]
                 .as_u64()
                 .unwrap_or(VERIFY_TIMEOUT_MS);
-            if mode == AgentMode::Verify && !is_discovered_verification_command(root, &command) {
+            if mode == AgentRole::Tester && !is_discovered_verification_command(root, &command) {
                 Err("Verify mode only accepts a Whim-discovered verification command for this workspace.".to_string())
             } else if let Some(reason) = is_destructive_command(&command) {
                 Err(format!(
@@ -1504,6 +1579,7 @@ fn edit_workspace_file(
             content: updated,
             create_parents: Some(true),
             overwrite: Some(true),
+            expected_modified_ms: None,
         },
     )?;
     Ok(format!(
@@ -1679,6 +1755,7 @@ async fn run_research(
     scope: &str,
     root: &Path,
     profile: &HarnessProfile,
+    operation_id: &str,
 ) -> (String, bool) {
     let system = format!(
         "You are a read-only research sub-agent inside the workspace at: {}\n\
@@ -1697,6 +1774,9 @@ Windows environment; relative paths only.",
     })];
     let mut notes = String::new();
     for _ in 0..RESEARCH_MAX_ITERS {
+        if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+            return ("Research cancelled with the parent task.".into(), true);
+        }
         let response =
             match chat_with_retry(provider, base, api_key, model, &system, &messages, &tools).await
             {
@@ -1729,13 +1809,16 @@ Windows environment; relative paths only.",
             break;
         }
         for call in &response.tool_calls {
+            if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+                return ("Research cancelled with the parent task.".into(), true);
+            }
             let (output, is_error) = run_tool(
                 state.clone(),
                 &call.name,
                 &call.arguments,
                 root,
                 profile,
-                AgentMode::Plan,
+                AgentRole::Planner,
             )
             .await;
             if is_error {
@@ -1858,7 +1941,7 @@ async fn run_native_agent<R: tauri::Runtime>(
     api_key: &Option<String>,
     model: &str,
     prompt: &str,
-    mode: AgentMode,
+    mode: AgentRole,
     auto_continue: bool,
     timeout_ms: u64,
     operation_id: &str,
@@ -2209,18 +2292,97 @@ async fn run_native_agent<R: tauri::Runtime>(
                     .and_then(Value::as_str)
                     .unwrap_or("")
                     .to_string();
-                let (output, is_error) = run_research(
-                    state.clone(),
-                    provider,
-                    base,
-                    api_key,
-                    model,
-                    &question,
-                    &scope,
-                    &root,
-                    profile,
-                )
+                let mut questions = call
+                    .arguments
+                    .get("questions")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .take(4)
+                            .map(str::to_string)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if questions.is_empty() {
+                    questions.push(question);
+                }
+                let workspace = root.to_string_lossy().into_owned();
+                let child_jobs = questions.iter().enumerate().map(|(index, item)| {
+                    let child_operation = format!("{operation_id}:r:{}:{}", call.id, index + 1);
+                    let started_at = Instant::now();
+                    let created = crate::backend::lock(&state.orchestration, "orchestration").and_then(|mut store| {
+                        let job = store.create(crate::orchestrator::CreateJobInput {
+                            workspace: workspace.clone(),
+                            intent: format!("Read-only research stream for parent operation {operation_id}: {item}"),
+                            title: Some(format!("Research: {item}")),
+                            mode: crate::orchestrator::JobMode::Research,
+                            operation_id: Some(child_operation),
+                            provider: Some(provider_name(provider).to_string()),
+                            model: Some(model.to_string()),
+                            max_duration_ms: Some(5 * 60 * 1000),
+                        })?;
+                        store.transition(&workspace, &job.id, crate::orchestrator::JobAction::Start)
+                    });
+                    created.ok().map(|job| (job.id, started_at))
+                }).collect::<Vec<_>>();
+                let results = join_all(questions.iter().map(|item| {
+                    run_research(
+                        state.clone(),
+                        provider,
+                        base,
+                        api_key,
+                        model,
+                        item,
+                        &scope,
+                        &root,
+                        profile,
+                        operation_id,
+                    )
+                }))
                 .await;
+                if let Ok(mut store) = crate::backend::lock(&state.orchestration, "orchestration") {
+                    for (index, (text, failed)) in results.iter().enumerate() {
+                        let Some((job_id, started_at)) =
+                            child_jobs.get(index).and_then(Option::as_ref)
+                        else {
+                            continue;
+                        };
+                        let cancelled =
+                            crate::backend::is_operation_cancelled(state.inner(), operation_id);
+                        let outcome = if cancelled {
+                            crate::orchestrator::JobOutcome::Cancelled
+                        } else if *failed {
+                            crate::orchestrator::JobOutcome::Failed
+                        } else {
+                            crate::orchestrator::JobOutcome::Completed
+                        };
+                        let _ = store.finish(
+                            &workspace,
+                            job_id,
+                            outcome,
+                            Some(text.clone()),
+                            crate::orchestrator::JobEvidence {
+                                event_count: 2,
+                                tool_call_count: 0,
+                                failed_tool_call_count: u32::from(*failed),
+                                duration_ms: Some(
+                                    started_at.elapsed().as_millis().min(u128::from(u64::MAX))
+                                        as u64,
+                                ),
+                                timed_out: false,
+                            },
+                        );
+                    }
+                }
+                let is_error = results.iter().all(|(_, failed)| *failed);
+                let output = results
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (text, _))| format!("## Research stream {}\n{}", index + 1, text))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
                 record_agent_event(
                     app,
                     operation_id,
@@ -2436,16 +2598,20 @@ pub async fn fetch_provider_models(
         | Provider::DeepSeek
         | Provider::Xiaomi
         | Provider::Qwen
+        | Provider::OmniRoute
         | Provider::Compatible => {
-            if api_key.is_empty() && provider_enum != Provider::Local {
+            if api_key.is_empty() && provider_requires_key(provider_enum) {
                 return Err("An API key is required to list these models.".into());
             }
-            let base = base_url
+            let mut base = base_url
                 .filter(|base| !base.trim().is_empty())
                 .map(str::to_string)
                 .unwrap_or_else(|| default_base(provider_enum).to_string());
             if base.trim().is_empty() {
                 return Err("A base URL is required to list these models.".into());
+            }
+            if provider_enum == Provider::OmniRoute {
+                base = validate_omniroute_base(&base)?;
             }
             let url = format!("{}/models", base.trim_end_matches('/'));
             let mut request = client.get(&url);
@@ -2532,7 +2698,7 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let (profile, profile_configured) =
         load_harness_profile(&root).map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
     let timeout_ms = profile.duration_cap(timeout_ms);
-    let mode = AgentMode::parse(request.agent.as_deref())
+    let mode = AgentRole::parse(request.agent.as_deref())
         .map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
 
     // Resolve provider. auto (or empty) lets Whim pick the best available
@@ -2575,10 +2741,10 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
             ),
         }
     } else {
-        default_model(provider).to_string()
+        default_model(provider, mode).to_string()
     };
 
-    let base = request
+    let mut base = request
         .base_url
         .clone()
         .filter(|url| !url.is_empty())
@@ -2587,11 +2753,15 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     if base.trim().is_empty() {
         return Err("WHIM:AGENT_START|This provider requires a base URL (set baseUrl)".to_string());
     }
+    if provider == Provider::OmniRoute {
+        base =
+            validate_omniroute_base(&base).map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
+    }
     let api_key = request.api_key.clone();
     // Early, crisp failure when a cloud provider has no key at all (neither
     // typed in-session nor present in the environment). Without this the run
     // would burn three provider retries on a 401 before surfacing anything.
-    if provider != Provider::Local && resolve_key(provider, &api_key).is_none() {
+    if provider_requires_key(provider) && resolve_key(provider, &api_key).is_none() {
         return Err(format!(
             "WHIM:AGENT_START|API key required for {}. Open Providers, select it, and paste your key (or set the {} env var).",
             provider_label(provider),
@@ -2633,6 +2803,7 @@ mod tests {
         assert!(parse_provider("ollama").is_ok());
         assert!(parse_provider("qwen").is_ok());
         assert!(parse_provider("compatible").is_ok());
+        assert_eq!(parse_provider("omniroute").unwrap(), Provider::OmniRoute);
         assert!(parse_provider("XIAOMI").is_ok());
         assert!(
             parse_provider("opencode").is_err(),
@@ -2642,19 +2813,36 @@ mod tests {
     }
 
     #[test]
-    fn agent_modes_are_strict_and_narrow_tool_authority() {
-        assert_eq!(AgentMode::parse(None).unwrap(), AgentMode::Vibe);
-        assert_eq!(AgentMode::parse(Some("VERIFY")).unwrap(), AgentMode::Verify);
-        assert!(AgentMode::parse(Some("operate")).is_err());
+    fn omniroute_uses_role_aware_routes_and_secure_bases() {
+        assert_eq!(
+            default_model(Provider::OmniRoute, AgentRole::Researcher),
+            "auto/cheap"
+        );
+        assert_eq!(
+            default_model(Provider::OmniRoute, AgentRole::Implementer),
+            "auto/coding"
+        );
+        assert!(validate_omniroute_base("http://127.0.0.1:20128/v1").is_ok());
+        assert!(validate_omniroute_base("http://localhost:20128/v1/").is_ok());
+        assert!(validate_omniroute_base("https://router.example.com/v1").is_ok());
+        assert!(validate_omniroute_base("http://router.example.com/v1").is_err());
+        assert!(!provider_requires_key(Provider::OmniRoute));
+    }
 
-        assert!(AgentMode::Plan.permits_tool("read_file"));
-        assert!(AgentMode::Plan.permits_tool("plan"));
-        assert!(!AgentMode::Plan.permits_tool("write_file"));
-        assert!(!AgentMode::Review.permits_tool("run_command"));
-        assert!(AgentMode::Verify.permits_tool("verify"));
-        assert!(!AgentMode::Verify.permits_tool("run_command"));
-        assert!(!AgentMode::Verify.permits_tool("edit_file"));
-        assert!(AgentMode::Build.permits_tool("edit_file"));
+    #[test]
+    fn agent_modes_are_strict_and_narrow_tool_authority() {
+        assert_eq!(AgentRole::parse(None).unwrap(), AgentRole::Vibe);
+        assert_eq!(AgentRole::parse(Some("tester")).unwrap(), AgentRole::Tester);
+        assert!(AgentRole::parse(Some("operate")).is_err());
+
+        assert!(AgentRole::Planner.permits_tool("read_file"));
+        assert!(AgentRole::Planner.permits_tool("plan"));
+        assert!(!AgentRole::Planner.permits_tool("write_file"));
+        assert!(!AgentRole::Reviewer.permits_tool("run_command"));
+        assert!(AgentRole::Tester.permits_tool("verify"));
+        assert!(!AgentRole::Tester.permits_tool("run_command"));
+        assert!(!AgentRole::Tester.permits_tool("edit_file"));
+        assert!(AgentRole::Implementer.permits_tool("edit_file"));
     }
 
     #[test]
@@ -2952,7 +3140,7 @@ mod tests {
             }"#,
         )
         .expect("parse harness profile");
-        let tools = tool_defs_for_profile(&profile, AgentMode::Build);
+        let tools = tool_defs_for_profile(&profile, AgentRole::Implementer);
         assert_eq!(
             tools.iter().map(|tool| tool.name).collect::<Vec<_>>(),
             vec!["read_file", "plan"]

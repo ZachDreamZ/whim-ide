@@ -8,6 +8,10 @@ describe("bridge event boundary", () => {
       message: "The selected folder is blocked",
     });
     expect(whimError("plain failure")).toEqual({ message: "plain failure" });
+    expect(whimError("WHIM_ERROR: WORKSPACE_FILE_CONFLICT - Reload before saving")).toEqual({
+      code: "WORKSPACE_FILE_CONFLICT",
+      message: "Reload before saving",
+    });
   });
 
   it("renders only recognized, sanitized event shapes", () => {

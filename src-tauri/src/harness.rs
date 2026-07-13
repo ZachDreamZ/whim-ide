@@ -65,6 +65,13 @@ pub struct HarnessProfile {
     /// A profile may lower, but never raise, a task's requested timeout.
     #[serde(default)]
     pub max_duration_ms: Option<u64>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub environment_adapters: Option<Vec<String>>,
+    #[serde(default)]
+    pub model_policy: Option<String>,
+    #[serde(default)]
+    pub require_signed_profiles: Option<bool>,
 }
 
 impl Default for HarnessProfile {
@@ -78,6 +85,9 @@ impl Default for HarnessProfile {
             verification_commands: Vec::new(),
             max_tool_iterations: None,
             max_duration_ms: None,
+            environment_adapters: None,
+            model_policy: None,
+            require_signed_profiles: None,
         }
     }
 }

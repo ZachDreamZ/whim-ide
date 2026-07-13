@@ -235,20 +235,16 @@ export function ShipHub({ workspace }: ShipHubProps) {
           <span>Workspace deployment and preflight checks are available in the installed Whim Windows app.</span>
         </div>
       )}
-      <div className="ship-hero">
-        <div className="ship-copy">
-          <span className="hub-eyebrow"><Rocket size={13} /> Universal Ship Hub</span>
-          <h1>From local intent<br />to <em>living software.</em></h1>
-          <p>Run the selected provider’s real preflight, inspect Git changes, and deploy only when the native command reports that the target is ready.</p>
-          <div className="hero-actions">
-            <button className="primary-action" onClick={preflight} disabled={busy || !native} type="button">
-              {checking ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />} {prepareLabel}
-            </button>
-            <button className="secondary-action" type="button" onClick={reviewDiff} disabled={busy || !native}>
-              {auxiliaryAction === "diff" ? <LoaderCircle className="spin" size={14} /> : <FileDiff size={14} />} Review release diff
-            </button>
-          </div>
+      <section className="market-toolbar" style={{ justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button className="primary-action" onClick={preflight} disabled={busy || !native} type="button">
+            {checking ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />} {prepareLabel}
+          </button>
+          <button className="secondary-action" type="button" onClick={reviewDiff} disabled={busy || !native}>
+            {auxiliaryAction === "diff" ? <LoaderCircle className="spin" size={14} /> : <FileDiff size={14} />} Review release diff
+          </button>
         </div>
+      </section>
 
         <div className="release-card">
           <div className="release-card-head">
@@ -276,7 +272,6 @@ export function ShipHub({ workspace }: ShipHubProps) {
             <button type="button" onClick={() => document.getElementById("ship-targets")?.scrollIntoView({ behavior: "smooth", block: "center" })} disabled={!native}>Change <ChevronRight size={12} /></button>
           </div>
         </div>
-      </div>
 
       <div className="ship-layout" style={{ marginTop: 30 }}>
         <section className="ship-targets" id="ship-targets">

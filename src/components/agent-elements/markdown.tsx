@@ -47,9 +47,20 @@ const code = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
 
+/**
+ * Replace citation patterns like [1], [2] etc. with styled inline superscript
+ * citation badges, matching ChatGPT's SearchGPT inline citation UI.
+ */
+function injectCitationBadges(text: string): string {
+  return text.split(/(```[\s\S]*?```)/g).map((segment) => segment.startsWith("```") ? segment : segment.replace(
+    /\[(\d{1,3})\](?!\s*:|\()/g,
+    (_match, num) => `<cite data-citation="${num}" title="Source [${num}]">[${num}]</cite>`,
+  )).join("");
+}
+
 export function Markdown({ content, className }: MarkdownProps) {
-  const safeContent = normalizeCodeFenceLanguages(
-    fixNumberedListBreaks(content),
+  const safeContent = injectCitationBadges(
+    normalizeCodeFenceLanguages(fixNumberedListBreaks(content)),
   );
   const components: Components = {
     h1: ({ children, ...props }) => (
@@ -162,6 +173,10 @@ export function Markdown({ content, className }: MarkdownProps) {
 
   return (
     <div
+      onClick={(event) => {
+        const citation = (event.target as HTMLElement).closest<HTMLElement>("cite[data-citation]");
+        if (citation?.dataset.citation) window.dispatchEvent(new CustomEvent("whim:citation", { detail: Number(citation.dataset.citation) }));
+      }}
       className={cn(
         "an-markdown",
         "overflow-hidden wrap-break-word",

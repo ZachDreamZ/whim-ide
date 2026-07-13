@@ -29,7 +29,7 @@ vi.mock("../lib/bridge", () => ({
 }));
 
 describe("MissionControl mode selector", () => {
-  it("exposes the six core modes and changes the selected mode", () => {
+  it("exposes every agent role and changes the selected mode", () => {
     render(
       <MissionControl
         workspace={null}
@@ -43,14 +43,10 @@ describe("MissionControl mode selector", () => {
       />,
     );
 
-    for (const name of ["Vibe", "Plan", "Build", "Verify", "Review", "Ship"]) {
-      expect(screen.getByRole("tab", { name })).toBeVisible();
+    for (const name of ["Vibe", "Planner", "Researcher", "Implementer", "Reviewer", "Tester", "Security", "Designer", "Debugger", "Release Agent"]) {
+      expect(screen.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toBeVisible();
     }
-    expect(screen.getByRole("tab", { name: "Vibe" })).toHaveAttribute("aria-selected", "true");
-
-    fireEvent.click(screen.getByRole("tab", { name: "Verify" }));
-
-    expect(screen.getByRole("tab", { name: "Verify" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Vibe" })).toHaveAttribute("aria-selected", "false");
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Tester/ }));
+    expect(screen.getByRole("button", { name: "Whim Tester" })).toBeVisible();
   });
 });

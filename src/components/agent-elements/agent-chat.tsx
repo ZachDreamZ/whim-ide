@@ -24,9 +24,12 @@ export function AgentChat({
   emptyStatePosition = "default",
   emptySuggestionsPlacement = "input",
   emptySuggestionsPosition = "top",
+  greeting,
   questionTool,
   className,
   style,
+  leftActions,
+  rightActions,
 }: AgentChatProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
@@ -56,8 +59,8 @@ export function AgentChat({
       onSelect={handleEmptySuggestionSelect}
       disabled={status === "streaming" || status === "submitted"}
       className={cn(
-        "w-full justify-center",
-        emptySuggestionsPosition === "top" ? "mb-3" : "mt-3",
+        "w-full justify-center whim-suggestions",
+        emptySuggestionsPosition === "top" ? "mb-6" : "mt-6",
         suggestionConfig.className,
       )}
       itemClassName={cn("h-8 rounded-md px-3", suggestionConfig.itemClassName)}
@@ -81,6 +84,8 @@ export function AgentChat({
       onPaste={attachments?.onPaste}
       isDragOver={attachments?.isDragOver}
       suggestions={showInputSuggestions ? suggestions : []}
+      leftActions={leftActions}
+      rightActions={rightActions}
       questionBar={
         pendingQuestion
           ? {
@@ -122,10 +127,16 @@ export function AgentChat({
       style={style}
     >
       {isCenteredEmptyState ? (
-        <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-4">
-          <div className="w-full max-w-an">
+        <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-4 overflow-y-auto">
+          <div className="w-full max-w-an flex flex-col items-center">
+            {greeting}
             {emptySuggestionsPosition === "top" ? emptySuggestionsNode : null}
-            {inputBarNode}
+            <div className="w-full">
+              {inputBarNode}
+              <div className="text-center text-xs text-[#a3a3a3] mt-2 pb-4">
+                Whim can make mistakes. Check important info.
+              </div>
+            </div>
             {emptySuggestionsPosition === "bottom"
               ? emptySuggestionsNode
               : null}

@@ -16,6 +16,10 @@ export function whimError(error: unknown): WhimErrorShape {
   if (match) {
     return { code: match[1], message: match[2].trim() || raw };
   }
+  const legacy = /^WHIM_ERROR:\s*([A-Z0-9_]+)\s*-\s*(.*)$/s.exec(raw.trim());
+  if (legacy) {
+    return { code: legacy[1], message: legacy[2].trim() || raw };
+  }
   return { message: raw };
 }
 
@@ -48,6 +52,8 @@ export type WorkspaceInfo = {
   name: string;
   gitRepository: boolean;
 };
+
+export type AppContextResult = { source: "vscode" | "terminal" | "screenshot"; available: boolean; message: string; content?: string | null; path?: string | null; contentKind?: "text" | "image" };
 
 /** A Git-reported execution folder. `managed` means Whim created it under
  * the repository's `.whim-worktrees` sibling directory. */
@@ -106,6 +112,8 @@ export type WorkspaceEntry = {
   size: number;
   modifiedMs?: number | null;
 };
+export type WorkspaceFileContent = { path: string; content: string; size: number; modifiedMs?: number | null };
+export type WorkspaceFileWrite = { path: string; bytesWritten: number; created: boolean; modifiedMs?: number | null };
 
 export type NativeResult = {
   success: boolean;
@@ -124,6 +132,7 @@ export type NativeResult = {
 export type OrchestrationJobMode =
   | "vibe"
   | "plan"
+  | "research"
   | "build"
   | "verify"
   | "review"
@@ -214,11 +223,12 @@ export type ProviderStatus = {
 export type DiscoveredProvider = {
   provider: string;
   label: string;
-  kind: "local" | "cloud";
+  kind: "local" | "gateway" | "cloud";
   available: boolean;
   hasKey: boolean;
   baseUrl: string | null;
   note: string | null;
+  capabilities: { chat: boolean; speechToText: boolean; textToSpeech: boolean };
 };
 
 export type ProviderInventory = {
@@ -228,7 +238,7 @@ export type ProviderInventory = {
 };
 
 export type LocalProviderStatus = {
-  id: "ollama" | "lmstudio";
+  id: "ollama" | "lmstudio" | "omniroute";
   name: string;
   detected: boolean;
   reachable: boolean;
@@ -388,12 +398,29 @@ export const bridge = {
   },
 
   async readFile(workspace: string, path: string): Promise<string> {
-    const result = await call<{ content: string }>("read_workspace_file", { workspace, request: { path, maxBytes: 8_000_000 } });
+    const result = await bridge.readFileContent(workspace, path);
     return result.content;
   },
 
-  async writeFile(workspace: string, path: string, content: string, createParents = false): Promise<void> {
-    await call("write_workspace_file", { workspace, request: { path, content, createParents, overwrite: true } });
+  async readFileContent(workspace: string, path: string): Promise<WorkspaceFileContent> {
+    return call<WorkspaceFileContent>("read_workspace_file", { workspace, request: { path, maxBytes: 8_000_000 } });
+  },
+
+  async writeFile(workspace: string, path: string, content: string, createParents = false, expectedModifiedMs?: number | null): Promise<WorkspaceFileWrite> {
+    return call<WorkspaceFileWrite>("write_workspace_file", { workspace, request: { path, content, createParents, overwrite: true, expectedModifiedMs } });
+  },
+
+  async captureAppContext(source: AppContextResult["source"]): Promise<AppContextResult> {
+    if (!inTauri()) return { source, available: false, message: "Desktop context is available in the installed Windows app." };
+    return call<AppContextResult>("capture_app_context", { request: { source } });
+  },
+
+  async transcribeVoice(input: { audio: number[]; mimeType: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string }): Promise<string> {
+    const result = await call<{ text: string }>("transcribe_voice", { request: input }); return result.text;
+  },
+
+  async synthesizeVoice(input: { text: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string; voice?: string }): Promise<number[]> {
+    return call<number[]>("synthesize_voice", { request: input });
   },
 
   async runCommand(workspace: string, command: string, options?: { operationId?: string; timeoutMs?: number; confirmed?: boolean }): Promise<NativeResult> {

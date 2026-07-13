@@ -518,3 +518,112 @@ pub(crate) async fn run_powershell_command_at(
     )
     .await
 }
+
+#[allow(dead_code)]
+pub trait ExecutionAdapter: Send + Sync {
+    #[allow(async_fn_in_trait)]
+    async fn spawn_process(
+        &self,
+        state: &BackendState,
+        operation_id: Option<String>,
+        kind: &str,
+        spec: ProcessSpec,
+    ) -> Result<CommandResult, String>;
+
+    #[allow(async_fn_in_trait)]
+    async fn read_file(
+        &self,
+        path: &Path,
+        max_bytes: Option<usize>,
+    ) -> Result<(String, bool), String>;
+
+    #[allow(async_fn_in_trait)]
+    async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String>;
+}
+
+#[allow(dead_code)]
+pub struct NativeWindowsAdapter;
+
+impl ExecutionAdapter for NativeWindowsAdapter {
+    async fn spawn_process(
+        &self,
+        state: &BackendState,
+        operation_id: Option<String>,
+        kind: &str,
+        spec: ProcessSpec,
+    ) -> Result<CommandResult, String> {
+        execute_tracked(state, operation_id, kind, spec).await
+    }
+
+    async fn read_file(
+        &self,
+        path: &Path,
+        max_bytes: Option<usize>,
+    ) -> Result<(String, bool), String> {
+        // We simulate reading file natively. In reality, it would call workspace read directly.
+        let content = std::fs::read_to_string(path).map_err(|e| format!("Read failed: {e}"))?;
+        let max = max_bytes.unwrap_or(super::MAX_READ_BYTES);
+        let truncated = content.len() > max;
+        let mut text = content;
+        if truncated {
+            text.truncate(max);
+        }
+        Ok((text, truncated))
+    }
+
+    async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String> {
+        std::fs::write(path, content).map_err(|e| format!("Write failed: {e}"))?;
+        Ok(content.len())
+    }
+}
+
+#[allow(dead_code)]
+pub struct WslAdapter {
+    pub distro: Option<String>,
+}
+
+impl ExecutionAdapter for WslAdapter {
+    async fn spawn_process(
+        &self,
+        state: &BackendState,
+        operation_id: Option<String>,
+        kind: &str,
+        mut spec: ProcessSpec,
+    ) -> Result<CommandResult, String> {
+        let mut wsl_args = Vec::new();
+        if let Some(distro) = &self.distro {
+            wsl_args.push("-d".to_string());
+            wsl_args.push(distro.clone());
+        }
+        wsl_args.push("--".to_string());
+        wsl_args.push(spec.program);
+        wsl_args.extend(spec.args);
+
+        spec.program = "wsl.exe".to_string();
+        spec.args = wsl_args;
+
+        execute_tracked(state, operation_id, kind, spec).await
+    }
+
+    async fn read_file(
+        &self,
+        path: &Path,
+        max_bytes: Option<usize>,
+    ) -> Result<(String, bool), String> {
+        // A real WSL adapter might shell out to wsl.exe cat, but since WSL mounts the Windows FS
+        // we can often just read the file directly on the host if we have the host path.
+        let content = std::fs::read_to_string(path).map_err(|e| format!("WSL Read failed: {e}"))?;
+        let max = max_bytes.unwrap_or(super::MAX_READ_BYTES);
+        let truncated = content.len() > max;
+        let mut text = content;
+        if truncated {
+            text.truncate(max);
+        }
+        Ok((text, truncated))
+    }
+
+    async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String> {
+        std::fs::write(path, content).map_err(|e| format!("WSL Write failed: {e}"))?;
+        Ok(content.len())
+    }
+}
