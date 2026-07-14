@@ -29,3 +29,7 @@ tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-
 uuid = { version = "1", features = ["serde", "v4"] }
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+keyring = "4.1.4"
+axum = "0.8.9"
+tower = "0.5.3"
+async-trait = "0.1.89"

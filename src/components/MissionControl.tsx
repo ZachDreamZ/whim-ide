@@ -15,6 +15,15 @@ import {
   Undo2,
   WandSparkles,
   Activity,
+  Workflow,
+  Gamepad2,
+  Palette,
+  Dna,
+  Languages,
+  Accessibility,
+  Gauge,
+  Code,
+  Brush,
 } from "lucide-react";
 import { AgentChat } from "./agent-elements/agent-chat";
 import { ContextIndexCard } from "./ContextIndexCard";
@@ -74,23 +83,26 @@ type MissionControlProps = {
 
 const initialMessages: UIMessage[] = [];
 
-type MissionAgentMode = "vibe" | "planner" | "researcher" | "implementer" | "reviewer" | "tester" | "securityReviewer" | "designer" | "debugger" | "releaseAgent" | "benchmark";
+type MissionAgentMode = "auto" | "vibe" | "planner" | "researcher" | "implementer" | "reviewer" | "tester" | "securityReviewer" | "designer" | "debugger" | "releaseAgent" | "benchmark" | "gameDesigner" | "techArtist" | "playtester" | "assetGenerator" | "refactorer" | "dataScientist" | "accessibilityExpert" | "localizer";
 
 const agentModes: readonly MissionAgentMode[] = [
-  "vibe", "planner", "researcher", "implementer", "reviewer",
-  "tester", "securityReviewer", "designer", "debugger", "releaseAgent", "benchmark"
+  "auto", "vibe", "planner", "researcher", "implementer", "reviewer",
+  "tester", "securityReviewer", "designer", "debugger", "releaseAgent", "benchmark",
+  "gameDesigner", "techArtist", "playtester", "assetGenerator", "refactorer", "dataScientist", "accessibilityExpert", "localizer"
 ];
 
-function orchestrationMode(mode: MissionAgentMode): "vibe" | "plan" | "build" | "verify" | "review" | "ship" {
-  if (mode === "planner") return "plan";
+function orchestrationMode(mode: MissionAgentMode): "auto" | "vibe" | "plan" | "build" | "verify" | "review" | "ship" {
+  if (mode === "auto") return "auto";
+  if (mode === "planner" || mode === "gameDesigner") return "plan";
   if (mode === "reviewer" || mode === "securityReviewer") return "review";
-  if (mode === "tester") return "verify";
+  if (mode === "tester" || mode === "playtester") return "verify";
   if (mode === "releaseAgent") return "ship";
   if (mode === "vibe" || mode === "researcher") return "vibe";
   return "build";
 }
 
 const modePrompt: Record<MissionAgentMode, string> = {
+  auto: "Orchestrate a workflow of specialized agents to solve the user's intent. Do not execute work directly; delegate to sub-agents.",
   vibe: "Work directly toward the requested outcome. Inspect the existing project first, preserve its direction, make the smallest complete change, and report exactly what changed.",
   planner: "Inspect this project and create a concrete implementation plan with acceptance criteria, risks, files likely to change, and the lightest relevant verification. Do not edit files or run commands.",
   researcher: "Investigate and summarize the requested topic or codebase structure without making changes.",
@@ -102,10 +114,19 @@ const modePrompt: Record<MissionAgentMode, string> = {
   debugger: "Diagnose and fix the specified issue, using targeted tests to verify the resolution.",
   releaseAgent: "Prepare the requested outcome for release. Inspect the project, make only necessary changes, run relevant readiness checks, and do not perform a public or production deployment.",
   benchmark: "Evaluate model performance. Do not edit files.",
+  gameDesigner: "Focus on game mechanics, balancing variables, level design algorithms, and Game Design Documents. Do not write standard application code.",
+  techArtist: "Write and debug WebGL, GLSL, HLSL, shaders, particle systems, and visual math. Focus strictly on graphics, rendering, and visual effects.",
+  playtester: "Simulate player input or run automated playthroughs to check for difficulty spikes, logic gaps, or economy imbalances without modifying the code.",
+  assetGenerator: "Hook into generative assets or build logic to generate sprite sheets, textures, and sound files for integration.",
+  refactorer: "Clean up technical debt, reorganize files, and extract components to improve architecture without altering behavior.",
+  dataScientist: "Focus on data pipelines, Jupyter notebooks, plotting, machine learning models, and heavy data analysis workflows.",
+  accessibilityExpert: "Audit and modify UI components to meet WCAG standards, adding ARIA labels, semantic HTML, and keyboard navigation.",
+  localizer: "Detect hardcoded strings, extract them into internationalization files, and apply standard translations.",
 };
 
 function roleLabel(mode: MissionAgentMode) {
   const map: Record<MissionAgentMode, { name: string; description: string; icon: any }> = {
+    auto: { name: "Auto Orchestrator", description: "Dynamic workflow orchestration", icon: Workflow },
     vibe: { name: "Vibe", description: "Default problem solving", icon: Sparkles },
     planner: { name: "Planner", description: "Design & architecture", icon: GitCompareArrows },
     researcher: { name: "Researcher", description: "Codebase analysis", icon: Bot },
@@ -117,6 +138,14 @@ function roleLabel(mode: MissionAgentMode) {
     debugger: { name: "Debugger", description: "Issue diagnosis & fixing", icon: Bot },
     releaseAgent: { name: "Release Agent", description: "Release prep", icon: Check },
     benchmark: { name: "Benchmark", description: "Evaluate dense models", icon: Activity },
+    gameDesigner: { name: "Game Designer", description: "Mechanics & level design", icon: Gamepad2 },
+    techArtist: { name: "Tech Artist", description: "Shaders & graphics math", icon: Palette },
+    playtester: { name: "Playtester", description: "Simulate & test gameplay", icon: Gauge },
+    assetGenerator: { name: "Asset Generator", description: "Textures & audio generation", icon: Brush },
+    refactorer: { name: "Refactorer", description: "Architecture & tech debt", icon: Code },
+    dataScientist: { name: "Data Scientist", description: "Data & ML pipelines", icon: Dna },
+    accessibilityExpert: { name: "A11y Expert", description: "WCAG & ARIA compliance", icon: Accessibility },
+    localizer: { name: "Localizer", description: "i18n & translations", icon: Languages },
   };
   return map[mode];
 }
@@ -169,7 +198,7 @@ export function MissionControl({
 }: MissionControlProps) {
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
   const [status, setStatus] = useState<ChatStatus>("ready");
-  const [mode, setMode] = useState<MissionAgentMode>("vibe");
+  const [mode, setMode] = useState<MissionAgentMode>("auto");
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
@@ -812,32 +841,14 @@ export function MissionControl({
         {/* Top Header */}
         <header className="mission-header">
           <div className="flex items-center gap-2">
-            {/* Agent Role Dropdown */}
-            <div className="relative group">
-              <button className="mission-role-trigger" aria-haspopup="menu">
-                Whim <span className="text-white/50">{roleLabel(mode).name}</span>
-                <ChevronDown size={14} className="text-white/50" />
+            {/* Agent Role Toggle */}
+            <div className="relative">
+              <button 
+                onClick={() => setMode(mode === "auto" ? "vibe" : "auto")}
+                className="mission-role-trigger flex items-center gap-1.5 hover:bg-white/5 transition-colors"
+              >
+                Whim <span className="rainbow-text font-bold">{mode === "auto" ? "Auto" : "Vibe"}</span>
               </button>
-              <div className="mission-role-menu" role="menu">
-                {agentModes.map((m) => {
-                  const Icon = roleLabel(m).icon;
-                  return (
-                    <button
-                      key={m}
-                      onClick={() => setMode(m)}
-                      className="mission-role-option"
-                      role="menuitem"
-                    >
-                      <Icon size={16} className="text-white/50 shrink-0" />
-                      <div className="flex flex-col">
-                        <span className="text-[#ececf1] text-sm">{roleLabel(m).name}</span>
-                        <span className="text-white/40 text-xs truncate max-w-[160px]">{roleLabel(m).description}</span>
-                      </div>
-                      {mode === m && <Check size={14} className="text-white ml-auto shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             {/* Worktree Selector */}
@@ -870,9 +881,9 @@ export function MissionControl({
           </div>
         )}
 
-        <details className="mx-3 mt-2 shrink-0 rounded-lg border border-white/5 bg-black/10">
+        <details className="mx-3 mt-2 shrink-0 rounded-lg bg-black/10">
           <summary className="cursor-pointer select-none px-3 py-2 text-xs text-white/50 hover:text-white/80">Project controls and durable evidence</summary>
-          <div className="grid max-h-[42vh] grid-cols-1 gap-2 overflow-y-auto border-t border-white/5 p-2 xl:grid-cols-2">
+          <div className="grid max-h-[42vh] grid-cols-1 gap-2 overflow-y-auto p-2 xl:grid-cols-2">
             <IntentBriefCard native={bridge.isNative()} workspaceOpen={Boolean(executionTarget)} brief={intentBrief} onSave={saveIntentBrief}/>
             <ContextIndexCard native={bridge.isNative()} workspaceOpen={Boolean(executionTarget)} index={contextIndex}/>
             <TaskLedger native={bridge.isNative()} jobs={taskJobs} activeJob={selectedJob ?? taskJobs[0] ?? null} detail={taskDetail} loading={taskLedgerLoading} onRefresh={() => void refreshTaskLedger()} onSelect={(job) => void loadTaskDetail(job)} onRetry={(job) => void retryTask(job)} onResume={(job) => void runQueuedAttempt(job)} onBackground={(job) => void dispatchTask(job)} onCancel={(job) => void cancelTask(job)} retrying={Boolean(retryingJobId)}/>
@@ -913,15 +924,8 @@ export function MissionControl({
             </>
           }
           greeting={
-            <div className="mission-empty-state">
-              <span className="mission-empty-kicker">READY / {workspace ? workspace.split(/[\\/]/).pop() : "NO WORKSPACE"}</span>
-              <h2>Describe the outcome.</h2>
-              <p>Whim inspects the repository, records the task, runs the native agent, and attaches evidence.</p>
-              <div className="execution-spine" aria-label="Mission lifecycle: prepare, persist, execute, verify">
-                {(["Prepare", "Persist", "Execute", "Verify"] as const).map((step, index) => (
-                  <span key={step}><i className={index === 0 ? "active" : ""} />{step}</span>
-                ))}
-              </div>
+            <div className="mission-empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', flex: 1 }}>
+              <h2>What can I help you with?</h2>
             </div>
           }
           suggestions={showSuggestedPrompts ? [
@@ -938,7 +942,7 @@ export function MissionControl({
             onRemoveFile: (id) => setAttachedFiles(current => current.filter(f => f.id !== id)),
             isDragOver: false,
           }}
-          classNames={{ root: "whim-agent-chat bg-transparent h-full flex flex-col", inputBar: "whim-input-bar shadow-xl border border-white/5 bg-white/5 backdrop-blur-xl rounded-[24px] mx-4 mb-4 transition-all focus-within:bg-white/10 focus-within:border-white/20", userMessage: "whim-user-message bg-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-sm" }}
+          classNames={{ root: "whim-agent-chat bg-transparent h-full flex flex-col", inputBar: "whim-input-bar mx-4 mb-4 transition-all", userMessage: "whim-user-message" }}
         />
       </div>
 
@@ -1027,7 +1031,7 @@ export function MissionControl({
       </div>
     </aside>
     {(showPreview || mode === "implementer" || mode === "benchmark") && (
-      <div className="w-[50%] h-full p-4 overflow-hidden flex flex-col animate-in slide-in-from-right-8 fade-in duration-300" style={{ background: "linear-gradient(135deg, rgba(20,20,25,0.7), rgba(15,15,20,0.9))", borderLeft: "1px solid rgba(255,255,255,0.05)", backdropFilter: "blur(16px)" }}>
+      <div className="w-[50%] h-full p-4 overflow-hidden flex flex-col animate-in slide-in-from-right-8 fade-in duration-300" style={{ background: "linear-gradient(135deg, rgba(20,20,25,0.7), rgba(15,15,20,0.9))", backdropFilter: "blur(16px)" }}>
         {mode === "implementer" ? (
           executionTarget ? <CanvasWorkspace workspace={executionTarget} entries={executionEntries} onClose={() => setMode("vibe")} onSaved={onRunComplete} /> : null
         ) : mode === "benchmark" ? (

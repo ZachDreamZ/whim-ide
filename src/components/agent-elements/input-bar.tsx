@@ -512,7 +512,7 @@ export const InputBar = memo(function InputBar({
           {questionBarNode}
           <div
             className={cn(
-              "relative cursor-text rounded-an-input-border-radius bg-an-input-background shadow-2xs ring-1 ring-foreground/10",
+              "relative cursor-text rounded-an-input-border-radius bg-an-input-background",
               isDragOver && "ring-2 ring-an-primary-color",
             )}
             onClick={handleContainerClick}
@@ -607,7 +607,7 @@ export const InputBar = memo(function InputBar({
                       disabled && "opacity-50 cursor-not-allowed",
                     )}
                   />
-                  <div className="pointer-events-none absolute inset-0 rounded-an-input-border-radius outline-2 outline-an-input-focus-outline opacity-0 transition-opacity duration-75 peer-focus-visible:opacity-100 peer-focus:opacity-100 z-20 ease-in-out" />
+                  {/* Focus ring removed for ChatGPT 1:1 styling */}
                 </>
               )}
             </div>

@@ -13,6 +13,15 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             backend::orchestration::start_orchestration_worker(app.handle().clone());
+            
+            // Spawn the Node execution sidecar
+            std::thread::spawn(|| {
+                let _ = std::process::Command::new("node")
+                    .current_dir("src-sidecar")
+                    .arg("index.js")
+                    .spawn();
+            });
+
             Ok(())
         })
         .manage(BackendState::default())
@@ -48,6 +57,10 @@ pub fn run() {
             backend::deployment::install_dependencies,
             backend::deployment::start_local_preview,
             backend::deployment::start_tunnel,
+            backend::whim_route::credentials::save_credential,
+            backend::whim_route::credentials::get_credential,
+            backend::whim_route::credentials::delete_credential,
+            backend::whim_route::credentials::redact_key,
             backend::deployment::discover_providers,
             backend::orchestration::create_orchestration_job,
             backend::orchestration::list_orchestration_jobs,
@@ -63,6 +76,9 @@ pub fn run() {
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,
+            backend::plugins::fetch_available_plugins,
+            backend::plugins::get_installed_plugins,
+            backend::plugins::install_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Whim IDE");

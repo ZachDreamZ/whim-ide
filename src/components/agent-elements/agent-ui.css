@@ -2,7 +2,7 @@
   /* Geometry — all radii derive from --an-border-radius */
   --an-border-radius: 16px;
   --an-message-border-radius: var(--an-border-radius);
-  --an-input-border-radius: var(--an-border-radius);
+  --an-input-border-radius: 26px;
   --an-tool-border-radius: 10px;
   --an-message-radius-inner-offset: 4px;
   --an-max-width: 420px;
@@ -22,8 +22,8 @@
   --an-user-message-text: #1a1a1a;
 
   /* Input */
-  --an-input-background: #ffffff;
-  --an-input-border-color: #e4e4e7;
+  --an-input-background: #f4f4f4;
+  --an-input-border-color: transparent;
   --an-input-color: #1a1a1a;
   --an-input-placeholder-color: #a3a3a3;
   --an-input-focus-outline: transparent;
@@ -63,11 +63,11 @@
   --an-border-color: #2a2a2a;
   --an-primary-color: #60a5fa;
 
-  --an-user-message-bg: #1a1a1a;
+  --an-user-message-bg: #2f2f2f;
   --an-user-message-text: #fafafa;
 
-  --an-input-background: transparent;
-  --an-input-border-color: #2a2a2a;
+  --an-input-background: #2f2f2f;
+  --an-input-border-color: transparent;
   --an-input-color: #fafafa;
   --an-input-placeholder-color: #71717a;
   --an-input-focus-outline: transparent;

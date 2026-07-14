@@ -1182,3 +1182,17 @@ a:focus-visible {
 .voice-controls button:hover:not(:disabled) { color: var(--foreground); border-color: var(--line-strong); }
 .voice-controls button:disabled { opacity: .35; }
 .voice-controls .voice-primary { margin-left: auto; color: var(--primary-foreground); border-color: var(--primary); background: var(--primary); }
+.rainbow-text {
+  background-image: linear-gradient(to right, #ffb3ba, #ffdfba, #ffffba, #baffc9, #bae1ff, #dcbaff, #ffb3ba);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rainbow-flow 3s linear infinite;
+}
+
+@keyframes rainbow-flow {
+  to {
+    background-position: 200% center;
+  }
+}

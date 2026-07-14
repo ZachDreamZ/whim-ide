@@ -204,6 +204,7 @@ export type NativeResult = {
 };
 
 export type OrchestrationJobMode =
+  | "auto"
   | "vibe"
   | "plan"
   | "research"

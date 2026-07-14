@@ -13,7 +13,7 @@ export type MissionGraphRequest = {
   prompt: string;
   auditIntent: string;
   title: string;
-  mode: "vibe" | "plan" | "build" | "verify" | "review" | "ship";
+  mode: "auto" | "vibe" | "plan" | "build" | "verify" | "review" | "ship";
   agent?: string;
   provider: string;
   model?: string;

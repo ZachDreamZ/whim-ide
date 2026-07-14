@@ -1,24 +1,22 @@
 import { useEffect, useState } from "react";
 import { Play, Activity, Check } from "lucide-react";
-import { bridge } from "../lib/bridge";
+import { bridge, BenchmarkModel, BenchmarkResult } from "../lib/bridge";
 
 export function BenchmarkHub({ workspace }: { workspace: string | null }) {
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<BenchmarkModel[]>([]);
   const [running, setRunning] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        // @ts-ignore
         if (bridge.getLmStudioModels) {
-          // @ts-ignore
           setModels(await bridge.getLmStudioModels());
         } else {
-          setModels(["Gemma 4", "DeepSeek-v4", "GPT-4o", "Claude 3.5 Sonnet"]);
+          setModels([{ id: "Gemma 4", object: "model" }, { id: "DeepSeek-v4", object: "model" }]);
         }
       } catch {
-        setModels(["Gemma 4", "DeepSeek-v4", "GPT-4o", "Claude 3.5 Sonnet"]);
+        setModels([{ id: "Gemma 4", object: "model" }, { id: "DeepSeek-v4", object: "model" }]);
       }
     };
     fetchModels();
@@ -27,11 +25,9 @@ export function BenchmarkHub({ workspace }: { workspace: string | null }) {
   const runTest = async (model: string) => {
     setRunning(prev => ({ ...prev, [model]: true }));
     try {
-      // @ts-ignore
       if (bridge.runModelBenchmark && workspace) {
-        // @ts-ignore
-        const result = await bridge.runModelBenchmark(model, workspace);
-        setResults(prev => ({ ...prev, [model]: result as string }));
+        const result: BenchmarkResult = await bridge.runModelBenchmark(model);
+        setResults(prev => ({ ...prev, [model]: `Score: ${result.score}/100` }));
       } else {
         await new Promise(resolve => setTimeout(resolve, 2000));
         setResults(prev => ({ ...prev, [model]: `Score: ${Math.floor(Math.random() * 20 + 80)}/100` }));
@@ -54,28 +50,28 @@ export function BenchmarkHub({ workspace }: { workspace: string | null }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
         {models.map(model => (
-          <div key={model} className="border border-white/10 bg-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 hover:bg-white/10 transition-all backdrop-blur-md shadow-lg">
+          <div key={model.id} className="bg-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:bg-white/10 transition-all backdrop-blur-md shadow-lg">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium tracking-tight">{model}</h2>
+              <h2 className="text-lg font-medium tracking-tight">{model.id}</h2>
               <Activity className="text-white/40" size={20} />
             </div>
             <div className="flex-1 min-h-[40px]">
-              {results[model] ? (
+              {results[model.id] ? (
                 <div className="text-sm text-[#72c99f] flex items-center gap-2 animate-in fade-in zoom-in duration-300">
                   <Check size={16} />
-                  {results[model]}
+                  {results[model.id]}
                 </div>
               ) : (
                 <div className="text-sm text-white/40">No benchmark run yet.</div>
               )}
             </div>
             <button
-              onClick={() => runTest(model)}
-              disabled={running[model]}
+              onClick={() => runTest(model.id)}
+              disabled={running[model.id]}
               className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm font-medium transition-all"
             >
-              {running[model] ? <span className="animate-spin text-white">⟳</span> : <Play size={16} />}
-              {running[model] ? "Running..." : "Run Test"}
+              {running[model.id] ? <span className="animate-spin text-white">⟳</span> : <Play size={16} />}
+              {running[model.id] ? "Running..." : "Run Test"}
             </button>
           </div>
         ))}

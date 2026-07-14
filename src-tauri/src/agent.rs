@@ -116,6 +116,7 @@ fn provider_name(provider: Provider) -> &'static str {
 /// ship retain the broader native tool set subject to the harness profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AgentRole {
+    Auto,
     Vibe,
     Planner,
     Researcher,
@@ -127,11 +128,20 @@ enum AgentRole {
     Debugger,
     ReleaseAgent,
     Janitor,
+    GameDesigner,
+    TechArtist,
+    Playtester,
+    AssetGenerator,
+    Refactorer,
+    DataScientist,
+    AccessibilityExpert,
+    Localizer,
 }
 
 impl AgentRole {
     fn parse(value: Option<&str>) -> Result<Self, String> {
         match value.unwrap_or("vibe").trim().to_ascii_lowercase().as_str() {
+            "auto" | "orchestrator" => Ok(Self::Auto),
             "vibe" => Ok(Self::Vibe),
             "plan" | "planner" => Ok(Self::Planner),
             "research" | "researcher" => Ok(Self::Researcher),
@@ -143,14 +153,23 @@ impl AgentRole {
             "debug" | "debugger" => Ok(Self::Debugger),
             "ship" | "releaseagent" => Ok(Self::ReleaseAgent),
             "janitor" => Ok(Self::Janitor),
+            "gamedesigner" | "game_designer" => Ok(Self::GameDesigner),
+            "techartist" | "tech_artist" => Ok(Self::TechArtist),
+            "playtester" => Ok(Self::Playtester),
+            "assetgenerator" | "asset_generator" => Ok(Self::AssetGenerator),
+            "refactorer" | "architect" => Ok(Self::Refactorer),
+            "datascientist" | "data_scientist" => Ok(Self::DataScientist),
+            "accessibilityexpert" | "a11y" => Ok(Self::AccessibilityExpert),
+            "localizer" => Ok(Self::Localizer),
             other => Err(format!(
-                "Unsupported agent role '{other}'. Supported: vibe, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor"
+                "Unsupported agent role '{other}'. Supported: vibe, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer"
             )),
         }
     }
 
     fn as_str(self) -> &'static str {
         match self {
+            Self::Auto => "auto",
             Self::Vibe => "vibe",
             Self::Planner => "planner",
             Self::Researcher => "researcher",
@@ -162,12 +181,24 @@ impl AgentRole {
             Self::Debugger => "debugger",
             Self::ReleaseAgent => "releaseagent",
             Self::Janitor => "janitor",
+            Self::GameDesigner => "gamedesigner",
+            Self::TechArtist => "techartist",
+            Self::Playtester => "playtester",
+            Self::AssetGenerator => "assetgenerator",
+            Self::Refactorer => "refactorer",
+            Self::DataScientist => "datascientist",
+            Self::AccessibilityExpert => "accessibilityexpert",
+            Self::Localizer => "localizer",
         }
     }
 
     fn permits_tool(self, name: &str) -> bool {
         match self {
-            Self::Planner | Self::Researcher | Self::SecurityReviewer => matches!(
+            Self::Auto => matches!(
+                name,
+                "read_file" | "list_directory" | "grep_files" | "plan" | "delegate_task"
+            ),
+            Self::Planner | Self::Researcher | Self::SecurityReviewer | Self::GameDesigner => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research"
             ),
@@ -175,7 +206,7 @@ impl AgentRole {
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "github"
             ),
-            Self::Tester => matches!(
+            Self::Tester | Self::Playtester => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "verify"
             ),
@@ -187,7 +218,13 @@ impl AgentRole {
             | Self::Implementer
             | Self::Designer
             | Self::Debugger
-            | Self::ReleaseAgent => true,
+            | Self::ReleaseAgent
+            | Self::TechArtist
+            | Self::AssetGenerator
+            | Self::Refactorer
+            | Self::DataScientist
+            | Self::AccessibilityExpert
+            | Self::Localizer => true,
         }
     }
 }
@@ -501,6 +538,18 @@ fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
+            name: "delegate_task",
+            description: "Delegate a task to a specialized sub-agent. This recursively triggers the selected agent role.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "role": { "type": "string", "enum": ["implementer", "tester", "researcher", "planner", "reviewer", "securityReviewer", "designer", "debugger", "releaseAgent"], "description": "The agent role to spawn" },
+                    "task": { "type": "string", "description": "The specific instruction for the sub-agent" }
+                },
+                "required": ["role", "task"]
+            }),
+        },
+        ToolDef {
             name: "plan",
             description: "Record an ordered checklist of concrete steps for the current task. Call this before non-trivial implementation so the user can follow progress. Re-call to revise the plan.",
             parameters: json!({
@@ -694,6 +743,7 @@ fn build_system_prompt(
         _ => "This is an exploratory or prototype task (vibe mode): a working demo is the goal, but still verify it actually runs.",
     };
     let mode_guard = match mode {
+        "auto" => "Native mode policy: this run is an orchestrator. File writes, shell commands, and deployments are unavailable. Use the `delegate_task` tool to break down the user request and spawn specialized sub-agents (e.g., implementer, tester).",
         "plan" | "planner" | "researcher" | "review" | "reviewer" | "securityreviewer" => "Native mode policy: this run is read-only. File writes, shell commands, checkpoints, previews, tunnels, and rollbacks are unavailable. Do not claim that any implementation or verification ran.",
         "verify" | "tester" => "Native mode policy: this run cannot edit files. The only command capability is `verify`, restricted to Whim-discovered project checks. Do not use run_command or claim a broader production guarantee from one check.",
         "janitor" => "Native mode policy: this low-priority run may inspect files, make targeted edits to existing files, and use only Whim-discovered verification. It cannot create files, run arbitrary shell commands, deploy, publish, rollback, or merge its isolated worktree.",
@@ -3120,6 +3170,78 @@ async fn run_native_agent<R: tauri::Runtime>(
                 }));
                 continue;
             }
+
+            if call.name == "delegate_task" {
+                let role_str = call.arguments.get("role").and_then(Value::as_str).unwrap_or("implementer");
+                let task = call.arguments.get("task").and_then(Value::as_str).unwrap_or("");
+                let sub_role = AgentRole::parse(Some(role_str)).unwrap_or(AgentRole::Implementer);
+                
+                let _ = emit_agent_progress(
+                    app,
+                    operation_id,
+                    format!("Delegating task to {}...", sub_role.as_str()),
+                );
+
+                let recursive_result = Box::pin(run_native_agent(
+                    app,
+                    app.state::<BackendState>(),
+                    root.clone(),
+                    provider.clone(),
+                    base,
+                    api_key,
+                    model,
+                    task,
+                    sub_role,
+                    auto_continue,
+                    timeout_ms,
+                    operation_id,
+                    session_id,
+                    profile,
+                    profile_configured,
+                    settings,
+                )).await;
+                
+                let outcome = match recursive_result {
+                    Ok(res) => {
+                        let final_msg = res.events.iter().rev().find_map(|e| {
+                            let event: Result<AgentEvent, _> = serde_json::from_value(e.clone());
+                            if let Ok(AgentEvent::Text { text }) = event {
+                                Some(text)
+                            } else {
+                                None
+                            }
+                        }).unwrap_or_else(|| "Completed with no final message.".to_string());
+                        format!("Delegated task completed successfully.\nResult:\n{}", final_msg)
+                    },
+                    Err(e) => format!("Delegated task failed:\n{}", e),
+                };
+
+                record_agent_event(
+                    app,
+                    operation_id,
+                    &mut events,
+                    AgentEvent::ToolUse {
+                        part: ToolUsePart {
+                            id: call.id.clone(),
+                            tool: "Delegate Task".into(),
+                            state: ToolUseState {
+                                status: "completed".into(),
+                                input: call.arguments.clone(),
+                                output: Some(Value::String(outcome.clone())),
+                                error: None,
+                            },
+                        },
+                    },
+                );
+
+                messages.push(json!({
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": outcome
+                }));
+                continue;
+            }
+
             if call.name == "plan" {
                 let steps = call
                     .arguments
