@@ -5,7 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist/**", "node_modules/**", "src-tauri/target/**"]),
+  globalIgnores(["dist/**", "node_modules/**", "src-tauri/target/**", "src-sidecar/**", "scratch/**", "scripts/**", "artifacts/**"]),
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -13,14 +13,6 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             backend::orchestration::start_orchestration_worker(app.handle().clone());
-            
-            // Spawn the Node execution sidecar
-            std::thread::spawn(|| {
-                let _ = std::process::Command::new("node")
-                    .current_dir("src-sidecar")
-                    .arg("index.js")
-                    .spawn();
-            });
 
             Ok(())
         })
@@ -71,8 +63,6 @@ pub fn run() {
             backend::orchestration::retry_orchestration_job,
             backend::orchestration::dispatch_orchestration_job,
             backend::orchestration::record_verification_result,
-            backend::benchmark::get_lm_studio_models,
-            backend::benchmark::run_model_benchmark,
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,

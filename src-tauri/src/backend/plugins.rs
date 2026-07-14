@@ -66,7 +66,7 @@ pub async fn get_installed_plugins() -> Result<Vec<AgentPlugin>, String> {
             }
         }
     }
-    
+
     Ok(installed)
 }
 
@@ -74,7 +74,7 @@ pub async fn get_installed_plugins() -> Result<Vec<AgentPlugin>, String> {
 pub async fn install_plugin(plugin_id: String) -> Result<bool, String> {
     let plugins_dir = get_plugins_dir();
     let target_dir = plugins_dir.join(&plugin_id);
-    
+
     if !target_dir.exists() {
         fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
     }

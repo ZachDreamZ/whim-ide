@@ -74,6 +74,9 @@ fn voice_base(provider: &str, value: Option<String>) -> Result<String, String> {
     });
     let url =
         reqwest::Url::parse(raw.trim()).map_err(|_| "Voice base URL is invalid".to_string())?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("Voice base URL must not contain embedded credentials".into());
+    }
     if !matches!(url.scheme(), "http" | "https") {
         return Err("Voice base URL must use HTTP or HTTPS".into());
     }
@@ -251,8 +254,16 @@ mod tests {
     use super::*;
     #[test]
     fn validates_voice_endpoints_and_formats() {
+        // Remote HTTPS endpoint is accepted.
+        assert!(voice_base("openai", Some("https://api.openai.com/v1".into())).is_ok());
+        // Non-loopback HTTP to a cloud provider is rejected (cleartext).
+        assert!(voice_base("openai", Some("http://api.openai.com/v1".into())).is_err());
+        // Loopback HTTP is rejected for cloud providers.
         assert!(voice_base("openai", Some("http://127.0.0.1/v1".into())).is_err());
+        // Local provider may use a loopback HTTP endpoint.
         assert!(voice_base("local", Some("http://127.0.0.1:9000/v1".into())).is_ok());
+        // Embedded credentials are rejected.
+        assert!(voice_base("openai", Some("https://user:pass@api.openai.com/v1".into())).is_err());
         assert_eq!(extension("audio/ogg; codecs=opus").unwrap(), "ogg");
         assert!(extension("video/mp4").is_err());
     }

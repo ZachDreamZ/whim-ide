@@ -36,6 +36,8 @@ const KNOWN_TOOLS: &[&str] = &[
     "preview",
     "tunnel",
     "github",
+    "browser_action",
+    "computer_action",
 ];
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -45,6 +47,21 @@ pub enum ExecutionAdapter {
     Wsl { distro: Option<String> },
     Container { image: String },
     Remote { host: String },
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UserApprovalMode {
+    Guided,
+    Balanced,
+    Autonomous,
+    Custom,
+}
+
+impl Default for UserApprovalMode {
+    fn default() -> Self {
+        Self::Autonomous
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -78,6 +95,8 @@ pub struct HarnessProfile {
     #[serde(default)]
     #[allow(dead_code)]
     pub evaluator_visible_snapshots: Option<bool>,
+    #[serde(default)]
+    pub approval_mode: UserApprovalMode,
 }
 
 impl Default for HarnessProfile {
@@ -96,6 +115,7 @@ impl Default for HarnessProfile {
             require_signed_profiles: None,
             recovery_procedures: None,
             evaluator_visible_snapshots: None,
+            approval_mode: UserApprovalMode::default(),
         }
     }
 }

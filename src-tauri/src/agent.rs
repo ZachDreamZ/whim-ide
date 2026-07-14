@@ -198,10 +198,12 @@ impl AgentRole {
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "delegate_task"
             ),
-            Self::Planner | Self::Researcher | Self::SecurityReviewer | Self::GameDesigner => matches!(
-                name,
-                "read_file" | "list_directory" | "grep_files" | "plan" | "research"
-            ),
+            Self::Planner | Self::Researcher | Self::SecurityReviewer | Self::GameDesigner => {
+                matches!(
+                    name,
+                    "read_file" | "list_directory" | "grep_files" | "plan" | "research"
+                )
+            }
             Self::Reviewer => matches!(
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "github"
@@ -624,6 +626,18 @@ fn tool_defs() -> Vec<ToolDef> {
     ]
 }
 
+/// Tool names that mutate the workspace or perform external side effects.
+/// Withheld from the native agent when the Sensitive tool policy is "always".
+const MUTATION_TOOLS: &[&str] = &[
+    "write_file",
+    "edit_file",
+    "run_command",
+    "checkpoint",
+    "rollback",
+    "preview",
+    "tunnel",
+];
+
 /// Read-only tool set used by research sub-agents.
 fn tool_defs_for_profile(
     profile: &HarnessProfile,
@@ -638,17 +652,7 @@ fn tool_defs_for_profile(
             profile.permits_tool(tool.name)
                 && mode.permits_tool(tool.name)
                 && capability_allows_tool(&capabilities, tool.name)
-                && !(approval_blocks_mutation
-                    && matches!(
-                        tool.name,
-                        "write_file"
-                            | "edit_file"
-                            | "run_command"
-                            | "checkpoint"
-                            | "rollback"
-                            | "preview"
-                            | "tunnel"
-                    ))
+                && !(approval_blocks_mutation && MUTATION_TOOLS.contains(&tool.name))
         })
         .collect()
 }
@@ -3270,10 +3274,18 @@ async fn run_native_agent<R: tauri::Runtime>(
             }
 
             if call.name == "delegate_task" {
-                let role_str = call.arguments.get("role").and_then(Value::as_str).unwrap_or("implementer");
-                let task = call.arguments.get("task").and_then(Value::as_str).unwrap_or("");
+                let role_str = call
+                    .arguments
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or("implementer");
+                let task = call
+                    .arguments
+                    .get("task")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
                 let sub_role = AgentRole::parse(Some(role_str)).unwrap_or(AgentRole::Implementer);
-                
+
                 let _ = emit_agent_progress(
                     app,
                     operation_id,
@@ -3297,20 +3309,30 @@ async fn run_native_agent<R: tauri::Runtime>(
                     profile,
                     profile_configured,
                     settings,
-                )).await;
-                
+                ))
+                .await;
+
                 let outcome = match recursive_result {
                     Ok(res) => {
-                        let final_msg = res.events.iter().rev().find_map(|e| {
-                            let event: Result<AgentEvent, _> = serde_json::from_value(e.clone());
-                            if let Ok(AgentEvent::Text { text }) = event {
-                                Some(text)
-                            } else {
-                                None
-                            }
-                        }).unwrap_or_else(|| "Completed with no final message.".to_string());
-                        format!("Delegated task completed successfully.\nResult:\n{}", final_msg)
-                    },
+                        let final_msg = res
+                            .events
+                            .iter()
+                            .rev()
+                            .find_map(|e| {
+                                let event: Result<AgentEvent, _> =
+                                    serde_json::from_value(e.clone());
+                                if let Ok(AgentEvent::Text { text }) = event {
+                                    Some(text)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_else(|| "Completed with no final message.".to_string());
+                        format!(
+                            "Delegated task completed successfully.\nResult:\n{}",
+                            final_msg
+                        )
+                    }
                     Err(e) => format!("Delegated task failed:\n{}", e),
                 };
 
@@ -4038,6 +4060,28 @@ mod tests {
     }
 
     #[test]
+    fn provider_base_url_rejects_query_fragment_cleartext_and_credentials() {
+        // Valid HTTPS cloud endpoint is accepted.
+        assert!(validate_provider_base(Provider::OpenAi, "https://api.openai.com/v1").is_ok());
+        // Cleartext HTTP to a non-loopback host is rejected.
+        assert!(validate_provider_base(Provider::OpenAi, "http://api.openai.com/v1").is_err());
+        // Query strings and fragments are rejected (could smuggle tokens/params).
+        assert!(validate_provider_base(Provider::OpenAi, "https://api.openai.com/v1?x=1").is_err());
+        assert!(
+            validate_provider_base(Provider::OpenAi, "https://api.openai.com/v1#frag").is_err()
+        );
+        // Embedded credentials in the URL are rejected.
+        assert!(
+            validate_provider_base(Provider::OpenAi, "https://user:pass@api.openai.com/v1")
+                .is_err()
+        );
+        // Loopback HTTP is allowed for local-compatible endpoints.
+        assert!(validate_provider_base(Provider::Compatible, "http://localhost:1234/v1").is_ok());
+        // OLLAMA_HOST-style loopback is the only non-HTTPS local case allowed.
+        assert!(validate_provider_base(Provider::Local, "http://127.0.0.1:11434/v1").is_ok());
+    }
+
+    #[test]
     fn pi_runtime_intersects_profile_capabilities_and_strips_secret_environment_names() {
         let settings = AppSettings::default();
         let read_only = HarnessProfile::parse(
@@ -4475,6 +4519,59 @@ mod tests {
         assert!(prompt.contains("Profile name: safe review"));
         assert!(prompt.contains("can only narrow"));
         assert!(prompt.contains("direct file-tool write paths"));
+    }
+
+    #[test]
+    fn sensitive_tool_policy_gates_mutation_tools_in_both_modes() {
+        let profile = HarnessProfile::default();
+        let risky = AppSettings::default(); // approval_policy defaults to "risky"
+        let mut always = AppSettings::default();
+        always.agent.approval_policy = "always".into();
+
+        let risky_names = tool_defs_for_profile(&profile, AgentRole::Implementer, &risky)
+            .iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        let always_names = tool_defs_for_profile(&profile, AgentRole::Implementer, &always)
+            .iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+
+        // Risky policy exposes mutation tools to the agent.
+        for allowed in [
+            "write_file",
+            "edit_file",
+            "run_command",
+            "checkpoint",
+            "rollback",
+            "preview",
+            "tunnel",
+        ] {
+            assert!(
+                risky_names.contains(&allowed),
+                "risky policy should expose {allowed}"
+            );
+        }
+
+        // Always policy withholds every mutation/external-effect tool.
+        for blocked in [
+            "write_file",
+            "edit_file",
+            "run_command",
+            "checkpoint",
+            "rollback",
+            "preview",
+            "tunnel",
+        ] {
+            assert!(
+                !always_names.contains(&blocked),
+                "always policy must withhold {blocked}"
+            );
+        }
+
+        // Read-only capabilities remain available under the strict policy.
+        assert!(always_names.contains(&"read_file"));
+        assert!(always_names.contains(&"plan"));
     }
 
     #[test]

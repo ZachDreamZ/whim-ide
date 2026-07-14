@@ -5,7 +5,7 @@ use super::deployment::{
     verification_plan_for_root,
 };
 use super::execution::{
-    powershell_args, preferred_powershell, should_sanitize_verification_environment,
+    powershell_args, preferred_powershell, quick_capture, should_sanitize_verification_environment,
     should_terminate_process_tree, validate_slug,
 };
 use super::orchestration::background_agent_evidence;
@@ -965,4 +965,117 @@ fn canvas_write_rejects_a_stale_disk_version() {
         "original"
     );
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn credential_redaction_never_leaks_full_key() {
+    let long = "sk-ant-longapikey1234567890abcdef";
+    let redacted = crate::backend::whim_route::credentials::redact_key(long);
+    // redact_key keeps the first 8 and last 4 chars, redacting the middle.
+    assert!(
+        redacted.starts_with("sk-ant-l"),
+        "prefix must be first 8 chars: {redacted}"
+    );
+    assert!(
+        redacted.ends_with("cdef"),
+        "suffix must be last 4 chars: {redacted}"
+    );
+    assert!(
+        !redacted.contains(long),
+        "redacted output must not contain the original key"
+    );
+    assert!(
+        !redacted.contains("ongapikey1234567890ab"),
+        "middle must not appear: {redacted}"
+    );
+}
+
+#[test]
+fn command_output_secrets_are_redacted() {
+    let output = concat!(
+        "export OPENAI_API_KEY=sk-ant-realkeyvalue1234567890abcdef\n",
+        "token=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n",
+        "Authorization: Bearer ya29.abcdefghijklmnopqrstuvwxyz0123456789\n",
+        "normal build output 12345\n",
+        "-----BEGIN RSA PRIVATE KEY-----\nMIIsecret\n-----END RSA PRIVATE KEY-----\n",
+    );
+    let redacted = crate::backend::whim_route::credentials::redact_secrets(output);
+    assert!(
+        !redacted.contains("sk-ant-realkeyvalue1234567890abcdef"),
+        "openai key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
+        "github token must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("ya29.abcdefghijklmnopqrstuvwxyz0123456789"),
+        "oauth token must be redacted: {redacted}"
+    );
+    assert!(
+        redacted.contains("[REDACTED PRIVATE KEY]"),
+        "private key block must be redacted: {redacted}"
+    );
+    assert!(
+        redacted.contains("normal build output 12345"),
+        "benign output must be preserved: {redacted}"
+    );
+    assert!(
+        redacted.contains("[REDACTED]"),
+        "redaction marker must be present: {redacted}"
+    );
+}
+
+#[test]
+fn credential_redact_short_keys() {
+    // Keys under 8 chars get full redaction
+    assert_eq!(
+        crate::backend::whim_route::credentials::redact_key("abc"),
+        "***"
+    );
+    // Keys of exactly 13 chars (8+4+1) still work
+    let r = crate::backend::whim_route::credentials::redact_key("12345678901abc");
+    assert!(r.starts_with("12345678"));
+    assert!(r.ends_with("abc"));
+    assert!(!r.contains("901"));
+}
+
+#[test]
+fn provider_redaction_works_across_all_credential_spellings() {
+    // Simulates the full redact path used in credential-report commands
+    let cases = vec![
+        ("sk-proj-ABCDef1234GhIjKlMnOpQrStUvWxYz", true),
+        ("sk-ant-api03-longerkeysegment-testvalues123", true),
+        ("AIzaSyDummyTestKeyForValidationPurposes", true),
+        ("short", true),
+    ];
+    for (key, _) in cases {
+        let redacted = crate::backend::whim_route::credentials::redact_key(key);
+        assert_ne!(redacted, key, "redaction must change the key");
+        assert!(
+            !redacted.contains("test"),
+            "redacted must not contain semantic segments: {redacted}"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn execution_runs_command_and_captures_output_in_temp_repo() {
+    // Exercises the real execution path (process start -> output capture ->
+    // completion) against a throwaway fixture repo. No network involved.
+    let root = std::env::temp_dir().join(format!("whim-exec-{}", Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("create temp fixture repo");
+    fs::write(root.join("README.md"), "# fixture\n").expect("write file");
+    let shell = preferred_powershell();
+    let args = powershell_args("echo hello-whim".to_string(), false);
+    let (stdout, _stderr, success) = quick_capture(&shell, &args, Some(&root), 15_000)
+        .await
+        .expect("run command");
+    assert!(success, "command should report success");
+    assert!(
+        stdout.contains("hello-whim"),
+        "stdout should contain echoed text: {stdout}"
+    );
+    let _ = fs::remove_dir_all(&root);
 }

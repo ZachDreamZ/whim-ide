@@ -384,19 +384,6 @@ function fromCommand(command: BackendCommand): NativeResult {
   };
 }
 
-export type BenchmarkModel = {
-  id: string;
-  object: string;
-};
-
-export type BenchmarkResult = {
-  model_id: string;
-  success: boolean;
-  duration_ms: number;
-  score: number;
-  details: string;
-};
-
 export const bridge = {
   isNative: inTauri,
 
@@ -744,14 +731,6 @@ export const bridge = {
       workspace,
       request: { commit: commit ?? null, operationId }
     });
-  },
-
-  async getLmStudioModels(): Promise<BenchmarkModel[]> {
-    return await call<BenchmarkModel[]>("get_lm_studio_models", {});
-  },
-
-  async runModelBenchmark(modelId: string): Promise<BenchmarkResult> {
-    return await call<BenchmarkResult>("run_model_benchmark", { modelId });
   },
 
   async reveal(path: string): Promise<void> {

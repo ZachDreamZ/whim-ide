@@ -17,6 +17,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
+use super::whim_route::credentials::redact_secrets;
 use super::{lock, BackendState};
 use super::{DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS, MAX_PROCESS_OUTPUT_BYTES};
 
@@ -429,12 +430,16 @@ pub(crate) async fn execute_tracked(
     };
 
     lock(&state.operations, "operations")?.remove(&operation_id);
-    let (stdout, stdout_truncated) = stdout_task
+    let (mut stdout, stdout_truncated) = stdout_task
         .await
         .map_err(|error| format!("Stdout reader failed: {error}"))??;
-    let (stderr, stderr_truncated) = stderr_task
+    let (mut stderr, stderr_truncated) = stderr_task
         .await
         .map_err(|error| format!("Stderr reader failed: {error}"))??;
+    // Secrets printed by a command (echoed keys, token responses, PEM blocks)
+    // must never reach the UI or agent verbatim.
+    stdout = redact_secrets(&stdout);
+    stderr = redact_secrets(&stderr);
     let was_cancelled = cancelled.load(Ordering::SeqCst);
 
     Ok(CommandResult {
@@ -613,8 +618,8 @@ pub(crate) async fn quick_capture_with_environment(
         .map_err(|_| format!("'{program}' timed out"))?
         .map_err(|error| format!("Cannot run '{program}': {error}"))?;
     Ok((
-        String::from_utf8_lossy(&output.stdout).into_owned(),
-        String::from_utf8_lossy(&output.stderr).into_owned(),
+        redact_secrets(&String::from_utf8_lossy(&output.stdout).into_owned()),
+        redact_secrets(&String::from_utf8_lossy(&output.stderr).into_owned()),
         output.status.success(),
     ))
 }

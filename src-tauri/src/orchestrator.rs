@@ -14,6 +14,8 @@ use std::{
 };
 use uuid::Uuid;
 
+use crate::backend::whim_route::credentials::redact_secrets;
+
 const LEDGER_VERSION: u32 = 1;
 const MAX_JOBS: usize = 250;
 const MAX_EVENTS_PER_JOB: usize = 128;
@@ -699,7 +701,7 @@ impl DurableJobStore {
         let workspace = normalized_text(workspace, 4_000);
         let job_id = valid_job_id(job_id)?;
         let check_id = normalized_text(check_id, 128);
-        let command = normalized_text(command, 1024);
+        let command = redact_secrets(&normalized_text(command, 1024));
 
         self.mutate(|ledger| {
             let stored = find_job_mut(&mut ledger.jobs, &workspace, &job_id)?;
@@ -1464,6 +1466,53 @@ mod tests {
         assert_eq!(updated2.evidence.tool_call_count, 2);
         assert_eq!(updated2.evidence.failed_tool_call_count, 1);
         assert_eq!(updated2.evidence.duration_ms, Some(650));
+
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn verification_command_secrets_are_redacted_in_durable_ledger() {
+        let (mut store, directory) = test_store("verification-redaction");
+        let workspace = "C:/example";
+        let created = store.create(create_input(workspace)).unwrap();
+        store
+            .transition(workspace, &created.id, JobAction::Start)
+            .unwrap();
+
+        // A verification command that embeds a secret must not persist the
+        // secret to the durable on-disk ledger in cleartext. The orchestrator
+        // documents that it must never become another secret store.
+        let secret_command =
+            "curl -H \"Authorization: Bearer ya29.abcdefghijklmnopqrstuvwxyz0123456789\" https://api.example.com/check";
+        store
+            .record_verification(
+                workspace,
+                &created.id,
+                "health",
+                secret_command,
+                true,
+                Some(120),
+            )
+            .unwrap();
+
+        let detail = store.detail(workspace, &created.id).unwrap();
+        let evidence_event = detail
+            .events
+            .iter()
+            .find(|event| event.kind == JobEventKind::Evidence)
+            .expect("durable evidence event");
+        assert!(
+            !evidence_event
+                .message
+                .contains("ya29.abcdefghijklmnopqrstuvwxyz0123456789"),
+            "verification command secret must be redacted in durable ledger: {}",
+            evidence_event.message
+        );
+        assert!(
+            evidence_event.message.contains("[redacted]"),
+            "redaction marker expected in durable evidence: {}",
+            evidence_event.message
+        );
 
         let _ = fs::remove_dir_all(directory);
     }

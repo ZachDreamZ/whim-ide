@@ -15,11 +15,10 @@ pub mod execution;
 pub mod orchestration;
 pub mod provider;
 pub mod reflector;
-pub mod benchmark;
 pub mod settings;
 pub mod voice;
-pub mod workspace;
 pub mod whim_route;
+pub mod workspace;
 
 #[cfg(test)]
 mod tests;
