@@ -78,6 +78,14 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
         defer_loading: true,
         enabled: true,
     },
+    AgentCapabilitySpec {
+        id: "computer-use",
+        description: "Inspect and invoke visible Windows controls through native UI Automation.",
+        instructions: "Operate only visible user-selected applications, prefer accessibility roles and automation IDs, and verify every action from a fresh bounded inspection.",
+        tools: &["computer_action"],
+        defer_loading: true,
+        enabled: true,
+    },
 ];
 
 fn mode_needs(mode: &str, id: &str) -> bool {
@@ -193,5 +201,20 @@ mod tests {
             .unwrap();
         assert!(research.defer_loading);
         assert!(capability_prompt(&capabilities).contains("research (deferred)"));
+    }
+
+    #[test]
+    fn computer_use_is_opt_in_and_exposes_only_the_native_desktop_tool() {
+        let mut settings = AppSettings::default();
+        let disabled = resolved_capabilities(&settings, "build");
+        assert!(!capability_allows_tool(&disabled, "computer_action"));
+
+        settings
+            .agent
+            .enabled_capabilities
+            .push("computer-use".into());
+        let enabled = resolved_capabilities(&settings, "build");
+        assert!(capability_allows_tool(&enabled, "computer_action"));
+        assert!(!capability_allows_tool(&enabled, "browser_action"));
     }
 }

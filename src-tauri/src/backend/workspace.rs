@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::VecDeque,
     fs::{self, OpenOptions},
     io::Write,
     path::{Component, Path, PathBuf},
@@ -394,25 +395,41 @@ fn collect_tree(
     entries: &mut Vec<FileEntry>,
     truncated: &mut bool,
 ) -> Result<(), String> {
-    if depth > options.max_depth || *truncated {
-        return Ok(());
-    }
-
-    for child in sorted_children(directory, options.include_hidden)? {
-        if entries.len() >= options.max_entries {
-            *truncated = true;
-            break;
+    let mut pending = VecDeque::from([(directory.to_path_buf(), depth)]);
+    while let Some((current, current_depth)) = pending.pop_front() {
+        if current_depth > options.max_depth {
+            continue;
         }
-        let metadata = fs::symlink_metadata(&child)
-            .map_err(|error| format!("Cannot inspect '{}': {error}", child.display()))?;
-        let entry = file_entry(root, &child)?;
-        entries.push(entry);
+        for child in sorted_children(&current, options.include_hidden)? {
+            if entries.len() >= options.max_entries {
+                *truncated = true;
+                return Ok(());
+            }
+            let metadata = fs::symlink_metadata(&child)
+                .map_err(|error| format!("Cannot inspect '{}': {error}", child.display()))?;
+            entries.push(file_entry(root, &child)?);
 
-        if metadata.is_dir() && !metadata.file_type().is_symlink() {
-            collect_tree(root, &child, depth + 1, options, entries, truncated)?;
+            if metadata.is_dir()
+                && !metadata.file_type().is_symlink()
+                && current_depth < options.max_depth
+                && !is_generated_tree_directory(&child)
+            {
+                pending.push_back((child, current_depth + 1));
+            }
         }
     }
     Ok(())
+}
+
+fn is_generated_tree_directory(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name.to_ascii_lowercase().as_str(),
+                "node_modules" | "target" | "dist" | "build" | "coverage" | ".next" | ".nuxt"
+            )
+        })
 }
 
 #[tauri::command]

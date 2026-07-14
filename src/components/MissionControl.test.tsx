@@ -29,7 +29,7 @@ vi.mock("../lib/bridge", () => ({
 }));
 
 describe("MissionControl mode selector", () => {
-  it("exposes every agent role and changes the selected mode", () => {
+  it("toggles between auto and vibe mode via the role trigger button", () => {
     render(
       <MissionControl
         workspace={null}
@@ -43,11 +43,13 @@ describe("MissionControl mode selector", () => {
       />,
     );
 
-    for (const name of ["Vibe", "Planner", "Researcher", "Implementer", "Reviewer", "Tester", "Security", "Designer", "Debugger", "Release Agent"]) {
-      expect(screen.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toBeVisible();
-    }
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Tester/ }));
-    expect(screen.getByRole("button", { name: "Whim Tester" })).toBeVisible();
+    // Default mode is "auto" — button shows "Whim Auto"
+    const trigger = screen.getByRole("button", { name: "Whim Auto" });
+    expect(trigger).toBeVisible();
+
+    // Click toggles to "vibe"
+    fireEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "Whim Vibe" })).toBeVisible();
   });
 });
 

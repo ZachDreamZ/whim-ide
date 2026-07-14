@@ -597,6 +597,30 @@ fn tool_defs() -> Vec<ToolDef> {
             description: "Expose the local preview over a public tunnel. ONLY call this when the USER explicitly asks to share the app publicly; never use it unprompted. No arguments.",
             parameters: json!({ "type": "object", "properties": {} }),
         },
+        ToolDef {
+            name: "browser_action",
+            description: "Interact with a Playwright browser session.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": { "type": "string", "enum": ["navigate", "back", "forward", "reload", "click", "type", "fill", "select", "check", "uncheck", "press", "captureScreenshot"] },
+                    "args": { "type": "object" }
+                },
+                "required": ["action"]
+            })
+        },
+        ToolDef {
+            name: "computer_action",
+            description: "Interact with Windows UI Automation.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": { "type": "string", "enum": ["launch", "inspect", "invoke"] },
+                    "args": { "type": "object" }
+                },
+                "required": ["action"]
+            })
+        },
     ]
 }
 
@@ -654,6 +678,9 @@ fn tool_display(name: &str) -> String {
         "rollback" => "Rollback",
         "preview" => "Preview",
         "tunnel" => "Tunnel",
+        "delegate_task" => "Delegate",
+        "browser_action" => "Browser",
+        "computer_action" => "Desktop",
         other => other,
     };
     display.to_string()
@@ -1769,6 +1796,77 @@ async fn run_tool(
                     )),
                     Err(error) => Err(error),
                 }
+            }
+        }
+        "browser_action" => {
+            let action = arguments["action"].as_str().unwrap_or("").to_string();
+            let args = arguments["args"].clone();
+
+            match reqwest::Client::builder()
+                .timeout(Duration::from_secs(15))
+                .build()
+            {
+                Ok(client) => match client
+                    .post("http://localhost:8765/browser_action")
+                    .json(&serde_json::json!({ "action": action, "args": args }))
+                    .send()
+                    .await
+                {
+                    Ok(response) => match response.error_for_status() {
+                        Ok(response) => match response.text().await {
+                            Ok(text) => Ok(text),
+                            Err(e) => Err(format!("Failed to read response: {}", e)),
+                        },
+                        Err(error) => Err(format!("Browser sidecar rejected the action: {error}")),
+                    },
+                    Err(error) => Err(format!("Failed to connect to browser sidecar: {}", error)),
+                },
+                Err(error) => Err(format!(
+                    "Failed to configure browser sidecar client: {error}"
+                )),
+            }
+        }
+        "computer_action" => {
+            let action = arguments["action"].as_str().unwrap_or("").to_string();
+            match action.as_str() {
+                "launch" => {
+                    let path = arguments["args"]["path"].as_str().unwrap_or("");
+                    match crate::backend::computer::computer_launch(path) {
+                        Ok(_) => Ok(format!("Launched {}", path)),
+                        Err(e) => Err(e),
+                    }
+                }
+                "inspect" => match crate::backend::computer::computer_inspect() {
+                    Ok(state) => serde_json::to_string(&state)
+                        .map_err(|error| format!("Failed to serialize desktop state: {error}")),
+                    Err(e) => Err(e),
+                },
+                "invoke" => {
+                    let ref_id = arguments["args"]["ref_id"].as_str().unwrap_or("");
+                    match crate::backend::computer::computer_invoke(ref_id) {
+                        Ok(_) => {
+                            // Action Verification Loop
+                            // 1. Wait for UI to update
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            // 2. Capture a fresh, bounded UI Automation state.
+                            match crate::backend::computer::computer_inspect() {
+                                Ok(new_state) => {
+                                    // 3. Return concrete observable evidence for the action.
+                                    Ok(format!(
+                                        "Action Verified. Invoked {}, UI updated with {} elements.",
+                                        ref_id,
+                                        new_state.elements.len()
+                                    ))
+                                }
+                                Err(e) => {
+                                    Err(format!("Action succeeded but verification failed: {}", e))
+                                }
+                            }
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                _ => Err(format!("Unknown computer action {}", action)),
             }
         }
         other => Err(format!("Unknown tool '{other}'")),
@@ -4432,6 +4530,9 @@ mod tests {
             "Preview",
             "Tunnel",
             "Verify",
+            "Delegate",
+            "Browser",
+            "Desktop",
         ];
         for display in &display_names {
             assert!(

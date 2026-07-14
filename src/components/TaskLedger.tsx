@@ -115,19 +115,19 @@ export function TaskLedger({
             <div className="task-ledger-detail">
               <p>{activeJob.intent}</p>
               <div className="task-ledger-meta"><span>{activeJob.nextEligibleAtMs && activeJob.nextEligibleAtMs > Date.now() ? `Eligible ${timestamp(activeJob.nextEligibleAtMs)}` : `Started ${timestamp(activeJob.startedAtMs)}`}</span><span>{evidenceLabel(activeJob)}</span></div>
-              {onRetry && ["failed", "interrupted"].includes(activeJob.status) && activeJob.attempt < activeJob.budget.maxAttempts && (
+              {onRetry && activeJob.mode !== "operate" && ["failed", "interrupted"].includes(activeJob.status) && activeJob.attempt < activeJob.budget.maxAttempts && (
                 <button className="task-ledger-retry" type="button" disabled={retrying} onClick={() => onRetry(activeJob)}>
                   {retrying ? "Scheduling retry…" : `Retry attempt ${activeJob.attempt + 1}`}
                 </button>
               )}
-              {onResume && activeJob.status === "queued" && activeJob.attempt > 1 && (
+              {onResume && activeJob.mode !== "operate" && activeJob.status === "queued" && activeJob.attempt > 1 && (
                 <button className="task-ledger-retry" type="button" disabled={retrying || Boolean(activeJob.nextEligibleAtMs && activeJob.nextEligibleAtMs > Date.now())} onClick={() => onResume(activeJob)}>
                   {retrying ? "Starting attempt…" : activeJob.nextEligibleAtMs && activeJob.nextEligibleAtMs > Date.now() ? `Eligible ${timestamp(activeJob.nextEligibleAtMs)}` : `Run queued attempt ${activeJob.attempt}`}
                 </button>
               )}
               {onBackground && activeJob.status === "queued" && activeJob.operationId && (
                 <button className="task-ledger-retry" type="button" disabled={retrying || Boolean(activeJob.nextEligibleAtMs && activeJob.nextEligibleAtMs > Date.now())} onClick={() => onBackground(activeJob)}>
-                  {retrying ? "Dispatching…" : "Run in background"}
+                  {retrying ? "Dispatching…" : activeJob.mode === "operate" ? "Run janitor candidate" : "Run in background"}
                 </button>
               )}
               {onCancel && activeJob.status === "running" && activeJob.operationId && (

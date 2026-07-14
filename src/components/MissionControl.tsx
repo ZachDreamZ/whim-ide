@@ -11,19 +11,8 @@ import {
   LoaderCircle,
   Mic,
   ShieldCheck,
-  Sparkles,
   Undo2,
   WandSparkles,
-  Activity,
-  Workflow,
-  Gamepad2,
-  Palette,
-  Dna,
-  Languages,
-  Accessibility,
-  Gauge,
-  Code,
-  Brush,
 } from "lucide-react";
 import { AgentChat } from "./agent-elements/agent-chat";
 import { ContextIndexCard } from "./ContextIndexCard";
@@ -85,12 +74,6 @@ const initialMessages: UIMessage[] = [];
 
 type MissionAgentMode = "auto" | "vibe" | "planner" | "researcher" | "implementer" | "reviewer" | "tester" | "securityReviewer" | "designer" | "debugger" | "releaseAgent" | "benchmark" | "gameDesigner" | "techArtist" | "playtester" | "assetGenerator" | "refactorer" | "dataScientist" | "accessibilityExpert" | "localizer";
 
-const agentModes: readonly MissionAgentMode[] = [
-  "auto", "vibe", "planner", "researcher", "implementer", "reviewer",
-  "tester", "securityReviewer", "designer", "debugger", "releaseAgent", "benchmark",
-  "gameDesigner", "techArtist", "playtester", "assetGenerator", "refactorer", "dataScientist", "accessibilityExpert", "localizer"
-];
-
 function orchestrationMode(mode: MissionAgentMode): "auto" | "vibe" | "plan" | "build" | "verify" | "review" | "ship" {
   if (mode === "auto") return "auto";
   if (mode === "planner" || mode === "gameDesigner") return "plan";
@@ -123,32 +106,6 @@ const modePrompt: Record<MissionAgentMode, string> = {
   accessibilityExpert: "Audit and modify UI components to meet WCAG standards, adding ARIA labels, semantic HTML, and keyboard navigation.",
   localizer: "Detect hardcoded strings, extract them into internationalization files, and apply standard translations.",
 };
-
-function roleLabel(mode: MissionAgentMode) {
-  const map: Record<MissionAgentMode, { name: string; description: string; icon: any }> = {
-    auto: { name: "Auto Orchestrator", description: "Dynamic workflow orchestration", icon: Workflow },
-    vibe: { name: "Vibe", description: "Default problem solving", icon: Sparkles },
-    planner: { name: "Planner", description: "Design & architecture", icon: GitCompareArrows },
-    researcher: { name: "Researcher", description: "Codebase analysis", icon: Bot },
-    implementer: { name: "Implementer", description: "Write & modify code", icon: WandSparkles },
-    reviewer: { name: "Reviewer", description: "Code review & feedback", icon: ShieldCheck },
-    tester: { name: "Tester", description: "Test creation & execution", icon: ShieldCheck },
-    securityReviewer: { name: "Security", description: "Security audit", icon: ShieldCheck },
-    designer: { name: "Designer", description: "UI/UX & aesthetics", icon: Sparkles },
-    debugger: { name: "Debugger", description: "Issue diagnosis & fixing", icon: Bot },
-    releaseAgent: { name: "Release Agent", description: "Release prep", icon: Check },
-    benchmark: { name: "Benchmark", description: "Evaluate dense models", icon: Activity },
-    gameDesigner: { name: "Game Designer", description: "Mechanics & level design", icon: Gamepad2 },
-    techArtist: { name: "Tech Artist", description: "Shaders & graphics math", icon: Palette },
-    playtester: { name: "Playtester", description: "Simulate & test gameplay", icon: Gauge },
-    assetGenerator: { name: "Asset Generator", description: "Textures & audio generation", icon: Brush },
-    refactorer: { name: "Refactorer", description: "Architecture & tech debt", icon: Code },
-    dataScientist: { name: "Data Scientist", description: "Data & ML pipelines", icon: Dna },
-    accessibilityExpert: { name: "A11y Expert", description: "WCAG & ARIA compliance", icon: Accessibility },
-    localizer: { name: "Localizer", description: "i18n & translations", icon: Languages },
-  };
-  return map[mode];
-}
 
 function modelLabel(id: string) {
   if (id === "auto") return { label: "Provider default", note: "model auto-select" };

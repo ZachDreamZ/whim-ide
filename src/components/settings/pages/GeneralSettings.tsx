@@ -12,6 +12,7 @@ const capabilityLabels: Record<string, { label: string; description: string }> =
   research: { label: "Research fan-out", description: "Allow bounded, read-only parallel investigations with durable child tasks." },
   coding: { label: "Workspace coding", description: "Expose scoped write, edit, checkpoint, and rollback tools in mutating roles." },
   verification: { label: "Native verification", description: "Expose project-discovered checks and local preview evidence." },
+  "computer-use": { label: "Windows desktop control", description: "Allow opt-in, accessibility-based inspection and invocation of visible Windows controls." },
   "pi-delegation": { label: "Pi delegation", description: "Allow the installed Pi runtime and its global subagent tooling." },
 };
 

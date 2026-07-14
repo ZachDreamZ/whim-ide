@@ -222,6 +222,7 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         "desktop-context",
         "voice",
         "pi-delegation",
+        "computer-use",
     ];
     if settings.agent.enabled_capabilities.len() > allowed_capabilities.len()
         || settings
@@ -326,5 +327,20 @@ mod tests {
         settings = AppSettings::default();
         settings.agent.approval_policy = "never".into();
         assert!(validate_settings(&settings).is_err());
+    }
+
+    #[test]
+    fn computer_use_is_a_valid_opt_in_capability() {
+        let mut settings = AppSettings::default();
+        assert!(!settings
+            .agent
+            .enabled_capabilities
+            .iter()
+            .any(|id| id == "computer-use"));
+        settings
+            .agent
+            .enabled_capabilities
+            .push("computer-use".into());
+        validate_settings(&settings).unwrap();
     }
 }

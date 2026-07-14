@@ -204,6 +204,38 @@ describe("TaskLedger", () => {
     expect(onBackground).toHaveBeenCalledWith(queued);
   });
 
+  it("routes janitor candidates only through their restricted background boundary", () => {
+    const operate = {
+      ...job,
+      mode: "operate" as const,
+      status: "queued" as const,
+      attempt: 2,
+      operationId: "c20a97fc-721f-4c5a-93c3-42ca1e12a5f2",
+      operationIds: ["first-attempt", "c20a97fc-721f-4c5a-93c3-42ca1e12a5f2"],
+      startedAtMs: null,
+      finishedAtMs: null,
+    };
+    const onResume = vi.fn();
+    const onBackground = vi.fn();
+    render(
+      <TaskLedger
+        native
+        jobs={[operate]}
+        activeJob={operate}
+        detail={{ ...detail, job: operate }}
+        onRefresh={vi.fn()}
+        onSelect={vi.fn()}
+        onResume={onResume}
+        onBackground={onBackground}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /build the task ledger/i }));
+    expect(screen.queryByRole("button", { name: /run queued attempt/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run janitor candidate" }));
+    expect(onBackground).toHaveBeenCalledWith(operate);
+    expect(onResume).not.toHaveBeenCalled();
+  });
+
   it("exposes cancellation for a running background-capable task", () => {
     const running = {
       ...job,

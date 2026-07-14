@@ -8,6 +8,7 @@ use std::{
     },
 };
 
+pub mod computer;
 pub mod context;
 pub mod deployment;
 pub mod execution;
@@ -19,7 +20,6 @@ pub mod settings;
 pub mod voice;
 pub mod workspace;
 pub mod whim_route;
-pub mod plugins;
 
 #[cfg(test)]
 mod tests;
@@ -48,7 +48,6 @@ pub(crate) use workspace::{
     list_workspace_tree_at, read_workspace_file_at, resolve_agent_workspace,
     write_workspace_file_at,
 };
-pub use plugins::{fetch_available_plugins, get_installed_plugins, install_plugin};
 
 pub(crate) const MAX_READ_BYTES: usize = 8 * 1024 * 1024;
 pub(crate) const MAX_WRITE_BYTES: usize = 8 * 1024 * 1024;

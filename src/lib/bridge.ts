@@ -455,7 +455,9 @@ export const bridge = {
   },
 
   async useWorkspace(path: string): Promise<WorkspaceInfo> {
-    return call<WorkspaceInfo>("select_workspace", { path });
+    return call<WorkspaceInfo>("select_workspace", {
+      request: { candidateWorkspace: path },
+    });
   },
 
   async listGitWorktrees(): Promise<GitWorktree[]> {

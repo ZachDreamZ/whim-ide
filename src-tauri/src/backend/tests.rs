@@ -10,8 +10,9 @@ use super::execution::{
 };
 use super::orchestration::background_agent_evidence;
 use super::workspace::{
-    ensure_inside, resolve_agent_workspace, resolve_existing, sanitize_relative,
-    selected_workspace_path, write_workspace_file_at, WriteFileRequest,
+    ensure_inside, list_workspace_tree_at, resolve_agent_workspace, resolve_existing,
+    sanitize_relative, selected_workspace_path, write_workspace_file_at, WorkspaceTreeRequest,
+    WriteFileRequest,
 };
 use super::{
     finish_operation, is_operation_cancelled, register_agent_operation, whim_err, AgentRunResult,
@@ -31,6 +32,44 @@ fn relative_paths_reject_traversal_and_absolute_paths() {
     assert!(sanitize_relative("../secret.txt", false).is_err());
     assert!(sanitize_relative("C:\\Windows\\System32", false).is_err());
     assert!(sanitize_relative("/etc/passwd", false).is_err());
+}
+
+#[test]
+fn workspace_tree_keeps_source_visible_beside_large_generated_output() {
+    let root = std::env::temp_dir().join(format!("whim-tree-test-{}", Uuid::new_v4()));
+    fs::create_dir_all(root.join("dist/assets")).unwrap();
+    fs::create_dir_all(root.join("src/components")).unwrap();
+    fs::write(root.join("package.json"), "{}").unwrap();
+    fs::write(root.join("src/main.ts"), "export {};\n").unwrap();
+    for index in 0..40 {
+        fs::write(
+            root.join("dist/assets").join(format!("chunk-{index}.js")),
+            "x",
+        )
+        .unwrap();
+    }
+
+    let tree = list_workspace_tree_at(
+        &root,
+        WorkspaceTreeRequest {
+            path: None,
+            include_hidden: Some(false),
+            max_depth: Some(4),
+            max_entries: Some(20),
+        },
+    )
+    .unwrap();
+    assert!(tree
+        .entries
+        .iter()
+        .any(|entry| entry.path == "package.json"));
+    assert!(tree.entries.iter().any(|entry| entry.path == "src/main.ts"));
+    assert!(!tree
+        .entries
+        .iter()
+        .any(|entry| entry.path.starts_with("dist/assets/")));
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

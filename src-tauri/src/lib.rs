@@ -76,9 +76,6 @@ pub fn run() {
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,
-            backend::plugins::fetch_available_plugins,
-            backend::plugins::get_installed_plugins,
-            backend::plugins::install_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Whim IDE");
