@@ -18,6 +18,7 @@ export function AgentChat({
   toolRenderers,
   attachments,
   showCopyToolbar,
+  enterToSend,
   initialScrollBehavior,
   enableImagePreview,
   suggestions,
@@ -85,6 +86,7 @@ export function AgentChat({
       onPaste={attachments?.onPaste}
       isDragOver={attachments?.isDragOver}
       suggestions={showInputSuggestions ? suggestions : []}
+      enterToSend={enterToSend}
       leftActions={leftActions}
       rightActions={rightActions}
       mentionContextPaths={mentionContextPaths}

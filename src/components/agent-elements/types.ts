@@ -142,6 +142,9 @@ export type AgentChatProps = {
   /** Show copy toolbar on text turns */
   showCopyToolbar?: boolean;
 
+  /** Enter sends when true; Ctrl/Cmd+Enter sends when false. */
+  enterToSend?: boolean;
+
   /**
    * Where to position the scroll container on initial mount.
    * - "bottom" (default): classic chat behavior, pinned to the latest message.

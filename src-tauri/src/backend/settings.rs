@@ -12,6 +12,8 @@ const MAX_SETTINGS_BYTES: u64 = 128 * 1024;
 pub struct AppSettings {
     pub version: u32,
     pub general: GeneralSettings,
+    pub personalization: PersonalizationSettings,
+    pub chat: ChatSettings,
     pub appearance: AppearanceSettings,
     pub voice: VoiceSettings,
     pub computer_use: ComputerUseSettings,
@@ -23,6 +25,22 @@ pub struct AppSettings {
 pub struct GeneralSettings {
     pub show_bottom_panel: bool,
     pub suggested_prompts: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PersonalizationSettings {
+    pub enabled: bool,
+    pub custom_instructions: String,
+    pub response_style: String,
+    pub project_memory: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChatSettings {
+    pub enter_to_send: bool,
+    pub show_copy_actions: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -71,6 +89,8 @@ impl Default for AppSettings {
         Self {
             version: SETTINGS_VERSION,
             general: GeneralSettings::default(),
+            personalization: PersonalizationSettings::default(),
+            chat: ChatSettings::default(),
             appearance: AppearanceSettings::default(),
             voice: VoiceSettings::default(),
             computer_use: ComputerUseSettings::default(),
@@ -84,6 +104,26 @@ impl Default for GeneralSettings {
         Self {
             show_bottom_panel: true,
             suggested_prompts: true,
+        }
+    }
+}
+
+impl Default for PersonalizationSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            custom_instructions: String::new(),
+            response_style: "normal".into(),
+            project_memory: true,
+        }
+    }
+}
+
+impl Default for ChatSettings {
+    fn default() -> Self {
+        Self {
+            enter_to_send: true,
+            show_copy_actions: true,
         }
     }
 }
@@ -181,6 +221,20 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     validate_font(&settings.appearance.code_font, "Code font")?;
     if settings.appearance.contrast > 100 {
         return Err("Contrast must be between 0 and 100".into());
+    }
+    one_of(
+        &settings.personalization.response_style,
+        &["normal", "concise", "formal", "explanatory"],
+        "response style",
+    )?;
+    if settings.personalization.custom_instructions.chars().count() > 8_000
+        || settings
+            .personalization
+            .custom_instructions
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return Err("Custom instructions must be at most 8000 characters of printable text".into());
     }
     one_of(
         &settings.voice.voice,
@@ -311,6 +365,9 @@ mod tests {
         assert_eq!(settings.agent.runtime, "native");
         assert!(settings.agent.background_verification);
         assert!(settings.agent.autonomous_janitor);
+        assert!(settings.personalization.enabled);
+        assert!(settings.personalization.project_memory);
+        assert_eq!(settings.personalization.response_style, "normal");
     }
 
     #[test]
@@ -342,5 +399,27 @@ mod tests {
             .enabled_capabilities
             .push("computer-use".into());
         validate_settings(&settings).unwrap();
+    }
+
+    #[test]
+    fn older_version_one_files_gain_new_default_sections() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("personalization");
+        object.remove("chat");
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(settings.personalization, PersonalizationSettings::default());
+        assert_eq!(settings.chat, ChatSettings::default());
+        validate_settings(&settings).unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_personalization_values() {
+        let mut settings = AppSettings::default();
+        settings.personalization.response_style = "rambling".into();
+        assert!(validate_settings(&settings).is_err());
+        settings = AppSettings::default();
+        settings.personalization.custom_instructions = "x".repeat(8_001);
+        assert!(validate_settings(&settings).is_err());
     }
 }

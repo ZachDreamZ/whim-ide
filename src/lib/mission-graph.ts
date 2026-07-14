@@ -2,6 +2,7 @@ import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import type {
   NativeResult,
   OrchestrationJob,
+  OrchestrationJobMode,
   OrchestrationJobOutcome,
 } from "./bridge";
 
@@ -13,7 +14,7 @@ export type MissionGraphRequest = {
   prompt: string;
   auditIntent: string;
   title: string;
-  mode: "auto" | "vibe" | "plan" | "build" | "verify" | "review" | "ship";
+  mode: OrchestrationJobMode;
   agent?: string;
   provider: string;
   model?: string;

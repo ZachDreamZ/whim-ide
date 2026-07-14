@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { attachmentPathIsSensitive, localPreviewUrlFromEvent, MissionControl, workspaceRelativeAttachmentPath } from "./MissionControl";
 
@@ -29,7 +29,7 @@ vi.mock("../lib/bridge", () => ({
 }));
 
 describe("MissionControl mode selector", () => {
-  it("toggles between auto and vibe mode via the role trigger button", () => {
+  it("shows Vibe as the only public default workflow name", () => {
     render(
       <MissionControl
         workspace={null}
@@ -43,13 +43,8 @@ describe("MissionControl mode selector", () => {
       />,
     );
 
-    // Default mode is "auto" — button shows "Whim Auto"
-    const trigger = screen.getByRole("button", { name: "Whim Auto" });
-    expect(trigger).toBeVisible();
-
-    // Click toggles to "vibe"
-    fireEvent.click(trigger);
-    expect(screen.getByRole("button", { name: "Whim Vibe" })).toBeVisible();
+    expect(screen.getByLabelText("Whim Vibe")).toBeVisible();
+    expect(screen.queryByText("Auto")).not.toBeInTheDocument();
   });
 });
 

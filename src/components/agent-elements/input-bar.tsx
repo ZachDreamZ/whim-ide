@@ -49,6 +49,16 @@ export type AttachedFile = {
   size?: number;
 };
 
+export function shouldSubmitOnEnter(
+  event: Pick<React.KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey">,
+  enterToSend: boolean,
+) {
+  if (event.key !== "Enter") return false;
+  return enterToSend
+    ? !event.shiftKey
+    : (event.ctrlKey || event.metaKey) && !event.shiftKey;
+}
+
 export type InputBarProps = {
   onSend: (message: { role: "user"; content: string }) => void;
   status: ChatStatus;
@@ -76,6 +86,8 @@ export type InputBarProps = {
   onChange?: (value: string) => void;
   disabled?: boolean;
   autoFocus?: boolean;
+  /** Enter sends when true; Ctrl/Cmd+Enter sends when false. */
+  enterToSend?: boolean;
   suggestions?:
     | SuggestionItem[]
     | {
@@ -146,6 +158,7 @@ export const InputBar = memo(function InputBar({
   onChange: controlledOnChange,
   disabled,
   autoFocus,
+  enterToSend = true,
   suggestions = [],
   typingAnimation,
   infoBar,
@@ -448,12 +461,12 @@ export const InputBar = memo(function InputBar({
         }
       }
 
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (shouldSubmitOnEnter(e, enterToSend)) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit, mentionQuery, mentionOptions, mentionIndex, handleMentionSelect],
+    [enterToSend, handleSubmit, mentionQuery, mentionOptions, mentionIndex, handleMentionSelect],
   );
 
   const hasInput = input.trim().length > 0;

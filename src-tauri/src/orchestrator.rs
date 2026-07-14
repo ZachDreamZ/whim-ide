@@ -32,6 +32,7 @@ const MAX_RETRY_DELAY_MS: u64 = 5 * 60 * 1000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobMode {
+    Auto,
     Vibe,
     Plan,
     Research,
@@ -45,7 +46,7 @@ pub enum JobMode {
 impl JobMode {
     pub fn default_risk(self) -> JobRisk {
         match self {
-            Self::Vibe | Self::Plan | Self::Research => JobRisk::Low,
+            Self::Auto | Self::Vibe | Self::Plan | Self::Research => JobRisk::Low,
             Self::Build | Self::Verify | Self::Review => JobRisk::Medium,
             Self::Ship | Self::Operate => JobRisk::High,
         }
@@ -54,7 +55,7 @@ impl JobMode {
     #[allow(dead_code)]
     pub fn agent_name(self) -> Option<&'static str> {
         match self {
-            Self::Vibe => None,
+            Self::Auto | Self::Vibe => Some("auto"),
             Self::Plan => Some("plan"),
             Self::Research => Some("researcher"),
             Self::Build => Some("build"),

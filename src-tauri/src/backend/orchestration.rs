@@ -130,7 +130,7 @@ fn orchestration_workspace(
 /// build tool set merely because the task originated in the background.
 fn agent_mode_string(mode: JobMode) -> String {
     match mode {
-        JobMode::Vibe => "vibe",
+        JobMode::Auto | JobMode::Vibe => "auto",
         JobMode::Plan => "plan",
         JobMode::Research => "researcher",
         JobMode::Build => "build",
@@ -149,7 +149,7 @@ pub async fn create_orchestration_job(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), Some(request.workspace.as_str()))
         .map_err(orchestration_error)?;
-    let mode = request.mode.unwrap_or(JobMode::Vibe);
+    let mode = request.mode.unwrap_or(JobMode::Auto);
     let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
     store
         .create(CreateJobInput {
@@ -256,15 +256,20 @@ pub async fn finish_orchestration_job(
         .map_err(orchestration_error)?;
     drop(store);
 
-    // Observer Agent hook: automatically persist the mission summary as an Observation
-    if let Some(summary) = request.summary {
-        if !summary.trim().is_empty() && request.outcome == JobOutcome::Completed {
-            if let Ok(mut memory_store) =
-                crate::memory::ObservationStore::from_workspace(&workspace)
-            {
-                let _ = memory_store.append(summary, 5); // default importance
+    let project_memory_enabled = lock(&state.settings, "settings")
+        .map(|settings| settings.personalization.project_memory)
+        .unwrap_or(false);
+    // Observer Agent hook: persist only when the user has enabled project memory.
+    if project_memory_enabled {
+        if let Some(summary) = request.summary {
+            if !summary.trim().is_empty() && request.outcome == JobOutcome::Completed {
+                if let Ok(mut memory_store) =
+                    crate::memory::ObservationStore::from_workspace(&workspace)
+                {
+                    let _ = memory_store.append(summary, 5); // default importance
+                }
+                let _ = crate::backend::reflector::run_reflector_if_needed(&workspace);
             }
-            let _ = crate::backend::reflector::run_reflector_if_needed(&workspace);
         }
     }
 
@@ -453,7 +458,16 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                             background_agent_evidence(&run),
                         );
                         drop(store);
-                        if finish.is_ok() && outcome == JobOutcome::Completed {
+                        let project_memory_enabled = lock(
+                            &app.state::<BackendState>().inner().settings,
+                            "settings",
+                        )
+                        .map(|settings| settings.personalization.project_memory)
+                        .unwrap_or(false);
+                        if finish.is_ok()
+                            && outcome == JobOutcome::Completed
+                            && project_memory_enabled
+                        {
                             if let Some(summary) = summary {
                                 if let Ok(mut memory_store) =
                                     crate::memory::ObservationStore::from_workspace(&workspace)
@@ -516,6 +530,13 @@ mod e2e {
     use crate::backend::BackendState;
     use crate::orchestrator::JobStatus;
     use serde_json::json;
+
+    #[test]
+    fn auto_is_a_durable_mode_and_vibe_is_its_legacy_alias() {
+        assert_eq!(serde_json::to_value(JobMode::Auto).unwrap(), json!("auto"));
+        assert_eq!(agent_mode_string(JobMode::Auto), "auto");
+        assert_eq!(agent_mode_string(JobMode::Vibe), "auto");
+    }
 
     /// Runtime-free integration test of the orchestration lifecycle through the
     /// real `DurableJobStore` + `BackendState`: create -> start -> finish

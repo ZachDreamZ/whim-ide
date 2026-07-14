@@ -69,6 +69,16 @@ export type AppSettings = {
     showBottomPanel: boolean;
     suggestedPrompts: boolean;
   };
+  personalization: {
+    enabled: boolean;
+    customInstructions: string;
+    responseStyle: "normal" | "concise" | "formal" | "explanatory";
+    projectMemory: boolean;
+  };
+  chat: {
+    enterToSend: boolean;
+    showCopyActions: boolean;
+  };
   appearance: {
     accent: string;
     uiFont: string;
@@ -109,6 +119,8 @@ export type AgentCapability = {
 export const defaultAppSettings: AppSettings = {
   version: 1,
   general: { showBottomPanel: true, suggestedPrompts: true },
+  personalization: { enabled: true, customInstructions: "", responseStyle: "normal", projectMemory: true },
+  chat: { enterToSend: true, showCopyActions: true },
   appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60 },
   voice: { voice: "alloy", language: "auto" },
   computerUse: { screenCapture: true, appContext: true },
@@ -121,7 +133,7 @@ export const defaultAppSettings: AppSettings = {
     autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
-    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "github"],
+    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation"],
     defaultAdapter: "native",
     wslDistro: "Ubuntu",
     containerImage: "ubuntu:latest",

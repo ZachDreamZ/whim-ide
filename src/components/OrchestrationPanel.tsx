@@ -22,6 +22,7 @@ import {
   type OrchestrationJobMode,
   type OrchestrationJobStatus,
 } from "../lib/bridge";
+import { displayWorkflowMode } from "../lib/agent-workflow";
 
 type OrchestrationPanelProps = { workspace: string };
 
@@ -336,7 +337,7 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
                       <span>
                         <BarChart3 size={11} /> {evidenceSummary(job)}
                       </span>
-                      <span className="mode-tag">{job.mode}</span>
+                      <span className="mode-tag">{displayWorkflowMode(job.mode)}</span>
                     </div>
                     {isSelected && (
                       <div

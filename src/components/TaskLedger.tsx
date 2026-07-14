@@ -1,6 +1,7 @@
 import { ChevronDown, History, RefreshCw, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { OrchestrationJob, OrchestrationJobDetail } from "../lib/bridge";
+import { displayWorkflowMode } from "../lib/agent-workflow";
 
 type TaskLedgerProps = {
   native: boolean;
@@ -108,7 +109,7 @@ export function TaskLedger({
             }}
           >
             <span className={`task-status ${activeJob.status}`}><ShieldCheck size={10} /> {statusLabel(activeJob.status)}</span>
-            <span className="task-ledger-copy"><strong>{activeJob.title}</strong><small>{targetLabel(activeJob.workspace)} · {activeJob.mode} · attempt {activeJob.attempt}/{activeJob.budget.maxAttempts} · risk {activeJob.risk} · #{shortId(activeJob.id)}</small></span>
+            <span className="task-ledger-copy"><strong>{activeJob.title}</strong><small>{targetLabel(activeJob.workspace)} · {displayWorkflowMode(activeJob.mode)} · attempt {activeJob.attempt}/{activeJob.budget.maxAttempts} · risk {activeJob.risk} · #{shortId(activeJob.id)}</small></span>
             <ChevronDown className={expanded ? "expanded" : ""} size={13} />
           </button>
           {expanded && (

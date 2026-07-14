@@ -24,6 +24,8 @@ import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
 import { AppearanceSettings } from "./components/settings/pages/AppearanceSettings";
 import { VoiceSettings } from "./components/settings/pages/VoiceSettings";
 import { ComputerUseSettings } from "./components/settings/pages/ComputerUseSettings";
+import { PersonalizationSettings } from "./components/settings/pages/PersonalizationSettings";
+import { ChatSettings } from "./components/settings/pages/ChatSettings";
 import {
   bridge,
   defaultAppSettings,
@@ -312,6 +314,8 @@ function App() {
           onClose={() => setView("build")}
         >
           {activeSettingsCategory === "general" && <GeneralSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "personalization" && <PersonalizationSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "chat" && <ChatSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "appearance" && <AppearanceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "voice" && <VoiceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "computer" && <ComputerUseSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
@@ -356,6 +360,8 @@ function App() {
                     voice={appSettings.voice.voice}
                     voiceLanguage={appSettings.voice.language}
                     showSuggestedPrompts={appSettings.general.suggestedPrompts}
+                    enterToSend={appSettings.chat.enterToSend}
+                    showCopyActions={appSettings.chat.showCopyActions}
                     onRunComplete={() => void refreshWorkspace()}
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                   />

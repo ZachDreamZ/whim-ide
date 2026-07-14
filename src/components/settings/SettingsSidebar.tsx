@@ -1,4 +1,4 @@
-import { Settings, Paintbrush, Mic, Monitor } from "lucide-react";
+import { Settings, Paintbrush, Mic, Monitor, MessageSquareText, SlidersHorizontal } from "lucide-react";
 
 interface CategoryGroup {
   name: string;
@@ -10,6 +10,8 @@ const CATEGORIES: CategoryGroup[] = [
     name: "Personal",
     items: [
       { id: "general", label: "General", icon: <Settings size={16} /> },
+      { id: "personalization", label: "Personalization", icon: <SlidersHorizontal size={16} /> },
+      { id: "chat", label: "Chat", icon: <MessageSquareText size={16} /> },
       { id: "appearance", label: "Appearance", icon: <Paintbrush size={16} /> },
       { id: "voice", label: "Voice", icon: <Mic size={16} /> },
     ]
