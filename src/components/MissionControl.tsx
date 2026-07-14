@@ -14,6 +14,7 @@ import {
   Sparkles,
   Undo2,
   WandSparkles,
+  Activity,
 } from "lucide-react";
 import { AgentChat } from "./agent-elements/agent-chat";
 import { ContextIndexCard } from "./ContextIndexCard";
@@ -23,6 +24,7 @@ import { VerificationCard } from "./VerificationCard";
 import { WorktreeCard } from "./WorktreeCard";
 import { LivePreviewCanvas } from "./LivePreviewCanvas";
 import { CanvasWorkspace } from "./CanvasWorkspace";
+import { BenchmarkHub } from "./BenchmarkHub";
 import { VoiceOrb } from "./ui/VoiceOrb";
 import { SourcesSidebar } from "./ui/SourcesSidebar";
 import { MemoryLedgerSidebar } from "./MemoryLedgerSidebar";
@@ -72,11 +74,11 @@ type MissionControlProps = {
 
 const initialMessages: UIMessage[] = [];
 
-type MissionAgentMode = "vibe" | "planner" | "researcher" | "implementer" | "reviewer" | "tester" | "securityReviewer" | "designer" | "debugger" | "releaseAgent";
+type MissionAgentMode = "vibe" | "planner" | "researcher" | "implementer" | "reviewer" | "tester" | "securityReviewer" | "designer" | "debugger" | "releaseAgent" | "benchmark";
 
 const agentModes: readonly MissionAgentMode[] = [
   "vibe", "planner", "researcher", "implementer", "reviewer",
-  "tester", "securityReviewer", "designer", "debugger", "releaseAgent"
+  "tester", "securityReviewer", "designer", "debugger", "releaseAgent", "benchmark"
 ];
 
 function orchestrationMode(mode: MissionAgentMode): "vibe" | "plan" | "build" | "verify" | "review" | "ship" {
@@ -99,6 +101,7 @@ const modePrompt: Record<MissionAgentMode, string> = {
   designer: "Focus on UI/UX improvements, aesthetics, and frontend component structure.",
   debugger: "Diagnose and fix the specified issue, using targeted tests to verify the resolution.",
   releaseAgent: "Prepare the requested outcome for release. Inspect the project, make only necessary changes, run relevant readiness checks, and do not perform a public or production deployment.",
+  benchmark: "Evaluate model performance. Do not edit files.",
 };
 
 function roleLabel(mode: MissionAgentMode) {
@@ -113,6 +116,7 @@ function roleLabel(mode: MissionAgentMode) {
     designer: { name: "Designer", description: "UI/UX & aesthetics", icon: Sparkles },
     debugger: { name: "Debugger", description: "Issue diagnosis & fixing", icon: Bot },
     releaseAgent: { name: "Release Agent", description: "Release prep", icon: Check },
+    benchmark: { name: "Benchmark", description: "Evaluate dense models", icon: Activity },
   };
   return map[mode];
 }
@@ -934,7 +938,7 @@ export function MissionControl({
             onRemoveFile: (id) => setAttachedFiles(current => current.filter(f => f.id !== id)),
             isDragOver: false,
           }}
-          classNames={{ root: "whim-agent-chat", inputBar: "whim-input-bar", userMessage: "whim-user-message" }}
+          classNames={{ root: "whim-agent-chat bg-transparent h-full flex flex-col", inputBar: "whim-input-bar shadow-xl border border-white/5 bg-white/5 backdrop-blur-xl rounded-[24px] mx-4 mb-4 transition-all focus-within:bg-white/10 focus-within:border-white/20", userMessage: "whim-user-message bg-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-sm" }}
         />
       </div>
 
@@ -1022,10 +1026,12 @@ export function MissionControl({
         </div>
       </div>
     </aside>
-    {(showPreview || mode === "implementer") && (
-      <div className="w-[50%] h-full p-4 bg-[#111111] overflow-hidden flex flex-col animate-in slide-in-from-right-8 fade-in duration-300">
+    {(showPreview || mode === "implementer" || mode === "benchmark") && (
+      <div className="w-[50%] h-full p-4 overflow-hidden flex flex-col animate-in slide-in-from-right-8 fade-in duration-300" style={{ background: "linear-gradient(135deg, rgba(20,20,25,0.7), rgba(15,15,20,0.9))", borderLeft: "1px solid rgba(255,255,255,0.05)", backdropFilter: "blur(16px)" }}>
         {mode === "implementer" ? (
           executionTarget ? <CanvasWorkspace workspace={executionTarget} entries={executionEntries} onClose={() => setMode("vibe")} onSaved={onRunComplete} /> : null
+        ) : mode === "benchmark" ? (
+          <BenchmarkHub workspace={executionTarget ?? workspace} />
         ) : (
           <>
             <LivePreviewCanvas url={previewUrl} />
