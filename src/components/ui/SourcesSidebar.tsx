@@ -3,7 +3,11 @@ import type { CitationSource } from "../../lib/citations";
 
 /** Inline citation chip — rendered inside markdown content. */
 export function CitationChip({ id, onClick }: { id: number; onClick?: () => void }) {
-  return <button type="button" onClick={onClick} className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors cursor-pointer align-middle mx-0.5 leading-none" title={`Source [${id}]`}>{id}</button>;
+  const activate = () => {
+    if (onClick) onClick();
+    else window.dispatchEvent(new CustomEvent("whim:citation", { detail: id }));
+  };
+  return <button type="button" onClick={activate} aria-label={`Open source ${id}`} className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors cursor-pointer align-middle mx-0.5 leading-none" title={`Source [${id}]`}>{id}</button>;
 }
 
 export function SourcesSidebar({ onClose, sources = [], activeId }: { onClose: () => void; sources?: CitationSource[]; activeId?: number | null }) {

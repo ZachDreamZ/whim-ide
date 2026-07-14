@@ -383,6 +383,19 @@ function fromCommand(command: BackendCommand): NativeResult {
   };
 }
 
+export type BenchmarkModel = {
+  id: string;
+  object: string;
+};
+
+export type BenchmarkResult = {
+  model_id: string;
+  success: boolean;
+  duration_ms: number;
+  score: number;
+  details: string;
+};
+
 export const bridge = {
   isNative: inTauri,
 
@@ -694,7 +707,7 @@ export const bridge = {
     });
   },
 
-  async deployPreflight(_workspace: string, target: string): Promise<NativeResult> {
+  async deployPreflight(workspace: string, target: string): Promise<NativeResult> {
     const mode = target === "docker" ? "local" : target === "render" || target === "fly" ? "production" : "preview";
     const result = await call<{
       ready: boolean;
@@ -702,7 +715,7 @@ export const bridge = {
       plannedCommand?: string | null;
       projectSignals: string[];
       supportsPreview?: boolean;
-    }>("deploy_preflight", { request: { target, mode, options: null } });
+    }>("deploy_preflight", { workspace, request: { target, mode, options: null } });
     return {
       success: result.ready,
       stdout: [
@@ -714,18 +727,28 @@ export const bridge = {
     };
   },
 
-  async deploy(_workspace: string, target: string, production = false, operationId = crypto.randomUUID()): Promise<NativeResult> {
+  async deploy(workspace: string, target: string, production = false, productionConfirmed = false, operationId = crypto.randomUUID()): Promise<NativeResult> {
     const mode = target === "docker" ? "local" : production ? "production" : "preview";
     const result = await call<{ command: BackendCommand }>("deploy_workspace", {
-      request: { target, mode, options: null, confirmed: true, productionConfirmed: production, operationId, timeoutMs: 1_200_000 },
+      workspace,
+      request: { target, mode, options: null, confirmed: true, productionConfirmed, operationId, timeoutMs: 1_200_000 },
     });
     return fromCommand(result.command);
   },
 
-  async workspaceRollback(commit?: string, operationId = crypto.randomUUID()): Promise<{ operationId: string; restoredCommit: string; stashCreated: boolean }> {
+  async workspaceRollback(workspace: string, commit?: string, operationId = crypto.randomUUID()): Promise<{ operationId: string; restoredCommit: string; stashCreated: boolean }> {
     return await call<{ operationId: string; restoredCommit: string; stashCreated: boolean }>("workspace_rollback", {
+      workspace,
       request: { commit: commit ?? null, operationId }
     });
+  },
+
+  async getLmStudioModels(): Promise<BenchmarkModel[]> {
+    return await call<BenchmarkModel[]>("get_lm_studio_models", {});
+  },
+
+  async runModelBenchmark(modelId: string): Promise<BenchmarkResult> {
+    return await call<BenchmarkResult>("run_model_benchmark", { modelId });
   },
 
   async reveal(path: string): Promise<void> {

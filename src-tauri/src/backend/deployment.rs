@@ -19,7 +19,7 @@ use super::execution::{
     clamp_timeout, execute_tracked, powershell_args, preferred_powershell, quick_capture,
     tool_script, validated_operation_id, CommandResult, ProcessSpec,
 };
-use super::workspace::selected_workspace_path;
+use super::workspace::{resolve_agent_workspace, selected_workspace_path};
 use super::{whim_err, BackendState};
 use super::{DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_DEPLOY_TIMEOUT_MS, MAX_DEPLOY_TIMEOUT_MS};
 
@@ -806,8 +806,9 @@ pub(crate) fn verification_plan_for_root(root: &Path) -> (Vec<VerificationCheck>
 #[tauri::command]
 pub async fn discover_verification_plan(
     state: State<'_, BackendState>,
+    workspace: Option<String>,
 ) -> Result<VerificationPlan, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
     let (checks, warnings) = verification_plan_for_root(&root);
     Ok(VerificationPlan {
         workspace: root.to_string_lossy().into_owned(),
@@ -968,9 +969,10 @@ pub struct RollbackResult {
 #[tauri::command]
 pub async fn workspace_rollback(
     state: State<'_, BackendState>,
+    workspace: Option<String>,
     request: RollbackRequest,
 ) -> Result<RollbackResult, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
     workspace_rollback_at(state, root, request).await
 }
 
@@ -1117,19 +1119,107 @@ pub(crate) async fn start_local_preview_at(
 ) -> Result<CommandResult, String> {
     let operation_id = validated_operation_id(request.operation_id)?;
     let port = request.port.unwrap_or(3000);
-    let script = format!("npx -y serve -l {port}");
-    run_powershell_command_at(
-        state,
-        root,
-        super::execution::PowerShellRequest {
-            command: script,
-            confirmed: true,
-            timeout_ms: Some(DEFAULT_COMMAND_TIMEOUT_MS),
-            operation_id: Some(operation_id),
-            display_command: Some(format!("Preview on port {port}")),
+    let script = preview_script_for_root(&root, port)?;
+    super::execution::spawn_tracked_background(
+        state.inner(),
+        Some(operation_id),
+        "preview",
+        super::execution::ProcessSpec {
+            adapter: crate::harness::ExecutionAdapter::NativeWindows,
+            program: super::execution::preferred_powershell(),
+            args: super::execution::powershell_args(script, false),
+            display_command: format!("Local preview on port {port}"),
+            cwd: root,
+            timeout_ms: 30_000,
+            environment: vec![("BROWSER".to_string(), "none".to_string())],
+            environment_remove: Vec::new(),
         },
+        port,
     )
     .await
+}
+
+fn preview_script_for_root(root: &Path, port: u16) -> Result<String, String> {
+    let package_path = root.join("package.json");
+    let package: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&package_path)
+            .map_err(|_| "Local preview requires a readable package.json".to_string())?,
+    )
+    .map_err(|error| format!("Cannot parse package.json for local preview: {error}"))?;
+    let scripts = package
+        .get("scripts")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "package.json has no scripts for local preview".to_string())?;
+    let (script_name, script_body) = scripts
+        .get("dev")
+        .and_then(serde_json::Value::as_str)
+        .map(|body| ("dev", body))
+        .or_else(|| {
+            scripts
+                .get("start")
+                .and_then(serde_json::Value::as_str)
+                .map(|body| ("start", body))
+        })
+        .ok_or_else(|| "package.json needs a dev or start script for local preview".to_string())?;
+
+    let runner = if root.join("pnpm-lock.yaml").is_file() {
+        format!("pnpm run {script_name}")
+    } else if root.join("yarn.lock").is_file() {
+        format!("yarn {script_name}")
+    } else if root.join("bun.lock").is_file() || root.join("bun.lockb").is_file() {
+        format!("bun run {script_name}")
+    } else {
+        format!("npm run {script_name}")
+    };
+    let lower = script_body.to_ascii_lowercase();
+    let arguments = if lower.contains("vite") {
+        format!(" -- --host 127.0.0.1 --port {port}")
+    } else if lower.contains("next") {
+        format!(" -- --hostname 127.0.0.1 --port {port}")
+    } else {
+        String::new()
+    };
+    Ok(format!(
+        "$env:PORT='{port}'; $env:HOST='127.0.0.1'; $env:BROWSER='none'; {runner}{arguments}"
+    ))
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::preview_script_for_root;
+
+    fn fixture(package_json: &str, lockfile: Option<&str>) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("whim-preview-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create preview fixture");
+        std::fs::write(root.join("package.json"), package_json).expect("write package fixture");
+        if let Some(lockfile) = lockfile {
+            std::fs::write(root.join(lockfile), "").expect("write lock fixture");
+        }
+        root
+    }
+
+    #[test]
+    fn preview_command_uses_project_runner_and_framework_port_flags() {
+        let vite = fixture(r#"{"scripts":{"dev":"vite"}}"#, Some("pnpm-lock.yaml"));
+        let next = fixture(r#"{"scripts":{"dev":"next dev"}}"#, None);
+
+        let vite_script = preview_script_for_root(&vite, 3210).expect("vite preview command");
+        let next_script = preview_script_for_root(&next, 4321).expect("next preview command");
+
+        assert!(vite_script.contains("pnpm run dev -- --host 127.0.0.1 --port 3210"));
+        assert!(next_script.contains("npm run dev -- --hostname 127.0.0.1 --port 4321"));
+
+        std::fs::remove_dir_all(vite).expect("remove vite fixture");
+        std::fs::remove_dir_all(next).expect("remove next fixture");
+    }
+
+    #[test]
+    fn preview_command_rejects_projects_without_a_server_script() {
+        let root = fixture(r#"{"scripts":{"build":"vite build"}}"#, None);
+        let error = preview_script_for_root(&root, 3000).expect_err("missing preview script");
+        assert!(error.contains("dev or start"));
+        std::fs::remove_dir_all(root).expect("remove fixture");
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -1459,9 +1549,10 @@ async fn deploy_preflight_internal(
 #[tauri::command]
 pub async fn deploy_preflight(
     state: State<'_, BackendState>,
+    workspace: Option<String>,
     request: DeployPreflightRequest,
 ) -> Result<DeployPreflight, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
     deploy_preflight_internal(
         &root,
         request.target,
@@ -1474,6 +1565,7 @@ pub async fn deploy_preflight(
 #[tauri::command]
 pub async fn deploy_workspace(
     state: State<'_, BackendState>,
+    workspace: Option<String>,
     request: DeployRequest,
 ) -> Result<DeployResult, String> {
     if !request.confirmed {
@@ -1488,7 +1580,7 @@ pub async fn deploy_workspace(
             "Production deployment requires an explicit, separate production confirmation",
         ));
     }
-    let root = selected_workspace_path(state.inner())?;
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
     let options = request.options.unwrap_or_default();
     let preflight =
         deploy_preflight_internal(&root, request.target, request.mode, &options).await?;

@@ -212,6 +212,11 @@ function App() {
     document.documentElement.classList.add("dark");
     const commandShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen((value) => !value); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setView("build");
+        requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-files")));
+      }
     };
     window.addEventListener("keydown", commandShortcut);
     return () => window.removeEventListener("keydown", commandShortcut);

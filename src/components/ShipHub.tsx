@@ -151,7 +151,7 @@ export function ShipHub({ workspace }: ShipHubProps) {
     setDeployStatus("running");
     appendLogs([{ level: "info", text: `Starting ${selected.name} ${mode} deployment.` }]);
     try {
-      const result = await bridge.deploy(workspace, target, production);
+      const result = await bridge.deploy(workspace, target, production, production);
       appendResult(
         result,
         `${selected.name} ${mode} deployment completed successfully.`,

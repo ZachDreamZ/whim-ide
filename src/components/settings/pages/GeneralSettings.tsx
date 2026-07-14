@@ -40,7 +40,7 @@ export function GeneralSettings({ settings, onChange, saving }: Props) {
             control={{
               type: "select",
               value: settings.agent.piModel,
-              options: ["opencode/big-pickle", "opencode/hy3-free", "opencode/deepseek-v4-flash-free"],
+              options: ["opencode/deepseek-v4-flash-free", "google/gemma-4-31b-it", "openrouter/google/gemma-4-31b-it:free", "opencode/big-pickle", "opencode/hy3-free"],
               onChange: (piModel) => updateAgent({ piModel }),
             }}
           />
@@ -56,17 +56,9 @@ export function GeneralSettings({ settings, onChange, saving }: Props) {
 
     <section className="mb-8">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Layers3 size={15}/> Execution Environment</div>
-      <div className="bg-white/[0.02] border border-white/5 rounded-xl px-5">
-        <SettingsRow label="Default Adapter" description="The execution environment where local tools are run." control={{ type: "select", value: settings.agent.defaultAdapter || "native", options: ["native", "wsl", "container", "remote"], onChange: (defaultAdapter) => updateAgent({ defaultAdapter }) }}/>
-        {settings.agent.defaultAdapter === "wsl" && (
-          <SettingsRow label="WSL Distro" description="The name of the WSL distribution to use (e.g., Ubuntu)." control={{ type: "input", value: settings.agent.wslDistro || "", onChange: (wslDistro) => updateAgent({ wslDistro }) }} />
-        )}
-        {settings.agent.defaultAdapter === "container" && (
-          <SettingsRow label="Container Image" description="The docker image to run the environment in." control={{ type: "input", value: settings.agent.containerImage || "", onChange: (containerImage) => updateAgent({ containerImage }) }} />
-        )}
-        {settings.agent.defaultAdapter === "remote" && (
-          <SettingsRow label="Remote Host" description="The SSH connection string for the remote host." control={{ type: "input", value: settings.agent.remoteHost || "", onChange: (remoteHost) => updateAgent({ remoteHost }) }} borderBottom={false} />
-        )}
+      <div className="rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4">
+        <div className="flex items-center justify-between gap-4"><span className="text-sm text-white/80">Windows native</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-medium text-emerald-300">Active</span></div>
+        <p className="mt-2 text-xs leading-relaxed text-white/40">Workspace tools currently execute through Whim's bounded PowerShell and filesystem backend. WSL, container, and remote adapters stay hidden until they have real runtime enforcement.</p>
       </div>
     </section>
 

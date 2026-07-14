@@ -58,6 +58,8 @@ pub fn run() {
             backend::orchestration::retry_orchestration_job,
             backend::orchestration::dispatch_orchestration_job,
             backend::orchestration::record_verification_result,
+            backend::benchmark::get_lm_studio_models,
+            backend::benchmark::run_model_benchmark,
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,

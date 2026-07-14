@@ -240,7 +240,10 @@ fn provider_env_var(provider: Provider) -> Option<&'static str> {
 }
 
 fn provider_requires_key(provider: Provider) -> bool {
-    !matches!(provider, Provider::Local | Provider::OmniRoute)
+    !matches!(
+        provider,
+        Provider::Local | Provider::OmniRoute | Provider::Compatible
+    )
 }
 
 /// Resolve the API key to use: prefer the explicit in-session key, otherwise
@@ -301,6 +304,67 @@ fn validate_omniroute_base(base: &str) -> Result<String, String> {
                 .to_string(),
         );
     }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn validate_provider_base(provider: Provider, base: &str) -> Result<String, String> {
+    if provider == Provider::OmniRoute {
+        return validate_omniroute_base(base);
+    }
+    let label = provider_label(provider);
+    let url = reqwest::Url::parse(base.trim())
+        .map_err(|error| format!("Invalid {label} base URL: {error}"))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(format!(
+            "{label} base URL must not contain embedded credentials"
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(format!(
+            "{label} base URL must not contain a query or fragment"
+        ));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| format!("{label} base URL must include a host"))?
+        .to_ascii_lowercase();
+    let parsed_ip = host.parse::<std::net::IpAddr>().ok();
+    let loopback = matches!(host.as_str(), "localhost")
+        || parsed_ip
+            .as_ref()
+            .is_some_and(std::net::IpAddr::is_loopback);
+
+    if provider == Provider::Local {
+        if !loopback || !matches!(url.scheme(), "http" | "https") {
+            return Err(
+                "Local model endpoints must use HTTP or HTTPS on localhost/127.0.0.1/::1"
+                    .to_string(),
+            );
+        }
+    } else if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
+        return Err(format!(
+            "{label} must use HTTPS, except for an explicit loopback endpoint"
+        ));
+    }
+
+    if provider == Provider::Compatible && !loopback {
+        let private_ip = match parsed_ip {
+            Some(std::net::IpAddr::V4(ip)) => {
+                ip.is_private() || ip.is_link_local() || ip.is_unspecified()
+            }
+            Some(std::net::IpAddr::V6(ip)) => {
+                ip.is_unique_local() || ip.is_unicast_link_local() || ip.is_unspecified()
+            }
+            None => false,
+        };
+        if private_ip {
+            return Err(
+                "OpenAI-compatible endpoints may not target non-loopback private IP addresses"
+                    .to_string(),
+            );
+        }
+    }
+
     Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
@@ -657,7 +721,8 @@ Tool discipline:\n\
 - Use relative paths from the workspace root.\n\
 - Use read_file / list_directory / grep_files to understand before acting.\n\
 - Use edit_file for targeted changes and write_file only for new files or full rewrites when those tools are available in the selected mode.\n\
-- Use only the command or verification tool available in the selected mode for checks.\n\
+- A direct user request to edit or replace a named file inside the workspace authorizes that scoped write; do not ask for redundant confirmation. This does not authorize rollback, deletion, or external side effects.\n\
+- Use only the command or verification tool available in the selected mode for checks. The verify tool already performs Whim's bounded project-check discovery, so call it directly instead of grepping configuration when the user asks to run Whim-discovered checks.\n\
 - Use `research` to delegate broad read-only investigation to a sub-agent when it would otherwise flood context.\n\
 \n\
 Authorization: By launching this agent run the user authorizes only the workspace-scoped tools exposed for its selected mode. You will execute those autonomously — this run does not prompt the user per tool call.\n\
@@ -684,8 +749,8 @@ Guardrails (hard rules):\n\
 </agent_capabilities>\n\
 \n\
 - Use the checkpoint tool BEFORE risky or large changes when the workspace already has Git history. It snapshots tracked files only and never initializes Git or captures untracked files.
-- Use rollback only if the build or app breaks and you need to restore tracked files to the last checkpoint; untracked files remain untouched.
-- Use preview to verify the app actually runs (starts the local dev server). Do not claim a UI works without previewing when a dev server exists.
+- Use rollback only if the build or app breaks, the user explicitly approved restoring the last checkpoint in the current request, and you need to restore tracked files; untracked files remain untouched. Otherwise stop and explain the proposed rollback.
+- Use preview to verify the app actually runs (starts the local dev server). Preview is strictly local. If the user requests local preview and rejects public sharing, call preview and do not call tunnel. Do not claim a UI works without previewing when a dev server exists.
 - Only call tunnel when the USER explicitly asks to share the app publicly. Tunneling exposes the workspace to the internet and must never be done unprompted.
 
 Respond in plain text between tool calls. Use tools to act."
@@ -1594,12 +1659,16 @@ async fn run_tool(
             match crate::backend::start_local_preview_at(
                 state.clone(),
                 root.to_path_buf(),
-                PreviewRequest { port: Some(3000), operation_id: Some(operation.clone()) },
+                PreviewRequest {
+                    port: Some(3000),
+                    operation_id: Some(operation.clone()),
+                },
             )
             .await
             {
-                Ok(_) => Ok(format!(
-                    "Local preview launching (operation {}). App should be at http://localhost:3000 once it builds.",
+                Ok(result) => Ok(format!(
+                    "Local preview ready at {} (operation {}).",
+                    result.stdout,
                     &operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
@@ -2061,6 +2130,68 @@ async fn wait_for_operation_cancelled(state: &BackendState, operation_id: &str) 
     }
 }
 
+fn pi_environment_name_is_sensitive(name: &std::ffi::OsStr) -> bool {
+    let upper = name.to_string_lossy().to_ascii_uppercase();
+    upper.ends_with("_API_KEY")
+        || upper.ends_with("_TOKEN")
+        || upper.ends_with("_SECRET")
+        || upper.ends_with("_PASSWORD")
+        || upper.ends_with("_CREDENTIAL")
+        || matches!(
+            upper.as_str(),
+            "OPENAI_API_KEY"
+                | "ANTHROPIC_API_KEY"
+                | "GOOGLE_API_KEY"
+                | "GEMINI_API_KEY"
+                | "DEEPSEEK_API_KEY"
+                | "DASHSCOPE_API_KEY"
+                | "XIAOMI_API_KEY"
+                | "OPENROUTER_API_KEY"
+                | "OPENCODE_API_KEY"
+                | "OMNIROUTE_API_KEY"
+                | "GITHUB_TOKEN"
+        )
+}
+
+fn pi_tool_allowlist(mode: AgentRole, profile: &HarnessProfile, settings: &AppSettings) -> String {
+    let capabilities = resolved_capabilities(settings, mode.as_str());
+    // Pi's built-in edit/write tools cannot enforce Whim's per-path prefixes.
+    // Fail closed whenever a profile narrows write paths instead of granting
+    // broader workspace authority than the native harness would have.
+    let unrestricted_write_paths = profile.allowed_write_paths.is_none();
+    let can_write = unrestricted_write_paths
+        && mode.permits_tool("write_file")
+        && profile.permits_tool("write_file")
+        && settings.agent.approval_policy == "risky"
+        && capability_allows_tool(&capabilities, "write_file");
+    let can_edit = unrestricted_write_paths
+        && mode.permits_tool("edit_file")
+        && profile.permits_tool("edit_file")
+        && settings.agent.approval_policy == "risky"
+        && capability_allows_tool(&capabilities, "edit_file");
+    let can_shell = mode.permits_tool("run_command")
+        && profile.permits_tool("run_command")
+        && settings.agent.approval_policy == "risky"
+        && capability_allows_tool(&capabilities, "run_command");
+    let mut tool_names = vec!["read", "grep", "find", "ls"];
+    if can_shell {
+        tool_names.push("bash");
+    }
+    if can_edit {
+        tool_names.push("edit");
+    }
+    if can_write {
+        tool_names.push("write");
+    }
+    tool_names.join(",")
+}
+
+fn pi_delegation_enabled(settings: &AppSettings, mode: AgentRole) -> bool {
+    resolved_capabilities(settings, mode.as_str())
+        .iter()
+        .any(|capability| capability.id == "pi-delegation" && capability.enabled)
+}
+
 /// Run the user's installed Pi coding agent without reading or copying Pi's
 /// credentials. The subprocess is hidden on Windows, inherits Pi's own secure
 /// configuration, receives a strict role-specific tool allowlist, and remains
@@ -2102,20 +2233,7 @@ async fn run_pi_agent<R: tauri::Runtime>(
         crate::backend::finish_operation(&state, operation_id);
         return Err(format!("Could not stage Pi input: {error}"));
     }
-    let capabilities = resolved_capabilities(settings, mode.as_str());
-    let can_write = mode.permits_tool("write_file")
-        && settings.agent.approval_policy == "risky"
-        && capability_allows_tool(&capabilities, "write_file");
-    let can_edit = mode.permits_tool("edit_file")
-        && settings.agent.approval_policy == "risky"
-        && capability_allows_tool(&capabilities, "edit_file");
-    let tools = if can_write {
-        "read,grep,find,ls,bash,edit,write"
-    } else if can_edit {
-        "read,grep,find,ls,edit"
-    } else {
-        "read,grep,find,ls"
-    };
+    let tools = pi_tool_allowlist(mode, profile, settings);
 
     let mut command = if cfg!(windows) && launcher.extension().is_some_and(|ext| ext == "ps1") {
         let mut command = TokioCommand::new("powershell.exe");
@@ -2138,9 +2256,12 @@ async fn run_pi_agent<R: tauri::Runtime>(
         "--print",
         "--no-session",
         "--no-context-files",
+        "--no-extensions",
+        "--no-skills",
+        "--no-prompt-templates",
         "--no-approve",
         "--tools",
-        tools,
+        &tools,
         "--thinking",
         match settings.agent.speed.as_str() {
             "fast" => "low",
@@ -2150,6 +2271,13 @@ async fn run_pi_agent<R: tauri::Runtime>(
     ]);
     if !settings.agent.pi_model.trim().is_empty() {
         command.args(["--model", settings.agent.pi_model.trim()]);
+    }
+    // Pi resolves credentials from its own protected auth store. Do not leak
+    // unrelated process-level provider credentials into the subprocess.
+    for (name, _) in std::env::vars_os() {
+        if pi_environment_name_is_sensitive(&name) {
+            command.env_remove(name);
+        }
     }
     command
         .arg(format!("@{}", prompt_path.to_string_lossy()))
@@ -3347,6 +3475,7 @@ pub async fn fetch_provider_models(
             let base = base_url
                 .filter(|base| !base.trim().is_empty())
                 .unwrap_or("https://generativelanguage.googleapis.com");
+            let base = validate_provider_base(provider_enum, base)?;
             let url = format!(
                 "{}/v1beta/models?key={}",
                 base.trim_end_matches('/'),
@@ -3397,9 +3526,7 @@ pub async fn fetch_provider_models(
             if base.trim().is_empty() {
                 return Err("A base URL is required to list these models.".into());
             }
-            if provider_enum == Provider::OmniRoute {
-                base = validate_omniroute_base(&base)?;
-            }
+            base = validate_provider_base(provider_enum, &base)?;
             let url = format!("{}/models", base.trim_end_matches('/'));
             let mut request = client.get(&url);
             if !api_key.is_empty() {
@@ -3491,6 +3618,12 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
         .map_err(|error| format!("WHIM:AGENT_START|{error}"))?
         .clone();
     if settings.agent.runtime == "pi" {
+        if !pi_delegation_enabled(&settings, mode) {
+            return Err(
+                "WHIM:AGENT_START|Pi runtime is disabled by the pi-delegation capability setting"
+                    .to_string(),
+            );
+        }
         let janitor_workspace = root.to_string_lossy().into_owned();
         let janitor_runtime = crate::backend::reflector::JanitorRuntimeRequest {
             provider: request.provider.clone(),
@@ -3574,10 +3707,8 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     if base.trim().is_empty() {
         return Err("WHIM:AGENT_START|This provider requires a base URL (set baseUrl)".to_string());
     }
-    if provider == Provider::OmniRoute {
-        base =
-            validate_omniroute_base(&base).map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
-    }
+    base = validate_provider_base(provider, &base)
+        .map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
     let api_key = request.api_key.clone();
     // Early, crisp failure when a cloud provider has no key at all (neither
     // typed in-session nor present in the environment). Without this the run
@@ -3664,6 +3795,64 @@ mod tests {
         assert!(validate_omniroute_base("https://router.example.com/v1").is_ok());
         assert!(validate_omniroute_base("http://router.example.com/v1").is_err());
         assert!(!provider_requires_key(Provider::OmniRoute));
+    }
+
+    #[test]
+    fn provider_endpoints_enforce_transport_and_locality_boundaries() {
+        assert!(validate_provider_base(Provider::Local, "http://127.0.0.1:1234/v1").is_ok());
+        assert!(validate_provider_base(Provider::Local, "http://localhost:11434/v1").is_ok());
+        assert!(validate_provider_base(Provider::Local, "http://192.168.1.4:1234/v1").is_err());
+        assert!(
+            validate_provider_base(Provider::Compatible, "https://models.example.com/v1").is_ok()
+        );
+        assert!(validate_provider_base(Provider::Compatible, "http://localhost:1234/v1").is_ok());
+        assert!(
+            validate_provider_base(Provider::Compatible, "http://models.example.com/v1").is_err()
+        );
+        assert!(validate_provider_base(Provider::Compatible, "https://10.0.0.4/v1").is_err());
+        assert!(
+            validate_provider_base(Provider::Compatible, "https://user:pass@example.com/v1")
+                .is_err()
+        );
+        assert!(!provider_requires_key(Provider::Compatible));
+    }
+
+    #[test]
+    fn pi_runtime_intersects_profile_capabilities_and_strips_secret_environment_names() {
+        let settings = AppSettings::default();
+        let read_only = HarnessProfile::parse(
+            r#"{"allowedTools":["read_file","list_directory","grep_files"]}"#,
+        )
+        .expect("read-only profile");
+        assert_eq!(
+            pi_tool_allowlist(AgentRole::Implementer, &read_only, &settings),
+            "read,grep,find,ls"
+        );
+
+        let path_restricted = HarnessProfile::parse(
+            r#"{"allowedTools":["read_file","edit_file","write_file","run_command"],"allowedWritePaths":["src"]}"#,
+        )
+        .expect("path-restricted profile");
+        assert_eq!(
+            pi_tool_allowlist(AgentRole::Implementer, &path_restricted, &settings),
+            "read,grep,find,ls,bash"
+        );
+
+        let mut disabled = settings.clone();
+        disabled
+            .agent
+            .enabled_capabilities
+            .retain(|capability| capability != "pi-delegation");
+        assert!(!pi_delegation_enabled(&disabled, AgentRole::Implementer));
+        assert!(pi_environment_name_is_sensitive(std::ffi::OsStr::new(
+            "OPENAI_API_KEY"
+        )));
+        assert!(pi_environment_name_is_sensitive(std::ffi::OsStr::new(
+            "GITHUB_TOKEN"
+        )));
+        assert!(!pi_environment_name_is_sensitive(std::ffi::OsStr::new(
+            "PATH"
+        )));
     }
 
     #[test]
@@ -4013,6 +4202,18 @@ mod tests {
             fallback.contains("exploratory") || fallback.contains("prototype"),
             "unknown mode should fall back to vibe-like text"
         );
+    }
+
+    #[test]
+    fn system_prompt_encodes_benchmarked_agent_boundaries() {
+        let prompt = build_system_prompt("/test", "", "build", None, &AppSettings::default());
+        assert!(prompt.contains("do not ask for redundant confirmation"));
+        assert!(
+            prompt.contains("verify tool already performs Whim's bounded project-check discovery")
+        );
+        assert!(prompt.contains("explicitly approved restoring the last checkpoint"));
+        assert!(prompt.contains("Preview is strictly local"));
+        assert!(prompt.contains("do not call tunnel"));
     }
 
     #[test]

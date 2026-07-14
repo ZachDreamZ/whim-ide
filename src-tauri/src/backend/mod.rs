@@ -14,6 +14,7 @@ pub mod execution;
 pub mod orchestration;
 pub mod provider;
 pub mod reflector;
+pub mod benchmark;
 pub mod settings;
 pub mod voice;
 pub mod workspace;
@@ -58,7 +59,7 @@ pub(crate) const MAX_DEPLOY_TIMEOUT_MS: u64 = 2 * 60 * 60 * 1000;
 
 pub struct BackendState {
     pub(crate) selected_workspace: Mutex<Option<PathBuf>>,
-    pub(crate) operations: Mutex<HashMap<String, RunningOperation>>,
+    pub(crate) operations: Arc<Mutex<HashMap<String, RunningOperation>>>,
     pub(crate) orchestration: Mutex<DurableJobStore>,
     pub(crate) settings: Mutex<settings::AppSettings>,
     pub(crate) janitor_workspaces: Mutex<HashSet<PathBuf>>,
@@ -68,7 +69,7 @@ impl Default for BackendState {
     fn default() -> Self {
         Self {
             selected_workspace: Mutex::new(None),
-            operations: Mutex::new(HashMap::new()),
+            operations: Arc::new(Mutex::new(HashMap::new())),
             orchestration: Mutex::new(DurableJobStore::default()),
             settings: Mutex::new(settings::load_settings_from_disk()),
             janitor_workspaces: Mutex::new(HashSet::new()),
@@ -121,7 +122,7 @@ pub(crate) fn register_agent_operation(
     let mut operations = lock(&state.operations, "operations")?;
     if operations
         .values()
-        .any(|operation| operation.workspace.as_deref() == Some(root))
+        .any(|operation| operation.pid == 0 && operation.workspace.as_deref() == Some(root))
     {
         return Err(format!(
             "An agent is already running in this workspace root; use a distinct registered worktree ({root:?})"
@@ -179,11 +180,37 @@ pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
             Some("http://127.0.0.1:20128/v1".to_string()),
         ));
     }
-    if std::env::var("OLLAMA_HOST").is_ok() || std::env::var("LM_STUDIO_BASE_URL").is_ok() {
-        return Some((
-            "local".to_string(),
-            Some("http://localhost:11434".to_string()),
-        ));
+    if let Ok(base) = std::env::var("LM_STUDIO_BASE_URL") {
+        if !base.trim().is_empty() {
+            return Some(("local".to_string(), Some(base.trim().to_string())));
+        }
+    }
+    if let Ok(host) = std::env::var("OLLAMA_HOST") {
+        if !host.trim().is_empty() {
+            return Some((
+                "local".to_string(),
+                Some(format!("{}/v1", host.trim().trim_end_matches('/'))),
+            ));
+        }
+    }
+    for (port, base) in [
+        (1234, "http://127.0.0.1:1234/v1"),
+        (11434, "http://127.0.0.1:11434/v1"),
+    ] {
+        let available = format!("127.0.0.1:{port}")
+            .parse()
+            .ok()
+            .and_then(|address| {
+                std::net::TcpStream::connect_timeout(
+                    &address,
+                    std::time::Duration::from_millis(250),
+                )
+                .ok()
+            })
+            .is_some();
+        if available {
+            return Some(("local".to_string(), Some(base.to_string())));
+        }
     }
     for (provider, env_var) in [
         ("openai", "OPENAI_API_KEY"),
@@ -201,6 +228,6 @@ pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
     }
     Some((
         "local".to_string(),
-        Some("http://localhost:11434".to_string()),
+        Some("http://127.0.0.1:11434/v1".to_string()),
     ))
 }

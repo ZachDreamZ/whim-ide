@@ -9,6 +9,7 @@
     "lint": "eslint src vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "benchmark:agents": "node scripts/benchmark-agent-harness.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

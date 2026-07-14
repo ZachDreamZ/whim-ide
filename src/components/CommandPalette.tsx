@@ -33,7 +33,7 @@ export function CommandPalette({ open, projectName, onClose, onNavigate, onOpenW
     { id: "ask", label: "Ask Whim to change something", hint: "Agent", icon: Sparkles, keywords: "prompt intent agent change", action: () => { onNavigate("build"); onClose(); requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-agent"))); } },
     { id: "file", label: "Find a file", hint: "Files", icon: FileSearch, keywords: "file symbol search", action: () => { onNavigate("build"); onClose(); requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-files"))); } },
     { id: "workspace", label: "Open a workspace", hint: "Native", icon: FolderOpen, keywords: "folder project open", action: () => { onOpenWorkspace(); onClose(); } },
-    { id: "models", label: "Connect or switch a model", hint: "75+ providers", icon: Bot, keywords: "provider zen model local ollama", action: () => { onNavigate("providers"); onClose(); } },
+    { id: "models", label: "Connect or switch a model", hint: "Configured routes", icon: Bot, keywords: "provider model local lm studio ollama", action: () => { onNavigate("providers"); onClose(); } },
     { id: "plugins", label: "Add a plugin, MCP, or skill", hint: "Ecosystem", icon: Blocks, keywords: "plugin skill mcp install", action: () => { onNavigate("ecosystem"); onClose(); } },
     { id: "verify", label: "Run release readiness", hint: "Ship", icon: CheckCircle2, keywords: "test check browser journey", action: () => { onNavigate("ship"); onClose(); } },
     { id: "ship", label: "Prepare a private preview", hint: "Ship", icon: Rocket, keywords: "deploy preview vercel ship", action: () => { onNavigate("ship"); onClose(); } },

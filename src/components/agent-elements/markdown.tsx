@@ -181,10 +181,6 @@ export function Markdown({ content, className }: MarkdownProps) {
 
   return (
     <div
-      onClick={(event) => {
-        const citation = (event.target as HTMLElement).closest<HTMLElement>("cite[data-citation]");
-        if (citation?.dataset.citation) window.dispatchEvent(new CustomEvent("whim:citation", { detail: Number(citation.dataset.citation) }));
-      }}
       className={cn(
         "an-markdown",
         "overflow-hidden wrap-break-word",

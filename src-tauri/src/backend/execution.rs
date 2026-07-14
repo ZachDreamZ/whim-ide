@@ -9,7 +9,12 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::State;
-use tokio::{io::AsyncReadExt, process::Command, time::timeout};
+use tokio::{
+    io::AsyncReadExt,
+    net::TcpStream,
+    process::Command,
+    time::{sleep, timeout},
+};
 use uuid::Uuid;
 
 use super::{lock, BackendState};
@@ -262,7 +267,7 @@ where
     Ok((strip_ansi(&text), truncated))
 }
 
-async fn terminate_process_tree(pid: u32) -> bool {
+pub(crate) async fn terminate_process_tree(pid: u32) -> bool {
     #[cfg(windows)]
     {
         let mut command = Command::new("taskkill.exe");
@@ -290,6 +295,48 @@ async fn terminate_process_tree(pid: u32) -> bool {
     }
 }
 
+fn command_for_spec(spec: &ProcessSpec) -> Command {
+    match &spec.adapter {
+        crate::harness::ExecutionAdapter::NativeWindows => {
+            let mut command = Command::new(&spec.program);
+            command.args(&spec.args);
+            command
+        }
+        crate::harness::ExecutionAdapter::Wsl { distro } => {
+            let mut command = Command::new("wsl.exe");
+            if let Some(distro) = distro {
+                command.arg("-d").arg(distro);
+            }
+            command.arg("--").arg(&spec.program).args(&spec.args);
+            command
+        }
+        crate::harness::ExecutionAdapter::Container { image } => {
+            let mut command = Command::new("docker");
+            let cwd = spec.cwd.to_string_lossy().replace('\\', "/");
+            command
+                .arg("run")
+                .arg("--rm")
+                .arg("-v")
+                .arg(format!("{cwd}:{cwd}"))
+                .arg("-w")
+                .arg(&cwd)
+                .arg(image)
+                .arg(&spec.program)
+                .args(&spec.args);
+            command
+        }
+        crate::harness::ExecutionAdapter::Remote { host } => {
+            let mut command = Command::new("ssh");
+            command
+                .arg(host)
+                .arg("--")
+                .arg(&spec.program)
+                .args(&spec.args);
+            command
+        }
+    }
+}
+
 pub(crate) fn should_terminate_process_tree(pid: u32) -> bool {
     pid != 0
 }
@@ -309,40 +356,7 @@ pub(crate) async fn execute_tracked(
         return Err(format!("Operation '{operation_id}' is already running"));
     }
 
-    let mut command = match &spec.adapter {
-        crate::harness::ExecutionAdapter::NativeWindows => {
-            let mut cmd = Command::new(&spec.program);
-            cmd.args(&spec.args);
-            cmd
-        }
-        crate::harness::ExecutionAdapter::Wsl { distro } => {
-            let mut cmd = Command::new("wsl.exe");
-            if let Some(d) = distro {
-                cmd.arg("-d").arg(d);
-            }
-            cmd.arg("--").arg(&spec.program).args(&spec.args);
-            cmd
-        }
-        crate::harness::ExecutionAdapter::Container { image } => {
-            let mut cmd = Command::new("docker");
-            let cwd_str = spec.cwd.to_string_lossy().replace('\\', "/");
-            cmd.arg("run")
-                .arg("--rm")
-                .arg("-v")
-                .arg(format!("{cwd_str}:{cwd_str}"))
-                .arg("-w")
-                .arg(&cwd_str)
-                .arg(image)
-                .arg(&spec.program)
-                .args(&spec.args);
-            cmd
-        }
-        crate::harness::ExecutionAdapter::Remote { host } => {
-            let mut cmd = Command::new("ssh");
-            cmd.arg(host).arg("--").arg(&spec.program).args(&spec.args);
-            cmd
-        }
-    };
+    let mut command = command_for_spec(&spec);
 
     command
         .current_dir(&spec.cwd)
@@ -435,6 +449,131 @@ pub(crate) async fn execute_tracked(
         stderr_truncated,
         timed_out,
         cancelled: was_cancelled,
+        duration_ms: started.elapsed().as_millis(),
+    })
+}
+
+/// Start a long-running process, wait until its localhost port is reachable,
+/// and keep it in the operation registry until it exits or is cancelled.
+pub(crate) async fn spawn_tracked_background(
+    state: &BackendState,
+    operation_id: Option<String>,
+    kind: &str,
+    spec: ProcessSpec,
+    ready_port: u16,
+) -> Result<CommandResult, String> {
+    let operation_id = validated_operation_id(operation_id)?;
+    if lock(&state.operations, "operations")?.contains_key(&operation_id) {
+        return Err(format!("Operation '{operation_id}' is already running"));
+    }
+    if TcpStream::connect(("127.0.0.1", ready_port)).await.is_ok() {
+        return Err(format!(
+            "Cannot start {} because localhost:{ready_port} is already in use",
+            spec.display_command
+        ));
+    }
+
+    let mut command = command_for_spec(&spec);
+    command
+        .current_dir(&spec.cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .env("NO_COLOR", "1");
+    for (name, value) in &spec.environment {
+        command.env(name, value);
+    }
+    for name in &spec.environment_remove {
+        command.env_remove(name);
+    }
+    hide_console(&mut command);
+
+    let started = Instant::now();
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Cannot start '{}': {error}", spec.display_command))?;
+    let pid = child
+        .id()
+        .ok_or_else(|| "Spawned process has no process ID".to_string())?;
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let already_running = {
+        let mut operations = lock(&state.operations, "operations")?;
+        if operations.contains_key(&operation_id) {
+            true
+        } else {
+            operations.insert(
+                operation_id.clone(),
+                super::RunningOperation {
+                    pid,
+                    kind: kind.to_string(),
+                    workspace: Some(spec.cwd.clone()),
+                    cancelled,
+                },
+            );
+            false
+        }
+    };
+    if already_running {
+        let _ = terminate_process_tree(pid).await;
+        return Err(format!("Operation '{operation_id}' is already running"));
+    }
+
+    let ready_deadline = Instant::now() + Duration::from_millis(spec.timeout_ms);
+    loop {
+        if TcpStream::connect(("127.0.0.1", ready_port)).await.is_ok() {
+            break;
+        }
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("Cannot inspect preview process: {error}"))?
+        {
+            lock(&state.operations, "operations")?.remove(&operation_id);
+            return Err(format!(
+                "{} exited before localhost:{ready_port} became ready (exit {:?})",
+                spec.display_command,
+                status.code()
+            ));
+        }
+        if Instant::now() >= ready_deadline {
+            let _ = terminate_process_tree(pid).await;
+            let _ = child.wait().await;
+            lock(&state.operations, "operations")?.remove(&operation_id);
+            return Err(format!(
+                "{} did not open localhost:{ready_port} within {} ms",
+                spec.display_command, spec.timeout_ms
+            ));
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+
+    let operations = Arc::clone(&state.operations);
+    let background_operation_id = operation_id.clone();
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+        if let Ok(mut running) = operations.lock() {
+            if running
+                .get(&background_operation_id)
+                .is_some_and(|operation| operation.pid == pid)
+            {
+                running.remove(&background_operation_id);
+            }
+        }
+    });
+
+    let url = format!("http://127.0.0.1:{ready_port}");
+    Ok(CommandResult {
+        operation_id,
+        command: spec.display_command,
+        cwd: spec.cwd.to_string_lossy().into_owned(),
+        success: true,
+        exit_code: None,
+        stdout: url,
+        stderr: String::new(),
+        stdout_truncated: false,
+        stderr_truncated: false,
+        timed_out: false,
+        cancelled: false,
         duration_ms: started.elapsed().as_millis(),
     })
 }

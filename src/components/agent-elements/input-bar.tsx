@@ -626,7 +626,7 @@ export const InputBar = memo(function InputBar({
                   <AttachmentButton onClick={onAttach} />
                 )}
                 {/* Send / Stop button */}
-                <div
+                <SendButton
                   onClick={() => {
                     if (isStreaming) {
                       onStop();
@@ -634,18 +634,15 @@ export const InputBar = memo(function InputBar({
                       handleSubmit();
                     }
                   }}
-                  className="cursor-pointer"
-                >
-                  <SendButton
-                    state={
-                      isStreaming
-                        ? "streaming"
-                        : hasInput && !disabled
-                          ? "typing"
-                          : "idle"
-                    }
-                  />
-                </div>
+                  disabled={disabled}
+                  state={
+                    isStreaming
+                      ? "streaming"
+                      : hasInput && !disabled
+                        ? "typing"
+                        : "idle"
+                  }
+                />
               </div>
             </div>
           </div>
