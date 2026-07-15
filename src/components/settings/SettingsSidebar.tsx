@@ -1,4 +1,4 @@
-import { Settings, Paintbrush, Mic, Monitor, MessageSquareText, SlidersHorizontal } from "lucide-react";
+import { Blocks, Cable, FileCog, Keyboard, Settings, Paintbrush, Mic, Monitor, MessageSquareText, SlidersHorizontal } from "lucide-react";
 
 interface CategoryGroup {
   name: string;
@@ -14,11 +14,15 @@ const CATEGORIES: CategoryGroup[] = [
       { id: "chat", label: "Chat", icon: <MessageSquareText size={16} /> },
       { id: "appearance", label: "Appearance", icon: <Paintbrush size={16} /> },
       { id: "voice", label: "Voice", icon: <Mic size={16} /> },
+      { id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={16} /> },
     ]
   },
   {
     name: "Integrations",
     items: [
+      { id: "configuration", label: "Configuration", icon: <FileCog size={16} /> },
+      { id: "plugins-link", label: "Plugins", icon: <Blocks size={16} /> },
+      { id: "connections-link", label: "Connections", icon: <Cable size={16} /> },
       { id: "computer", label: "Computer use", icon: <Monitor size={16} /> },
     ]
   }

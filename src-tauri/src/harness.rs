@@ -49,19 +49,14 @@ pub enum ExecutionAdapter {
     Remote { host: String },
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum UserApprovalMode {
     Guided,
     Balanced,
+    #[default]
     Autonomous,
     Custom,
-}
-
-impl Default for UserApprovalMode {
-    fn default() -> Self {
-        Self::Autonomous
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -312,7 +307,13 @@ impl HarnessProfile {
             .as_ref()
             .map(|paths| format!("{} direct-write prefix(es)", paths.len()))
             .unwrap_or_else(|| "no extra direct-write prefix restriction".to_string());
-        format!("[harness] Applied profile '{name}': {tools}; {paths}.")
+        let approval = match self.approval_mode {
+            UserApprovalMode::Guided => "guided",
+            UserApprovalMode::Balanced => "balanced",
+            UserApprovalMode::Autonomous => "autonomous",
+            UserApprovalMode::Custom => "custom",
+        };
+        format!("[harness] Applied profile '{name}': {tools}; {paths}; declared approval mode {approval}.")
     }
 }
 

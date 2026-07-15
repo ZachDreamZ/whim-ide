@@ -5,6 +5,7 @@ import {
   GitBranch,
   LayoutDashboard,
   ListChecks,
+  MessageSquareText,
   Rocket,
   Settings2,
   Sparkles,
@@ -12,14 +13,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type ViewId = "build" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
+export type ViewId = "build" | "scheduled" | "plugins" | "sites" | "pullRequests" | "chat" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
 
 const items: { id: ViewId; label: string; icon: LucideIcon; accent?: boolean }[] = [
-  { id: "build", label: "Chat & Workspace", icon: LayoutDashboard },
-  { id: "orchestrate", label: "Orchestration", icon: ListChecks },
+  { id: "build", label: "New task", icon: LayoutDashboard },
+  { id: "scheduled", label: "Scheduled", icon: ListChecks },
+  { id: "plugins", label: "Plugins", icon: Blocks },
+  { id: "sites", label: "Sites", icon: Rocket, accent: true },
+  { id: "pullRequests", label: "Pull requests", icon: GitBranch },
+  { id: "chat", label: "Chat", icon: MessageSquareText },
   { id: "providers", label: "Models & Providers", icon: Bot },
-  { id: "ecosystem", label: "Ecosystem", icon: Blocks },
-  { id: "ship", label: "Deployment", icon: Rocket, accent: true },
   { id: "autopilot", label: "Autopilot", icon: WandSparkles },
 ];
 

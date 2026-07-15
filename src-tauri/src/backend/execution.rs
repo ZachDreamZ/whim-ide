@@ -618,8 +618,8 @@ pub(crate) async fn quick_capture_with_environment(
         .map_err(|_| format!("'{program}' timed out"))?
         .map_err(|error| format!("Cannot run '{program}': {error}"))?;
     Ok((
-        redact_secrets(&String::from_utf8_lossy(&output.stdout).into_owned()),
-        redact_secrets(&String::from_utf8_lossy(&output.stderr).into_owned()),
+        redact_secrets(&String::from_utf8_lossy(&output.stdout)),
+        redact_secrets(&String::from_utf8_lossy(&output.stderr)),
         output.status.success(),
     ))
 }

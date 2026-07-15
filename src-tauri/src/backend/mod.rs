@@ -8,11 +8,14 @@ use std::{
     },
 };
 
+pub mod chat;
 pub mod computer;
 pub mod context;
 pub mod deployment;
 pub mod execution;
 pub mod orchestration;
+pub mod plugins;
+pub mod productivity;
 pub mod provider;
 pub mod reflector;
 pub mod settings;

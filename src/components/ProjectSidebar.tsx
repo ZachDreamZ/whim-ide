@@ -9,15 +9,18 @@ import {
   FolderOpen,
   LoaderCircle,
   MoreHorizontal,
+  MessageSquareText,
   Plus,
   RefreshCw,
-  Rocket,
+  GitPullRequest,
+  Globe2,
   Search,
   Sparkles,
   Blocks,
-  Bot,
+  CalendarClock,
   Settings2,
 } from "lucide-react";
+import type { ViewId } from "./WorkspaceRail";
 import {
   normalizeWorkspacePath,
   workspaceEntryDepth,
@@ -32,7 +35,7 @@ import type {
 
 export type ProjectSidebarProps = {
   activeView?: string;
-  onViewChange?: (view: any) => void;
+  onViewChange?: (view: ViewId) => void;
   workspace: string;
   activeFile: string;
   entries?: readonly WorkspaceEntry[];
@@ -207,24 +210,30 @@ export function ProjectSidebar({
         </div>
       </div>
 
-      {/* Primary Navigation (ChatGPT Clone Style) */}
+      {/* GPT desktop navigation order, backed by native Whim views. */}
       {onViewChange && (
         <div className="flex flex-col gap-0.5 px-3 mb-2">
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "build" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("build")}>
-            <Sparkles size={16} /> Chat
+            <Sparkles size={16} /> New task
           </button>
-          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "orchestrate" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("orchestrate")}>
-            <CircleDot size={16} /> Scheduled tasks
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "scheduled" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("scheduled")}>
+            <CalendarClock size={16} /> Scheduled
           </button>
-          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "providers" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("providers")}>
-            <Blocks size={16} /> Models & Providers
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "plugins" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("plugins")}>
+            <Blocks size={16} /> Plugins
           </button>
-          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "ecosystem" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("ecosystem")}>
-            <Bot size={16} /> Ecosystem plugins
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "sites" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("sites")}>
+            <Globe2 size={16} /> Sites
           </button>
-          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "ship" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("ship")}>
-            <Rocket size={16} /> Deployment
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "pullRequests" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("pullRequests")}>
+            <GitPullRequest size={16} /> Pull requests
           </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "chat" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("chat")}>
+            <MessageSquareText size={16} /> Chat
+          </button>
+          <div className="h-px bg-white/5 my-1" />
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "orchestrate" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("orchestrate")}><CircleDot size={16} /> Tasks</button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "providers" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("providers")}><Settings2 size={16} /> Models & Providers</button>
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "settings" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("settings")}>
             <Settings2 size={16} /> Settings
           </button>

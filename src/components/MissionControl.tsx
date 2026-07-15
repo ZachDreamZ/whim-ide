@@ -71,6 +71,7 @@ type MissionControlProps = {
   baseUrl?: string;
   voice?: string;
   voiceLanguage?: string;
+  voiceDictionary?: string;
   showSuggestedPrompts?: boolean;
   enterToSend?: boolean;
   showCopyActions?: boolean;
@@ -124,6 +125,7 @@ export function MissionControl({
   baseUrl,
   voice = "alloy",
   voiceLanguage = "auto",
+  voiceDictionary = "",
   showSuggestedPrompts = true,
   enterToSend = true,
   showCopyActions = true,
@@ -776,7 +778,7 @@ export function MissionControl({
 
   return (
     <div className="flex w-full h-full overflow-hidden">
-      {showVoiceMode && <VoiceOrb provider={provider} apiKey={apiKey} baseUrl={baseUrl} voice={voice} language={voiceLanguage} speakText={latestAssistantText} onTranscript={(text) => { setShowVoiceMode(false); void send({ role: "user", content: text }); }} onClose={() => setShowVoiceMode(false)} />}
+      {showVoiceMode && <VoiceOrb provider={provider} apiKey={apiKey} baseUrl={baseUrl} voice={voice} language={voiceLanguage} dictionary={voiceDictionary} speakText={latestAssistantText} onTranscript={(text) => { setShowVoiceMode(false); void send({ role: "user", content: text }); }} onClose={() => setShowVoiceMode(false)} />}
       <aside className={`mission-control flex-1 ${(showPreview || mode === "implementer") ? "mission-control-split" : ""}`}>
         {/* Top Header */}
         <header className="mission-header">

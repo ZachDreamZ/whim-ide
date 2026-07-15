@@ -61,7 +61,106 @@ export type Observation = {
   merged: boolean;
 };
 
+export type ScheduleRecurrence = "once" | "daily" | "weekdays" | "weekly";
+
+export type ScheduledTask = {
+  id: string;
+  title: string;
+  prompt: string;
+  recurrence: ScheduleRecurrence;
+  nextRunAtMs: number;
+  enabled: boolean;
+  mode: OrchestrationJobMode;
+  provider?: string | null;
+  model?: string | null;
+  createdAtMs: number;
+  lastRunAtMs?: number | null;
+  lastJobId?: string | null;
+};
+
+export type CodexPlugin = {
+  pluginId: string;
+  id: string;
+  marketplaceName: string;
+  installed: boolean;
+  enabled: boolean;
+  displayName: string;
+  description: string;
+  version: string;
+  developerName: string;
+  category?: string | null;
+  capabilities: string[];
+  brandColor?: string | null;
+  websiteUrl?: string | null;
+  manifestPath: string;
+};
+
+export type CodexPluginCatalog = { installed: CodexPlugin[]; available: CodexPlugin[] };
+
+export type SitesStatus = {
+  pluginInstalled: boolean;
+  pluginVersion?: string | null;
+  configExists: boolean;
+  configPath: string;
+  projectId?: string | null;
+  siteSlug?: string | null;
+  access?: string | null;
+  buildCommand?: string | null;
+  outputDirectory?: string | null;
+  rawConfig?: Record<string, unknown> | null;
+};
+
+export type PullRequestItem = {
+  number: number;
+  title: string;
+  state: string;
+  isDraft: boolean;
+  url: string;
+  headRefName: string;
+  baseRefName: string;
+  author?: string | null;
+  updatedAt?: string | null;
+  repository: string;
+  relationship: "authored" | "reviewing" | "reviewed";
+};
+
+export type PullRequestStatus = {
+  isRepository: boolean;
+  branch?: string | null;
+  remoteUrl?: string | null;
+  githubAuthenticated: boolean;
+  accountLogin?: string | null;
+  pullRequests: PullRequestItem[];
+  previouslyReviewed: PullRequestItem[];
+  message?: string | null;
+};
+
 export type AppContextResult = { source: "vscode" | "terminal" | "screenshot"; available: boolean; message: string; content?: string | null; path?: string | null; contentKind?: "text" | "image" };
+
+export type ChatThreadMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAtMs: number;
+};
+
+export type ChatThread = {
+  id: string;
+  title: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+  model?: string | null;
+  messages: ChatThreadMessage[];
+};
+
+export type ChatThreadSummary = {
+  id: string;
+  title: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+  messageCount: number;
+  preview: string;
+};
 
 export type AppSettings = {
   version: number;
@@ -78,18 +177,24 @@ export type AppSettings = {
   chat: {
     enterToSend: boolean;
     showCopyActions: boolean;
+    persistHistory: boolean;
   };
   appearance: {
     accent: string;
     uiFont: string;
     codeFont: string;
     contrast: number;
+    reduceMotion: "system" | "on" | "off";
+    pointerCursors: boolean;
+    uiFontSize: number;
+    codeFontSize: number;
   };
   voice: {
     voice: "alloy" | "ash" | "ballad" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer" | "verse";
     language: "auto" | "en" | "es" | "fr" | "de" | "ja" | "zh";
+    dictionary: string;
   };
-  computerUse: { screenCapture: boolean; appContext: boolean };
+  computerUse: { enabled: boolean; screenCapture: boolean; appContext: boolean };
   agent: {
     runtime: "native" | "pi";
     piModel: string;
@@ -120,10 +225,10 @@ export const defaultAppSettings: AppSettings = {
   version: 1,
   general: { showBottomPanel: true, suggestedPrompts: true },
   personalization: { enabled: true, customInstructions: "", responseStyle: "normal", projectMemory: true },
-  chat: { enterToSend: true, showCopyActions: true },
-  appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60 },
-  voice: { voice: "alloy", language: "auto" },
-  computerUse: { screenCapture: true, appContext: true },
+  chat: { enterToSend: true, showCopyActions: true, persistHistory: true },
+  appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60, reduceMotion: "system", pointerCursors: true, uiFontSize: 14, codeFontSize: 13 },
+  voice: { voice: "alloy", language: "auto", dictionary: "" },
+  computerUse: { enabled: false, screenCapture: true, appContext: true },
   agent: {
     runtime: "native",
     piModel: "opencode/big-pickle",
@@ -518,7 +623,7 @@ export const bridge = {
     return call<AppContextResult>("capture_app_context", { request: { source } });
   },
 
-  async transcribeVoice(input: { audio: number[]; mimeType: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string; language?: string }): Promise<string> {
+  async transcribeVoice(input: { audio: number[]; mimeType: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string; language?: string; prompt?: string }): Promise<string> {
     const result = await call<{ text: string }>("transcribe_voice", { request: input }); return result.text;
   },
 
@@ -553,7 +658,7 @@ export const bridge = {
   },
 
   async runAgent(input: {
-    workspace: string;
+    workspace?: string;
     prompt: string;
     model?: string;
     agent?: string;
@@ -651,6 +756,65 @@ export const bridge = {
 
   async listProjectOrchestrationJobs(): Promise<OrchestrationJob[]> {
     return call<OrchestrationJob[]>("list_project_orchestration_jobs");
+  },
+
+  async listScheduledTasks(workspace: string): Promise<ScheduledTask[]> {
+    return call<ScheduledTask[]>("list_scheduled_tasks", { workspace });
+  },
+
+  async saveScheduledTask(input: {
+    workspace: string;
+    id?: string;
+    title: string;
+    prompt: string;
+    recurrence: ScheduleRecurrence;
+    nextRunAtMs: number;
+    enabled?: boolean;
+    mode?: OrchestrationJobMode;
+    provider?: string;
+    model?: string;
+  }): Promise<ScheduledTask> {
+    return call<ScheduledTask>("save_scheduled_task", { request: input });
+  },
+
+  async deleteScheduledTask(workspace: string, scheduleId: string): Promise<void> {
+    return call<void>("delete_scheduled_task", { request: { workspace, scheduleId } });
+  },
+
+  async toggleScheduledTask(workspace: string, scheduleId: string, enabled: boolean): Promise<ScheduledTask> {
+    return call<ScheduledTask>("toggle_scheduled_task", { request: { workspace, scheduleId, enabled } });
+  },
+
+  async claimDueScheduledTasks(workspace: string): Promise<ScheduledTask[]> {
+    return call<ScheduledTask[]>("claim_due_scheduled_tasks", { workspace });
+  },
+
+  async markScheduledTaskRun(workspace: string, scheduleId: string, jobId: string): Promise<void> {
+    return call<void>("mark_scheduled_task_run", { request: { workspace, scheduleId, jobId } });
+  },
+
+  async codexPlugins(): Promise<CodexPlugin[]> {
+    return call<CodexPlugin[]>("list_codex_plugins");
+  },
+
+  async codexPluginCatalog(): Promise<CodexPluginCatalog> {
+    return call<CodexPluginCatalog>("list_codex_plugin_catalog");
+  },
+
+  async installCodexPlugin(pluginId: string): Promise<void> {
+    return call<void>("install_codex_plugin", { pluginId });
+  },
+
+  async removeCodexPlugin(pluginId: string): Promise<void> {
+    return call<void>("remove_codex_plugin", { pluginId });
+  },
+
+  async sitesStatus(workspace: string): Promise<SitesStatus> {
+    return call<SitesStatus>("inspect_sites_workspace", { workspace });
+  },
+
+  async pullRequestStatus(workspace: string): Promise<PullRequestStatus> {
+    return call<PullRequestStatus>("inspect_pull_requests", { workspace });
   },
 
   async getOrchestrationJob(workspace: string, jobId: string): Promise<OrchestrationJobDetail> {
@@ -758,6 +922,31 @@ export const bridge = {
   async openUrl(url: string): Promise<void> {
     if (!inTauri()) requireNative();
     await openNativeUrl(url);
+  },
+
+  async listChatThreads(): Promise<ChatThreadSummary[]> {
+    if (!inTauri()) return [];
+    return call<ChatThreadSummary[]>("list_chat_threads");
+  },
+
+  async getChatThread(id: string): Promise<ChatThread> {
+    return call<ChatThread>("get_chat_thread", { id });
+  },
+
+  async saveChatThread(thread: ChatThread): Promise<ChatThread> {
+    return call<ChatThread>("save_chat_thread", { thread });
+  },
+
+  async deleteChatThread(id: string): Promise<void> {
+    return call<void>("delete_chat_thread", { id });
+  },
+
+  async clearChatThreads(): Promise<void> {
+    return call<void>("clear_chat_threads");
+  },
+
+  async openGptSection(section: "Scheduled" | "Plugins" | "Sites" | "Pull requests" | "Chat"): Promise<void> {
+    return call<void>("open_gpt_section", { section });
   },
 
   async readWhimConfig(workspace: string): Promise<Record<string, unknown>> {

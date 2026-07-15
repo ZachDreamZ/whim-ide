@@ -8,7 +8,8 @@ use windows::core::{Interface, BSTR};
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationInvokePattern,
-    TreeScope_Descendants, UIA_InvokePatternId,
+    IUIAutomationTogglePattern, ToggleState_Off, TreeScope_Children, TreeScope_Descendants,
+    UIA_InvokePatternId, UIA_TogglePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
@@ -132,7 +133,7 @@ pub fn computer_inspect() -> Result<UIState, String> {
             }
         }
 
-        let _ = CoUninitialize();
+        CoUninitialize();
 
         Ok(UIState {
             window_title: name,
@@ -159,7 +160,7 @@ pub fn computer_invoke(ref_id: &str) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
 
         pattern.Invoke().map_err(|e| e.to_string())?;
-        let _ = CoUninitialize();
+        CoUninitialize();
     }
 
     Ok(())
@@ -192,4 +193,78 @@ pub fn computer_launch(path: &str) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("Failed to launch {}: {}", program.display(), e))?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn open_gpt_section(section: String) -> Result<(), String> {
+    if !matches!(
+        section.as_str(),
+        "Scheduled" | "Plugins" | "Sites" | "Pull requests" | "Chat"
+    ) {
+        return Err("Unsupported GPT section".into());
+    }
+    let automation = get_automation()?;
+    unsafe {
+        let root = automation
+            .GetRootElement()
+            .map_err(|error| error.to_string())?;
+        let condition = automation
+            .CreateTrueCondition()
+            .map_err(|error| error.to_string())?;
+        let windows = root
+            .FindAll(TreeScope_Children, &condition)
+            .map_err(|error| error.to_string())?;
+        let mut found_chatgpt = false;
+        for index in 0..windows.Length().unwrap_or(0) {
+            let Ok(candidate) = windows.GetElement(index) else {
+                continue;
+            };
+            if candidate.CurrentName().unwrap_or(BSTR::new()) != "ChatGPT" {
+                continue;
+            }
+            found_chatgpt = true;
+            let Ok(descendants) = candidate.FindAll(TreeScope_Descendants, &condition) else {
+                continue;
+            };
+            for descendant_index in 0..descendants.Length().unwrap_or(0).min(5_000) {
+                let Ok(descendant) = descendants.GetElement(descendant_index) else {
+                    continue;
+                };
+                if descendant.CurrentName().unwrap_or(BSTR::new()) != section.as_str() {
+                    continue;
+                }
+                if let Ok(pattern) = descendant.GetCurrentPattern(UIA_InvokePatternId) {
+                    if let Ok(pattern) = pattern.cast::<IUIAutomationInvokePattern>() {
+                        pattern.Invoke().map_err(|error| error.to_string())?;
+                        CoUninitialize();
+                        return Ok(());
+                    }
+                }
+                if section == "Chat" {
+                    let Ok(pattern) = descendant.GetCurrentPattern(UIA_TogglePatternId) else {
+                        continue;
+                    };
+                    let Ok(pattern) = pattern.cast::<IUIAutomationTogglePattern>() else {
+                        continue;
+                    };
+                    if pattern
+                        .CurrentToggleState()
+                        .map_err(|error| error.to_string())?
+                        == ToggleState_Off
+                    {
+                        pattern.Toggle().map_err(|error| error.to_string())?;
+                    }
+                    CoUninitialize();
+                    return Ok(());
+                }
+            }
+        }
+        CoUninitialize();
+        if !found_chatgpt {
+            return Err("Open the GPT desktop app, then try again".into());
+        }
+    }
+    Err(format!(
+        "Could not find the {section} page in the GPT desktop app"
+    ))
 }

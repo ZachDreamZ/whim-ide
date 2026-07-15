@@ -160,6 +160,9 @@ pub fn capture_app_context(
     request: AppContextRequest,
 ) -> Result<AppContextResult, String> {
     let permissions = lock(&state.settings, "settings")?.computer_use.clone();
+    if !permissions.enabled {
+        return Err("Computer use is disabled in Settings".into());
+    }
     match request.source.as_str() {
         "vscode" | "terminal" if permissions.app_context => read_window(&request.source),
         "vscode" | "terminal" => {

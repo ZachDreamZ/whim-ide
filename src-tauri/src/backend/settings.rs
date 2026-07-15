@@ -41,6 +41,7 @@ pub struct PersonalizationSettings {
 pub struct ChatSettings {
     pub enter_to_send: bool,
     pub show_copy_actions: bool,
+    pub persist_history: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -50,6 +51,10 @@ pub struct AppearanceSettings {
     pub ui_font: String,
     pub code_font: String,
     pub contrast: u8,
+    pub reduce_motion: String,
+    pub pointer_cursors: bool,
+    pub ui_font_size: u8,
+    pub code_font_size: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -57,11 +62,13 @@ pub struct AppearanceSettings {
 pub struct VoiceSettings {
     pub voice: String,
     pub language: String,
+    pub dictionary: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ComputerUseSettings {
+    pub enabled: bool,
     pub screen_capture: bool,
     pub app_context: bool,
 }
@@ -124,6 +131,7 @@ impl Default for ChatSettings {
         Self {
             enter_to_send: true,
             show_copy_actions: true,
+            persist_history: true,
         }
     }
 }
@@ -135,6 +143,10 @@ impl Default for AppearanceSettings {
             ui_font: "IBM Plex Sans Variable".into(),
             code_font: "JetBrains Mono Variable".into(),
             contrast: 60,
+            reduce_motion: "system".into(),
+            pointer_cursors: true,
+            ui_font_size: 14,
+            code_font_size: 13,
         }
     }
 }
@@ -144,6 +156,7 @@ impl Default for VoiceSettings {
         Self {
             voice: "alloy".into(),
             language: "auto".into(),
+            dictionary: String::new(),
         }
     }
 }
@@ -151,6 +164,7 @@ impl Default for VoiceSettings {
 impl Default for ComputerUseSettings {
     fn default() -> Self {
         Self {
+            enabled: false,
             screen_capture: true,
             app_context: true,
         }
@@ -223,6 +237,17 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         return Err("Contrast must be between 0 and 100".into());
     }
     one_of(
+        &settings.appearance.reduce_motion,
+        &["system", "on", "off"],
+        "reduced motion preference",
+    )?;
+    if !(11..=20).contains(&settings.appearance.ui_font_size) {
+        return Err("Interface font size must be between 11 and 20".into());
+    }
+    if !(10..=24).contains(&settings.appearance.code_font_size) {
+        return Err("Code font size must be between 10 and 24".into());
+    }
+    one_of(
         &settings.personalization.response_style,
         &["normal", "concise", "formal", "explanatory"],
         "response style",
@@ -249,6 +274,17 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         &["auto", "en", "es", "fr", "de", "ja", "zh"],
         "voice language",
     )?;
+    if settings.voice.dictionary.chars().count() > 1_000
+        || settings
+            .voice
+            .dictionary
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return Err(
+            "Dictation dictionary must be at most 1000 characters of printable text".into(),
+        );
+    }
     one_of(&settings.agent.runtime, &["native", "pi"], "agent runtime")?;
     if settings.agent.pi_model.chars().count() > 200
         || settings.agent.pi_model.chars().any(char::is_control)
@@ -368,6 +404,10 @@ mod tests {
         assert!(settings.personalization.enabled);
         assert!(settings.personalization.project_memory);
         assert_eq!(settings.personalization.response_style, "normal");
+        assert_eq!(settings.appearance.reduce_motion, "system");
+        assert_eq!(settings.appearance.ui_font_size, 14);
+        assert_eq!(settings.appearance.code_font_size, 13);
+        assert!(!settings.computer_use.enabled);
     }
 
     #[test]
@@ -414,12 +454,33 @@ mod tests {
     }
 
     #[test]
+    fn older_nested_settings_gain_runtime_defaults() {
+        let value = serde_json::json!({
+            "version": 1,
+            "appearance": { "accent": "#72c99f", "uiFont": "Segoe UI", "codeFont": "Consolas", "contrast": 50 },
+            "voice": { "voice": "alloy", "language": "auto" },
+            "computerUse": { "screenCapture": true, "appContext": true }
+        });
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(settings.appearance.reduce_motion, "system");
+        assert_eq!(settings.voice.dictionary, "");
+        assert!(!settings.computer_use.enabled);
+        validate_settings(&settings).unwrap();
+    }
+
+    #[test]
     fn rejects_invalid_personalization_values() {
         let mut settings = AppSettings::default();
         settings.personalization.response_style = "rambling".into();
         assert!(validate_settings(&settings).is_err());
         settings = AppSettings::default();
         settings.personalization.custom_instructions = "x".repeat(8_001);
+        assert!(validate_settings(&settings).is_err());
+        settings = AppSettings::default();
+        settings.appearance.ui_font_size = 30;
+        assert!(validate_settings(&settings).is_err());
+        settings = AppSettings::default();
+        settings.voice.dictionary = "x".repeat(1_001);
         assert!(validate_settings(&settings).is_err());
     }
 }

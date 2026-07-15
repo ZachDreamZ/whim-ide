@@ -14,6 +14,7 @@ pub struct TranscribeRequest {
     pub base_url: Option<String>,
     pub model: Option<String>,
     pub language: Option<String>,
+    pub prompt: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -195,6 +196,16 @@ pub async fn transcribe_voice(request: TranscribeRequest) -> Result<Transcript, 
             return Err("Unsupported transcription language".into());
         }
         form = form.text("language", language);
+    }
+    if let Some(prompt) = request.prompt.filter(|prompt| !prompt.trim().is_empty()) {
+        if prompt.chars().count() > 1_000
+            || prompt
+                .chars()
+                .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+        {
+            return Err("Transcription prompt must be at most 1000 printable characters".into());
+        }
+        form = form.text("prompt", prompt);
     }
     let mut builder = client(&base, &provider)
         .await?

@@ -130,7 +130,8 @@ pub(crate) fn resolved_capabilities(
                 .agent
                 .enabled_capabilities
                 .iter()
-                .any(|id| id == capability.id);
+                .any(|id| id == capability.id)
+                && (capability.id != "computer-use" || settings.computer_use.enabled);
             capability.defer_loading = settings.agent.defer_capabilities
                 && capability.defer_loading
                 && !mode_needs(mode, capability.id);
@@ -213,6 +214,9 @@ mod tests {
             .agent
             .enabled_capabilities
             .push("computer-use".into());
+        let still_disabled = resolved_capabilities(&settings, "build");
+        assert!(!capability_allows_tool(&still_disabled, "computer_action"));
+        settings.computer_use.enabled = true;
         let enabled = resolved_capabilities(&settings, "build");
         assert!(capability_allows_tool(&enabled, "computer_action"));
         assert!(!capability_allows_tool(&enabled, "browser_action"));

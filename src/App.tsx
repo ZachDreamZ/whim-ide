@@ -13,9 +13,14 @@ import { Titlebar } from "./components/Titlebar";
 import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { MissionControl } from "./components/MissionControl";
+import { ChatHub } from "./components/ChatHub";
 import { OrchestrationPanel } from "./components/OrchestrationPanel";
 import { ProviderHub } from "./components/ProviderHub";
 import { EcosystemHub } from "./components/EcosystemHub";
+import { ScheduledTasksHub } from "./components/ScheduledTasksHub";
+import { PluginsHub } from "./components/PluginsHub";
+import { SitesHub } from "./components/SitesHub";
+import { PullRequestsHub } from "./components/PullRequestsHub";
 import { ShipHub } from "./components/ShipHub";
 import { AutopilotHub } from "./components/AutopilotHub";
 import { CommandPalette } from "./components/CommandPalette";
@@ -26,6 +31,8 @@ import { VoiceSettings } from "./components/settings/pages/VoiceSettings";
 import { ComputerUseSettings } from "./components/settings/pages/ComputerUseSettings";
 import { PersonalizationSettings } from "./components/settings/pages/PersonalizationSettings";
 import { ChatSettings } from "./components/settings/pages/ChatSettings";
+import { ConfigurationSettings } from "./components/settings/pages/ConfigurationSettings";
+import { KeyboardShortcutsSettings } from "./components/settings/pages/KeyboardShortcutsSettings";
 import {
   bridge,
   defaultAppSettings,
@@ -75,6 +82,7 @@ function App() {
   const fileRequest = useRef(0);
   const settingsRevision = useRef(0);
   const settingsSaveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const scheduleRunnerActive = useRef(false);
 
   useEffect(() => { localStorage.setItem("whim:agent:provider", agentProvider); }, [agentProvider]);
   // API key is session-memory only; never persisted to localStorage.
@@ -112,10 +120,42 @@ function App() {
     root.style.setProperty("--font-code", `"${appSettings.appearance.codeFont}", Consolas, monospace`);
     root.style.setProperty("--border", `rgba(255, 255, 255, ${(0.035 + contrast * 0.00115).toFixed(3)})`);
     root.style.setProperty("--line-strong", `rgba(255, 255, 255, ${(0.08 + contrast * 0.0014).toFixed(3)})`);
+    root.style.fontSize = `${appSettings.appearance.uiFontSize}px`;
+    root.style.setProperty("--code-font-size", `${appSettings.appearance.codeFontSize}px`);
+    root.classList.toggle("pointer-cursors", appSettings.appearance.pointerCursors);
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const applyMotion = () => root.classList.toggle("reduce-motion", appSettings.appearance.reduceMotion === "on" || (appSettings.appearance.reduceMotion === "system" && motion.matches));
+    applyMotion();
+    motion.addEventListener("change", applyMotion);
+    return () => motion.removeEventListener("change", applyMotion);
   }, [appSettings.appearance]);
 
   const workspacePath = workspace?.path ?? null;
   const projectName = workspace?.name ?? "No workspace";
+
+  useEffect(() => {
+    if (!workspacePath || !bridge.isNative()) return;
+    const runDue = async () => {
+      if (scheduleRunnerActive.current) return;
+      scheduleRunnerActive.current = true;
+      try {
+        const due = await bridge.claimDueScheduledTasks(workspacePath);
+        for (const task of due) {
+          try {
+            const job = await bridge.createOrchestrationJob({ workspace: workspacePath, intent: task.prompt, title: task.title, mode: task.mode, provider: task.provider ?? undefined, model: task.model ?? undefined });
+            await bridge.markScheduledTaskRun(workspacePath, task.id, job.id);
+            await bridge.dispatchOrchestrationJob({ workspace: workspacePath, jobId: job.id });
+            setToast(`Scheduled task started: ${task.title}`);
+          } catch {
+            await bridge.saveScheduledTask({ workspace: workspacePath, id: task.id, title: task.title, prompt: task.prompt, recurrence: task.recurrence, nextRunAtMs: Date.now() + 60_000, enabled: true, mode: task.mode, provider: task.provider ?? undefined, model: task.model ?? undefined }).catch(() => undefined);
+          }
+        }
+      } finally { scheduleRunnerActive.current = false; }
+    };
+    void runDue();
+    const timer = window.setInterval(() => void runDue(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [workspacePath]);
 
   const runModel = agentModel;
   const onRunModelChange = setAgentModel;
@@ -215,16 +255,37 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.add("dark");
     const commandShortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen((value) => !value); }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (event.altKey && key === "n") {
+        event.preventDefault();
+        setView("chat");
+        requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-chat")));
+        return;
+      }
+      if (key === "k") { event.preventDefault(); setPaletteOpen((value) => !value); }
+      if (key === "p") {
         event.preventDefault();
         setView("build");
         requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-files")));
       }
+      if (key === "n") {
+        event.preventDefault();
+        setView("build");
+        requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-agent")));
+      }
+      if (key === "j") {
+        event.preventDefault();
+        updateAppSettings({ ...appSettings, general: { ...appSettings.general, showBottomPanel: !appSettings.general.showBottomPanel } });
+      }
+      if (key === ",") {
+        event.preventDefault();
+        setView("settings");
+      }
     };
     window.addEventListener("keydown", commandShortcut);
     return () => window.removeEventListener("keydown", commandShortcut);
-  }, []);
+  }, [appSettings, updateAppSettings]);
 
   useEffect(() => {
     if (booted.current) return;
@@ -309,7 +370,11 @@ function App() {
       {view === "settings" && (
         <SettingsLayout
           activeCategory={activeSettingsCategory}
-          onCategoryChange={setActiveSettingsCategory}
+          onCategoryChange={(category) => {
+            if (category === "plugins-link") { setView("plugins"); return; }
+            if (category === "connections-link") { setView("providers"); return; }
+            setActiveSettingsCategory(category);
+          }}
           onClose={() => setView("build")}
         >
           {activeSettingsCategory === "general" && <GeneralSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
@@ -317,12 +382,14 @@ function App() {
           {activeSettingsCategory === "chat" && <ChatSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "appearance" && <AppearanceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "voice" && <VoiceSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "shortcuts" && <KeyboardShortcutsSettings />}
+          {activeSettingsCategory === "configuration" && <ConfigurationSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "computer" && <ComputerUseSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
         </SettingsLayout>
       )}
       <Titlebar projectName={projectName} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProjectClick={openWorkspace} />
       <div className="app-body">
-        {view === "build" || view === "providers" || view === "ecosystem" || view === "orchestrate" || view === "ship" ? (
+        {view !== "autopilot" && view !== "settings" ? (
           <div className="build-workspace">
             <ProjectSidebar
               activeView={view}
@@ -358,11 +425,30 @@ function App() {
                     baseUrl={agentBaseUrl}
                     voice={appSettings.voice.voice}
                     voiceLanguage={appSettings.voice.language}
+                    voiceDictionary={appSettings.voice.dictionary}
                     showSuggestedPrompts={appSettings.general.suggestedPrompts}
                     enterToSend={appSettings.chat.enterToSend}
                     showCopyActions={appSettings.chat.showCopyActions}
                     onRunComplete={() => void refreshWorkspace()}
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
+                  />
+                ) : view === "chat" ? (
+                  <ChatHub
+                    workspace={workspacePath}
+                    provider={agentProvider}
+                    apiKey={agentApiKey}
+                    baseUrl={agentBaseUrl}
+                    model={runModel}
+                    models={models}
+                    onModelChange={onRunModelChange}
+                    hasProvider={agentReady}
+                    onOpenProviders={() => setView("providers")}
+                    voice={appSettings.voice.voice}
+                    voiceLanguage={appSettings.voice.language}
+                    voiceDictionary={appSettings.voice.dictionary}
+                    enterToSend={appSettings.chat.enterToSend}
+                    showCopyActions={appSettings.chat.showCopyActions}
+                    persistHistory={appSettings.chat.persistHistory}
                   />
                 ) : view === "providers" ? (
                   <ProviderHub onRefresh={refreshCurrentProviders}
@@ -374,6 +460,14 @@ function App() {
                       if (patch.model !== undefined) setAgentModel(patch.model);
                     }}
                   />
+                ) : view === "scheduled" ? (
+                  workspacePath ? <ScheduledTasksHub workspace={workspacePath} /> : workspaceGate("Scheduled tasks need a workspace")
+                ) : view === "plugins" ? (
+                  <PluginsHub />
+                ) : view === "sites" ? (
+                  workspacePath ? <SitesHub workspace={workspacePath} /> : workspaceGate("Sites needs a workspace")
+                ) : view === "pullRequests" ? (
+                  workspacePath ? <PullRequestsHub workspace={workspacePath} /> : workspaceGate("Pull requests need a workspace")
                 ) : view === "ecosystem" ? (
                   workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")
                 ) : view === "orchestrate" ? (
@@ -381,7 +475,7 @@ function App() {
                 ) : view === "ship" ? (
                   workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")
                 ) : null}
-                {readOnlyFile && (
+                {view === "build" && readOnlyFile && (
                   <section className="read-only-file" aria-label="File viewer">
                     <header className="read-only-file-header">
                       <span>{currentFileName}</span>

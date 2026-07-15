@@ -9,11 +9,12 @@ type Props = {
   baseUrl?: string;
   voice?: string;
   language?: string;
+  dictionary?: string;
   onTranscript: (text: string) => void;
   speakText?: string;
 };
 
-export function VoiceOrb({ onClose, provider, apiKey, baseUrl, voice, language, onTranscript, speakText }: Props) {
+export function VoiceOrb({ onClose, provider, apiKey, baseUrl, voice, language, dictionary, onTranscript, speakText }: Props) {
   const [phase, setPhase] = useState<"listening" | "thinking" | "speaking" | "error">("listening");
   const [message, setMessage] = useState("Listening…");
   const [muted, setMuted] = useState(false);
@@ -66,7 +67,7 @@ export function VoiceOrb({ onClose, provider, apiKey, baseUrl, voice, language, 
     stream.current?.getTracks().forEach((track) => track.stop());
     try {
       const audio = [...new Uint8Array(await blob.arrayBuffer())];
-      const text = await bridge.transcribeVoice({ audio, mimeType: blob.type, provider, apiKey, baseUrl, language });
+      const text = await bridge.transcribeVoice({ audio, mimeType: blob.type, provider, apiKey, baseUrl, language, prompt: dictionary?.trim() || undefined });
       setMessage(text);
       onTranscript(text);
     } catch (cause) {

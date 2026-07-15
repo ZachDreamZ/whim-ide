@@ -13,5 +13,8 @@ describe("ChatSettings", () => {
 
     fireEvent.click(screen.getByRole("switch", { name: "Copy actions" }));
     expect(onChange.mock.calls[onChange.mock.calls.length - 1]?.[0].chat.showCopyActions).toBe(false);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Save chat history" }));
+    expect(onChange.mock.calls[onChange.mock.calls.length - 1]?.[0].chat.persistHistory).toBe(false);
   });
 });
