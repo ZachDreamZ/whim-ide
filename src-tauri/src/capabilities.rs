@@ -171,7 +171,7 @@ pub fn list_agent_capabilities(
     let settings = lock(&state.settings, "settings")?.clone();
     Ok(resolved_capabilities(
         &settings,
-        mode.as_deref().unwrap_or("vibe"),
+        mode.as_deref().unwrap_or("auto"),
     ))
 }
 

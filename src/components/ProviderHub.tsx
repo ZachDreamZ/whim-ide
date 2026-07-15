@@ -13,6 +13,10 @@ import { bridge, type DiscoveredProvider } from "../lib/bridge";
 
 const OMNIROUTE_ROUTES = ["auto", "auto/coding", "auto/fast", "auto/cheap", "auto/offline", "auto/smart"];
 
+export function displayModelChoice(value: string) {
+  return value === "auto" ? "Vibe (agent chooses)" : value;
+}
+
 type ProviderHubProps = {
   workspace: string | null;
   credentials: unknown;
@@ -64,13 +68,13 @@ function ModelDropdown({ value, options, placeholder, onChange }: { value: strin
   return (
     <>
       <button type="button" ref={triggerRef} className="model-select-trigger" onClick={() => (open ? setOpen(false) : openMenu())}>
-        <span className={value ? "model-select-value" : "model-select-placeholder"}>{value || placeholder}</span>
+        <span className={value ? "model-select-value" : "model-select-placeholder"}>{value ? displayModelChoice(value) : placeholder}</span>
         <ChevronRight size={11} className="model-select-caret" />
       </button>
       {open && createPortal(
         <div ref={menuRef} className="model-menu" role="listbox" style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}>
           {options.map((id) => (
-            <button type="button" key={id} role="option" aria-selected={id === value} className={`model-option${id === value ? " selected" : ""}`} onClick={() => { onChange(id); setOpen(false); }}>{id}</button>
+            <button type="button" key={id} role="option" aria-selected={id === value} className={`model-option${id === value ? " selected" : ""}`} onClick={() => { onChange(id); setOpen(false); }}>{displayModelChoice(id)}</button>
           ))}
         </div>,
         document.body
@@ -185,13 +189,13 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
                       <ModelDropdown
                         value={agentModel}
                         options={[...new Set(["auto", ...modelOptions])]}
-                        placeholder="auto (agent chooses)"
+                        placeholder="Vibe (agent chooses)"
                         onChange={(id) => onAgentProfileChange({ provider: agentProvider, model: id === "auto" ? "" : id })}
                       />
                     ) : (
-                      <input id={`model-${provider.provider}`} value={agentModel} placeholder="auto (agent chooses)" onChange={(event) => onAgentProfileChange({ provider: agentProvider, model: event.target.value })} />
+                      <input id={`model-${provider.provider}`} value={agentModel} placeholder="Vibe (agent chooses)" onChange={(event) => onAgentProfileChange({ provider: agentProvider, model: event.target.value })} />
                     )}
-                    <button type="button" className="reset-auto" onClick={() => onAgentProfileChange({ provider: "auto" })}>Auto</button>
+                    <button type="button" className="reset-auto" title="Use Vibe routing" onClick={() => onAgentProfileChange({ provider: "auto" })}>Vibe</button>
                   </div>
                 )}
                 {isActive && provider.kind !== "local" && (

@@ -408,7 +408,7 @@ export const bridge = {
     return call<AppSettings>("save_app_settings", { settings });
   },
 
-  async agentCapabilities(mode = "vibe"): Promise<AgentCapability[]> {
+  async agentCapabilities(mode = "auto"): Promise<AgentCapability[]> {
     if (!inTauri()) return [];
     return call<AgentCapability[]>("list_agent_capabilities", { mode });
   },

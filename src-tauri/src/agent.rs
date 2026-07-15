@@ -160,7 +160,7 @@ impl AgentRole {
             "accessibilityexpert" | "a11y" => Ok(Self::AccessibilityExpert),
             "localizer" => Ok(Self::Localizer),
             other => Err(format!(
-                "Unsupported agent role '{other}'. Supported: vibe, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer"
+                "Unsupported agent role '{other}'. Supported: auto, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer"
             )),
         }
     }
@@ -4162,7 +4162,8 @@ mod tests {
             AgentRole::parse(Some("janitor")).unwrap(),
             AgentRole::Janitor
         );
-        assert!(AgentRole::parse(Some("operate")).is_err());
+        let unsupported = AgentRole::parse(Some("operate")).unwrap_err();
+        assert!(unsupported.contains("Supported: auto"));
 
         assert!(AgentRole::Planner.permits_tool("read_file"));
         assert!(AgentRole::Planner.permits_tool("plan"));
