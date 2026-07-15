@@ -258,20 +258,30 @@ fn provider_label(provider: Provider) -> &'static str {
     }
 }
 
-/// Well-known environment variable that holds each cloud provider's API key.
-/// Mirrors `auto_provider` in backend.rs so an auto-detected provider can
-/// actually authenticate even when the in-session UI key is empty.
+/// Well-known environment variables that may hold each provider's API key.
+/// Keep aliases here so provider discovery, model listing, and agent runs all
+/// agree without sending environment secrets through the renderer.
+pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'static str] {
+    match provider {
+        "openai" => &["OPENAI_API_KEY"],
+        "anthropic" => &["ANTHROPIC_API_KEY"],
+        "google" => &[
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_GENERATIVE_AI_API_KEY",
+        ],
+        "deepseek" => &["DEEPSEEK_API_KEY"],
+        "qwen" => &["DASHSCOPE_API_KEY"],
+        "xiaomi" => &["XIAOMI_API_KEY"],
+        "omniroute" => &["OMNIROUTE_API_KEY"],
+        _ => &[],
+    }
+}
+
 fn provider_env_var(provider: Provider) -> Option<&'static str> {
-    Some(match provider {
-        Provider::OpenAi => "OPENAI_API_KEY",
-        Provider::Anthropic => "ANTHROPIC_API_KEY",
-        Provider::Google => "GOOGLE_API_KEY",
-        Provider::DeepSeek => "DEEPSEEK_API_KEY",
-        Provider::Qwen => "DASHSCOPE_API_KEY",
-        Provider::Xiaomi => "XIAOMI_API_KEY",
-        Provider::OmniRoute => "OMNIROUTE_API_KEY",
-        Provider::Local | Provider::Compatible => return None,
-    })
+    provider_environment_variables(provider_name(provider))
+        .first()
+        .copied()
 }
 
 fn provider_requires_key(provider: Provider) -> bool {
@@ -281,21 +291,35 @@ fn provider_requires_key(provider: Provider) -> bool {
     )
 }
 
-/// Resolve the API key to use: prefer the explicit in-session key, otherwise
-/// fall back to the provider's environment variable. This is what lets the
-/// default "auto" provider (detected from an env key) authenticate.
-fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
-    if let Some(key) = api_key.as_ref().filter(|key| !key.is_empty()) {
-        return Some(key.clone());
+fn resolve_key_with(
+    provider: Provider,
+    api_key: &Option<String>,
+    mut environment: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    if let Some(key) = api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        return Some(key.to_string());
     }
-    if let Some(env_var) = provider_env_var(provider) {
-        if let Ok(value) = std::env::var(env_var) {
+
+    for env_var in provider_environment_variables(provider_name(provider)) {
+        if let Some(value) = environment(env_var) {
+            let value = value.trim();
             if !value.is_empty() {
-                return Some(value);
+                return Some(value.to_string());
             }
         }
     }
     None
+}
+
+/// Resolve the API key to use: prefer the explicit in-session key, otherwise
+/// fall back to a supported environment alias. This lets Vibe authenticate
+/// without exposing native environment values to the webview.
+fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
+    resolve_key_with(provider, api_key, |name| std::env::var(name).ok())
 }
 
 /// Sensible default model per provider so vibecoding needs no configuration
@@ -3846,7 +3870,10 @@ pub async fn list_provider_models(
     api_key: String,
     base_url: Option<String>,
 ) -> Result<Vec<String>, String> {
-    fetch_provider_models(&provider, &api_key, base_url.as_deref()).await
+    let provider_enum = parse_provider(&provider)?;
+    let explicit_key = (!api_key.trim().is_empty()).then_some(api_key);
+    let resolved_key = resolve_key(provider_enum, &explicit_key).unwrap_or_default();
+    fetch_provider_models(&provider, &resolved_key, base_url.as_deref()).await
 }
 
 #[tauri::command]
@@ -4732,6 +4759,29 @@ mod tests {
         // An empty UI key is treated as absent (so the early API-key check fires
         // when no environment key is present either).
         assert_eq!(resolve_key(Provider::OpenAi, &Some(String::new())), None);
+    }
+
+    #[test]
+    fn provider_credentials_support_aliases_without_exposing_environment_values() {
+        assert_eq!(
+            provider_environment_variables("google"),
+            &[
+                "GOOGLE_API_KEY",
+                "GEMINI_API_KEY",
+                "GOOGLE_GENERATIVE_AI_API_KEY"
+            ]
+        );
+        let resolved = resolve_key_with(Provider::Google, &None, |name| {
+            (name == "GEMINI_API_KEY").then(|| "  gemini-native-key  ".to_string())
+        });
+        assert_eq!(resolved.as_deref(), Some("gemini-native-key"));
+
+        let explicit = resolve_key_with(
+            Provider::Google,
+            &Some("  session-key  ".to_string()),
+            |_| Some("environment-key".to_string()),
+        );
+        assert_eq!(explicit.as_deref(), Some("session-key"));
     }
 
     /// Verifies that run_native_agent's success/error derivation from events

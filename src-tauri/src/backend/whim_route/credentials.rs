@@ -1,15 +1,7 @@
 use keyring::Entry;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use tauri::command;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProviderCredential {
-    pub provider_id: String,
-    pub api_key: Option<String>,
-    pub base_url: Option<String>,
-}
 
 #[command]
 pub fn save_credential(provider: &str, api_key: &str) -> Result<(), String> {

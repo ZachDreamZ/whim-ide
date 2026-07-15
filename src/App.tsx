@@ -32,10 +32,10 @@ import {
   type AppSettings,
   type CredentialReport,
   type EnvironmentReport,
-  type LocalProviderStatus,
   type WorkspaceInfo,
 } from "./lib/bridge";
 import { chooseInitialFile, inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
+import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
 import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
 
 const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] };
@@ -65,7 +65,6 @@ function App() {
   const [agentModel, setAgentModel] = useState(() => localStorage.getItem("whim:agent:model") ?? "");
   const [environment, setEnvironment] = useState<EnvironmentReport>(defaultEnvironment);
   const [credentials, setCredentials] = useState<CredentialReport>(defaultCredentials);
-  const [localProviders, setLocalProviders] = useState<LocalProviderStatus[]>([]);
   const [profile, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
@@ -120,15 +119,18 @@ function App() {
 
   const runModel = agentModel;
   const onRunModelChange = setAgentModel;
-  const agentReady = agentProvider === "auto" || agentProvider === "local" || agentProvider === "omniroute" || agentApiKey.trim().length > 0;
+  const agentReady = agentProvider === "auto"
+    || agentProvider === "local"
+    || agentProvider === "omniroute"
+    || agentApiKey.trim().length > 0
+    || providerHasEnvironmentCredential(agentProvider, credentials.environmentNames);
 
-  const refreshProviders = useCallback(async (_root?: string | null, _refreshCatalog = false) => {
-    const [environmentResult, credentialsResult, localResult] = await Promise.allSettled([
-      bridge.environment(), bridge.credentials(), bridge.localProviders(),
+  const refreshProviders = useCallback(async () => {
+    const [environmentResult, credentialsResult] = await Promise.allSettled([
+      bridge.environment(), bridge.credentials(),
     ]);
     if (environmentResult.status === "fulfilled") setEnvironment(environmentResult.value);
     if (credentialsResult.status === "fulfilled") setCredentials(credentialsResult.value);
-    if (localResult.status === "fulfilled") setLocalProviders(localResult.value);
   }, []);
 
   const loadReadOnlyFile = useCallback(async (root: string, path: string) => {
@@ -204,7 +206,7 @@ function App() {
     setChanges([]);
     const nextEntries = await loadTreeAndProfile(info.path);
     void loadGitState(info.path);
-    void refreshProviders(info.path);
+    void refreshProviders();
     const recentFile = localStorage.getItem(`whim:last-file:${info.path}`);
     const initial = recentFile && nextEntries.some((entry) => entry.kind === "file" && entry.path.replace(/\\/g, "/") === recentFile.replace(/\\/g, "/")) ? recentFile : chooseInitialFile(nextEntries);
     if (initial) await loadReadOnlyFile(info.path, initial);
@@ -234,7 +236,7 @@ function App() {
       // Provider detection (PowerShell probes for Ollama/LM Studio, environment
       // discovery) runs in parallel with workspace activation so slow or
       // unreachable provider endpoints never block file reads.
-      void refreshProviders(null);
+      void refreshProviders();
       if (!bridge.isNative()) return;
       const alreadySelected = await bridge.selectedWorkspace().catch(() => null);
       if (alreadySelected) { await activateWorkspace(alreadySelected).catch(() => undefined); return; }
@@ -281,10 +283,7 @@ function App() {
     setFileError(null);
   }, []);
 
-  const refreshCurrentProviders = useCallback(
-    () => refreshProviders(workspacePath, true),
-    [refreshProviders, workspacePath],
-  );
+  const refreshCurrentProviders = refreshProviders;
 
 
   const contextItems = useMemo(() => [
@@ -366,7 +365,7 @@ function App() {
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                   />
                 ) : view === "providers" ? (
-                  <ProviderHub workspace={workspacePath} credentials={credentials} localProviders={localProviders} onRefresh={refreshCurrentProviders}
+                  <ProviderHub onRefresh={refreshCurrentProviders}
                     agentProvider={agentProvider} agentApiKey={agentApiKey} agentBaseUrl={agentBaseUrl} agentModel={agentModel}
                     onAgentProfileChange={(patch) => {
                       if (patch.provider !== undefined) setAgentProvider(patch.provider);

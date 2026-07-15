@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -12,15 +12,17 @@ import {
 import { bridge, type DiscoveredProvider } from "../lib/bridge";
 
 const OMNIROUTE_ROUTES = ["auto", "auto/coding", "auto/fast", "auto/cheap", "auto/offline", "auto/smart"];
+const MODEL_DISCOVERY_DELAY_MS = 350;
 
 export function displayModelChoice(value: string) {
   return value === "auto" ? "Vibe (agent chooses)" : value;
 }
 
+export function isProviderReady(provider: DiscoveredProvider) {
+  return provider.kind === "cloud" ? provider.hasKey : provider.available;
+}
+
 type ProviderHubProps = {
-  workspace: string | null;
-  credentials: unknown;
-  localProviders: unknown;
   onRefresh: () => void | Promise<void>;
   agentProvider: string;
   agentApiKey: string;
@@ -67,7 +69,14 @@ function ModelDropdown({ value, options, placeholder, onChange }: { value: strin
 
   return (
     <>
-      <button type="button" ref={triggerRef} className="model-select-trigger" onClick={() => (open ? setOpen(false) : openMenu())}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="model-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+      >
         <span className={value ? "model-select-value" : "model-select-placeholder"}>{value ? displayModelChoice(value) : placeholder}</span>
         <ChevronRight size={11} className="model-select-caret" />
       </button>
@@ -83,47 +92,85 @@ function ModelDropdown({ value, options, placeholder, onChange }: { value: strin
   );
 }
 
-export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentModel, onAgentProfileChange }: ProviderHubProps) {
+export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUrl, agentModel, onAgentProfileChange }: ProviderHubProps) {
   const [discovered, setDiscovered] = useState<DiscoveredProvider[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
+  const scanRequest = useRef(0);
+  const modelRequest = useRef(0);
 
-  const rescan = async () => {
+  const rescan = useCallback(async () => {
+    const request = ++scanRequest.current;
     setLoading(true);
     try {
       const list = await bridge.discoverProviders();
+      if (request !== scanRequest.current) return;
       setDiscovered(list);
-      if (agentProvider !== "auto") {
-        const active = list.find((item) => item.provider === agentProvider);
-        if (active?.hasKey || active?.available) loadModels(active.provider, agentApiKey, active.baseUrl ?? agentBaseUrl);
+      setNotice(null);
+    } catch {
+      if (request === scanRequest.current) {
+        setNotice("Provider scan failed. Try refreshing the catalog.");
       }
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Provider scan failed.");
     } finally {
-      setLoading(false);
+      if (request === scanRequest.current) setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void rescan(); }, []);
+  useEffect(() => {
+    void rescan();
+    return () => { scanRequest.current += 1; };
+  }, [rescan]);
 
-  const loadModels = (agentValue: string, apiKey: string, baseUrl: string) => {
-    if (!apiKey?.trim() && agentValue !== "local" && agentValue !== "omniroute") return;
+  useEffect(() => {
+    const request = ++modelRequest.current;
+    const active = discovered.find((provider) => provider.provider === agentProvider);
+    const canLoad = Boolean(active) && (
+      agentProvider === "omniroute"
+      || (active?.kind === "local" && active.available)
+      || (active?.kind === "cloud" && (active.hasKey || agentApiKey.trim().length > 0))
+    );
+
+    setModelOptions([]);
+    if (!active || !canLoad || agentProvider === "auto") {
+      setModelLoading(false);
+      return;
+    }
+
     setModelLoading(true);
-    bridge.listProviderModels(agentValue, apiKey, baseUrl)
-      .then((ids) => {
-        if (!Array.isArray(ids)) return;
-        const routes = agentValue === "omniroute" ? OMNIROUTE_ROUTES : [];
-        setModelOptions([...new Set([...routes, ...ids])]);
-      })
-      .catch(() => { if (agentValue === "omniroute") setModelOptions(OMNIROUTE_ROUTES); })
-      .finally(() => setModelLoading(false));
-  };
+    const timer = window.setTimeout(() => {
+      bridge.listProviderModels(agentProvider, agentApiKey, agentBaseUrl || active.baseUrl || "")
+        .then((ids) => {
+          if (request !== modelRequest.current || !Array.isArray(ids)) return;
+          const routes = agentProvider === "omniroute" ? OMNIROUTE_ROUTES : [];
+          setModelOptions([...new Set([...routes, ...ids])]);
+        })
+        .catch(() => {
+          if (request !== modelRequest.current) return;
+          if (agentProvider === "omniroute") {
+            setModelOptions(OMNIROUTE_ROUTES);
+          } else {
+            setNotice(`Could not load ${active.label} models. You can enter a model ID manually.`);
+          }
+        })
+        .finally(() => {
+          if (request === modelRequest.current) setModelLoading(false);
+        });
+    }, MODEL_DISCOVERY_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      if (request === modelRequest.current) modelRequest.current += 1;
+    };
+  }, [agentApiKey, agentBaseUrl, agentProvider, discovered]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([Promise.resolve().then(onRefresh), rescan()]);
+  }, [onRefresh, rescan]);
 
   const onKeyChange = (value: string) => {
     onAgentProfileChange({ provider: agentProvider, apiKey: value });
-    if (value?.trim()) loadModels(agentProvider, value, agentBaseUrl);
   };
 
   const useProvider = (provider: DiscoveredProvider) => {
@@ -143,20 +190,19 @@ export function ProviderHub({ agentProvider, agentApiKey, agentBaseUrl, agentMod
       onAgentProfileChange(patch);
     }
     setModelOptions([]);
-    if (provider.hasKey || provider.available) loadModels(provider.provider, provider.provider === agentProvider ? agentApiKey : "", provider.baseUrl ?? agentBaseUrl);
   };
 
-  const connectedCount = discovered.filter((item) => item.hasKey || (item.kind !== "cloud" && item.available)).length;
+  const connectedCount = discovered.filter(isProviderReady).length;
 
   return (
     <main className="hub-page provider-page">
 
 
       <section className="provider-status-strip">
-        <span className="status-good"><Check size={13} /> Whim native agent ready</span>
-        <span><ShieldCheck size={13} /> {connectedCount} with credentials</span>
+        <span className="status-good"><Check size={13} /> Whim native runtime ready</span>
+        <span><ShieldCheck size={13} /> {connectedCount} {connectedCount === 1 ? "provider" : "providers"} ready</span>
         <span>Keys stay on this PC, never exposed in source files</span>
-        <button type="button" onClick={rescan} disabled={loading}>Refresh <RefreshCw className={loading ? "spin" : ""} size={12} /></button>
+        <button type="button" onClick={() => void refreshAll()} disabled={loading}>Refresh <RefreshCw className={loading ? "spin" : ""} size={12} /></button>
       </section>
 
       {notice && <div className="inline-notice"><Sparkles size={14} /><span>{notice}</span><button type="button" onClick={() => setNotice(null)}>Dismiss</button></div>}

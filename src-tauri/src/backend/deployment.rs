@@ -1697,9 +1697,9 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         label: "OmniRoute".to_string(),
         kind: "gateway".to_string(),
         available: omniroute,
-        has_key: std::env::var("OMNIROUTE_API_KEY")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false),
+        has_key: crate::agent::provider_environment_variables("omniroute")
+            .iter()
+            .any(|name| std::env::var(name).is_ok_and(|value| !value.trim().is_empty())),
         base_url: Some("http://127.0.0.1:20128/v1".to_string()),
         note: Some(if omniroute {
             "Local routing gateway detected on :20128; endpoint key is optional unless OmniRoute requires one."
@@ -1710,16 +1710,18 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         }),
         capabilities: capabilities("omniroute"),
     });
-    let cloud: &[(&str, &str, &str)] = &[
-        ("openai", "OPENAI_API_KEY", "OpenAI"),
-        ("anthropic", "ANTHROPIC_API_KEY", "Anthropic"),
-        ("google", "GOOGLE_API_KEY", "Google Gemini"),
-        ("deepseek", "DEEPSEEK_API_KEY", "DeepSeek"),
-        ("qwen", "DASHSCOPE_API_KEY", "Qwen"),
-        ("xiaomi", "XIAOMI_API_KEY", "Xiaomi"),
+    let cloud: &[(&str, &str)] = &[
+        ("openai", "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("google", "Google Gemini"),
+        ("deepseek", "DeepSeek"),
+        ("qwen", "Qwen"),
+        ("xiaomi", "Xiaomi"),
     ];
-    for (provider, env_key, label) in cloud {
-        let has = std::env::var(env_key).is_ok();
+    for (provider, label) in cloud {
+        let has = crate::agent::provider_environment_variables(provider)
+            .iter()
+            .any(|name| std::env::var(name).is_ok_and(|value| !value.trim().is_empty()));
         out.push(ProviderStatus {
             provider: provider.to_string(),
             label: label.to_string(),
