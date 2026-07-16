@@ -201,7 +201,7 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
       <section className="provider-status-strip">
         <span className="status-good"><Check size={13} /> Whim native runtime ready</span>
         <span><ShieldCheck size={13} /> {connectedCount} {connectedCount === 1 ? "provider" : "providers"} ready</span>
-        <span>Keys stay on this PC, never exposed in source files</span>
+        <span>Keys stay on this PC, never exposed in source files or renderer state</span>
         <button type="button" onClick={() => void refreshAll()} disabled={loading}>Refresh <RefreshCw className={loading ? "spin" : ""} size={12} /></button>
       </section>
 
@@ -271,7 +271,7 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
       </section>
 
       <section className="provider-footer">
-        <article className="policy-card policy-card-wide"><span className="policy-icon violet"><ShieldCheck size={17} /></span><div><small>Credential policy</small><h3>Authentication stays on this PC.</h3><p>Cloud keys are read from your environment or typed in-session. They are never persisted in workspace source files.</p></div></article>
+        <article className="policy-card policy-card-wide"><span className="policy-icon violet"><ShieldCheck size={17} /></span><div><small>Credential policy</small><h3>Authentication stays on this PC.</h3><p>Cloud keys can come from your environment, supported local auth stores, or an in-session entry. Stored keys remain in the Rust process and are never copied into workspace files or renderer state.</p></div></article>
       </section>
     </main>
   );

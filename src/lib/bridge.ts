@@ -196,8 +196,9 @@ export type AppSettings = {
   };
   computerUse: { enabled: boolean; screenCapture: boolean; appContext: boolean };
   agent: {
-    runtime: "native" | "pi";
+    runtime: "native" | "pi" | "codex" | "claude" | "antigravity" | "eve";
     piModel: string;
+    externalModel: string;
     speed: "fast" | "balanced" | "thorough";
     approvalPolicy: "always" | "risky";
     backgroundVerification: boolean;
@@ -232,13 +233,14 @@ export const defaultAppSettings: AppSettings = {
   agent: {
     runtime: "native",
     piModel: "opencode/big-pickle",
+    externalModel: "default",
     speed: "balanced",
     approvalPolicy: "risky",
     backgroundVerification: true,
     autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
-    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation"],
+    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "external-harnesses"],
     defaultAdapter: "native",
     wslDistro: "Ubuntu",
     containerImage: "ubuntu:latest",
@@ -438,6 +440,74 @@ export type LocalProviderStatus = {
   cliPath?: string | null;
   models: { id: string; name: string }[];
   detail: string;
+};
+
+export type ExternalHarnessStatus = {
+  id: "codex" | "claude" | "antigravity" | "eve" | "pi" | "opencode";
+  name: string;
+  available: boolean;
+  authenticated: boolean;
+  authKind: string;
+  version?: string | null;
+  path?: string | null;
+  capabilities: string[];
+  setupHint: string;
+};
+
+export type EveProjectStatus = {
+  detected: boolean;
+  layout?: string | null;
+  packageVersion?: string | null;
+  cliAvailable: boolean;
+  cliPath?: string | null;
+  instructionsPath?: string | null;
+  skills: string[];
+  tools: string[];
+  channels: string[];
+  schedules: string[];
+  evals: string[];
+  compileStatus?: string | null;
+  model?: string | null;
+  diagnosticErrors?: number | null;
+  diagnosticWarnings?: number | null;
+  createRoute?: string | null;
+  continueRoute?: string | null;
+  streamRoute?: string | null;
+};
+
+export type MediaRuntimeStatus = {
+  codexAvailable: boolean;
+  codexAuthenticated: boolean;
+  codexAuthKind: string;
+  ffmpegAvailable: boolean;
+  windowsVoiceAvailable: boolean;
+};
+
+export type MediaArtifact = {
+  kind: "image" | "video" | "audio" | "captions";
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+  width?: number | null;
+  height?: number | null;
+};
+
+export type MediaGenerateResult = {
+  id: string;
+  mode: "image" | "ugc-video";
+  title: string;
+  summary: string;
+  outputDirectory: string;
+  artifacts: MediaArtifact[];
+};
+
+export type MediaProgressEvent = { operationId: string; stage: string; message: string };
+
+export type WorkflowSummary = {
+  id: string;
+  title: string;
+  description: string;
+  source: string;
 };
 
 type BackendTool = { name: string; available: boolean; version?: string | null; path?: string | null };
@@ -655,6 +725,75 @@ export const bridge = {
       request: { timeoutMs: 5_000 },
     });
     return result.providers;
+  },
+
+  async externalHarnesses(): Promise<ExternalHarnessStatus[]> {
+    if (!inTauri()) return [];
+    return call<ExternalHarnessStatus[]>("discover_external_harnesses");
+  },
+
+  async inspectEveWorkspace(workspace: string): Promise<EveProjectStatus> {
+    return call<EveProjectStatus>("inspect_eve_workspace", { workspace });
+  },
+
+  async validateEveWorkspace(workspace: string): Promise<EveProjectStatus> {
+    return call<EveProjectStatus>("validate_eve_workspace", {
+      request: { workspace, confirmed: true },
+    });
+  },
+
+  async mediaRuntimeStatus(): Promise<MediaRuntimeStatus> {
+    if (!inTauri()) return { codexAvailable: false, codexAuthenticated: false, codexAuthKind: "unavailable", ffmpegAvailable: false, windowsVoiceAvailable: false };
+    return call<MediaRuntimeStatus>("media_runtime_status");
+  },
+
+  async generateMedia(input: {
+    workspace: string;
+    operationId: string;
+    mode: "image" | "ugc-video";
+    prompt: string;
+    title?: string;
+    aspectRatio?: "1:1" | "16:9" | "9:16";
+    durationSeconds?: number;
+    onEvent?: (event: MediaProgressEvent) => void;
+  }): Promise<MediaGenerateResult> {
+    let unlisten: (() => void) | undefined;
+    if (inTauri() && input.onEvent) {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen<MediaProgressEvent>("whim:media-event", ({ payload }) => {
+        if (payload.operationId === input.operationId) input.onEvent?.(payload);
+      });
+    }
+    try {
+      return await call<MediaGenerateResult>("generate_media", {
+        request: {
+          workspace: input.workspace,
+          operationId: input.operationId,
+          mode: input.mode,
+          prompt: input.prompt,
+          title: input.title,
+          aspectRatio: input.aspectRatio,
+          durationSeconds: input.durationSeconds,
+        },
+      });
+    } finally {
+      unlisten?.();
+    }
+  },
+
+  async readMediaArtifact(workspace: string, path: string): Promise<Uint8Array> {
+    const bytes = await call<number[]>("read_media_artifact", { workspace, path });
+    return Uint8Array.from(bytes);
+  },
+
+  async workspaceWorkflows(workspace: string): Promise<WorkflowSummary[]> {
+    if (!inTauri()) return [];
+    return call<WorkflowSummary[]>("list_workspace_workflows", { workspace });
+  },
+
+  async expandWorkspaceWorkflow(workspace: string, prompt: string): Promise<string> {
+    if (!inTauri()) return prompt;
+    return call<string>("expand_workspace_workflow", { workspace, prompt });
   },
 
   async runAgent(input: {

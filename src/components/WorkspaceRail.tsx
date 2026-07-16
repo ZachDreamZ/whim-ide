@@ -2,10 +2,12 @@ import {
   Blocks,
   Bot,
   Boxes,
+  Clapperboard,
   GitBranch,
   LayoutDashboard,
   ListChecks,
   MessageSquareText,
+  Orbit,
   Rocket,
   Settings2,
   Sparkles,
@@ -13,15 +15,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type ViewId = "build" | "scheduled" | "plugins" | "sites" | "pullRequests" | "chat" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
+export type ViewId = "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
 
 const items: { id: ViewId; label: string; icon: LucideIcon; accent?: boolean }[] = [
   { id: "build", label: "New task", icon: LayoutDashboard },
   { id: "scheduled", label: "Scheduled", icon: ListChecks },
   { id: "plugins", label: "Plugins", icon: Blocks },
+  { id: "eve", label: "Eve Agents", icon: Orbit, accent: true },
   { id: "sites", label: "Sites", icon: Rocket, accent: true },
   { id: "pullRequests", label: "Pull requests", icon: GitBranch },
   { id: "chat", label: "Chat", icon: MessageSquareText },
+  { id: "creative", label: "Creative Studio", icon: Clapperboard, accent: true },
   { id: "providers", label: "Models & Providers", icon: Bot },
   { id: "autopilot", label: "Autopilot", icon: WandSparkles },
 ];

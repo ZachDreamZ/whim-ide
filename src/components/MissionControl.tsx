@@ -8,6 +8,7 @@ import {
   Clock3,
   Database,
   GitCompareArrows,
+  ListChecks,
   LoaderCircle,
   Mic,
   ShieldCheck,
@@ -35,6 +36,7 @@ import {
   type OrchestrationJob,
   type OrchestrationJobDetail,
   type OrchestrationJobOutcome,
+  type WorkflowSummary,
 } from "../lib/bridge";
 import {
   INTENT_BRIEF_PATH,
@@ -142,6 +144,8 @@ export function MissionControl({
   const [showMemory, setShowMemory] = useState(false);
   const [activeCitation, setActiveCitation] = useState<number | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const [showWorkflows, setShowWorkflows] = useState(false);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [lastDuration, setLastDuration] = useState<number | null>(null);
   const sessionId = useRef<string | undefined>(undefined);
   const operationId = useRef<string | undefined>(undefined);
@@ -513,6 +517,18 @@ export function MissionControl({
   }, [executionTarget, workspaceEntries]);
 
   useEffect(() => {
+    let active = true;
+    if (!executionTarget || !bridge.isNative()) {
+      setWorkflows([]);
+      return () => { active = false; };
+    }
+    void bridge.workspaceWorkflows(executionTarget)
+      .then((items) => { if (active) setWorkflows(items); })
+      .catch(() => { if (active) setWorkflows([]); });
+    return () => { active = false; };
+  }, [executionTarget]);
+
+  useEffect(() => {
     sessionId.current = undefined;
     runningJob.current = null;
     setMessages(initialMessages);
@@ -544,9 +560,17 @@ export function MissionControl({
       return;
     }
 
+    // Manual workflows are workspace guidance, expanded by the native boundary
+    // before role routing. A missing or invalid workflow remains ordinary text.
+    let expandedContent = content;
+    if (executionTarget && bridge.isNative()) {
+      try {
+        expandedContent = await bridge.expandWorkspaceWorkflow(executionTarget, content);
+      } catch { /* workflow discovery must never block a normal prompt */ }
+    }
     // Resolve the request synchronously. React state updates are intentionally
     // not used for slash routing, so this request cannot execute a stale role.
-    const resolvedRequest = resolveMissionRequest(content, mode);
+    const resolvedRequest = resolveMissionRequest(expandedContent, mode);
     const messageContent = resolvedRequest.content;
     const requestWorkflow = resolvedRequest.workflow;
 
@@ -585,7 +609,7 @@ export function MissionControl({
     const attachmentContext = attachedFiles
       .map((file) => `<workspace_attachment path="${file.path.replace(/"/g, "&quot;")}">\n${file.content}\n</workspace_attachment>`)
       .join("\n\n");
-    const userMessage: UIMessage = { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: messageContent }] };
+    const userMessage: UIMessage = { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: content }] };
     setMessages((current) => [...current, userMessage]);
     setLiveEvents([]);
     lastLiveLedgerRefresh.current = 0;
@@ -860,6 +884,39 @@ export function MissionControl({
                 <WandSparkles size={14} />
                 <span>Canvas</span>
               </button>
+              <div className="mission-workflow-picker">
+                <button
+                  type="button"
+                  onClick={() => setShowWorkflows((value) => !value)}
+                  className={`mission-mode-toggle${showWorkflows ? " active" : ""}`}
+                  title="Reusable workspace workflows"
+                  aria-haspopup="menu"
+                  aria-expanded={showWorkflows}
+                >
+                  <ListChecks size={14} />
+                  <span>Workflows</span>
+                </button>
+                {showWorkflows && (
+                  <div className="mission-workflow-menu" role="menu">
+                    {workflows.map((workflow) => (
+                      <button
+                        key={workflow.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setShowWorkflows(false);
+                          void send({ role: "user", content: `/${workflow.id}` });
+                        }}
+                      >
+                        <strong>{workflow.title}</strong>
+                        <span>{workflow.description}</span>
+                        <small>/{workflow.id} · {workflow.source}</small>
+                      </button>
+                    ))}
+                    {workflows.length === 0 && <p>No workflows found.</p>}
+                  </div>
+                )}
+              </div>
             </>
           }
           greeting={

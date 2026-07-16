@@ -14,6 +14,8 @@ import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { MissionControl } from "./components/MissionControl";
 import { ChatHub } from "./components/ChatHub";
+import { CreativeStudio } from "./components/CreativeStudio";
+import { EveHub } from "./components/EveHub";
 import { OrchestrationPanel } from "./components/OrchestrationPanel";
 import { ProviderHub } from "./components/ProviderHub";
 import { EcosystemHub } from "./components/EcosystemHub";
@@ -450,6 +452,8 @@ function App() {
                     showCopyActions={appSettings.chat.showCopyActions}
                     persistHistory={appSettings.chat.persistHistory}
                   />
+                ) : view === "creative" ? (
+                  workspacePath ? <CreativeStudio workspace={workspacePath} onOpenConfiguration={() => { setActiveSettingsCategory("configuration"); setView("settings"); }} /> : workspaceGate("Creative Studio needs a workspace")
                 ) : view === "providers" ? (
                   <ProviderHub onRefresh={refreshCurrentProviders}
                     agentProvider={agentProvider} agentApiKey={agentApiKey} agentBaseUrl={agentBaseUrl} agentModel={agentModel}
@@ -464,6 +468,8 @@ function App() {
                   workspacePath ? <ScheduledTasksHub workspace={workspacePath} /> : workspaceGate("Scheduled tasks need a workspace")
                 ) : view === "plugins" ? (
                   <PluginsHub />
+                ) : view === "eve" ? (
+                  workspacePath ? <EveHub workspace={workspacePath} onOpenFile={(path) => { setView("build"); void chooseFile(path); }} /> : workspaceGate("Eve Agents needs a workspace")
                 ) : view === "sites" ? (
                   workspacePath ? <SitesHub workspace={workspacePath} /> : workspaceGate("Sites needs a workspace")
                 ) : view === "pullRequests" ? (

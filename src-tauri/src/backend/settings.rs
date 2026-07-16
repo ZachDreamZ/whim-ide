@@ -78,6 +78,7 @@ pub struct ComputerUseSettings {
 pub struct AgentSettings {
     pub runtime: String,
     pub pi_model: String,
+    pub external_model: String,
     pub speed: String,
     pub approval_policy: String,
     pub background_verification: bool,
@@ -176,6 +177,7 @@ impl Default for AgentSettings {
         Self {
             runtime: "native".into(),
             pi_model: "opencode/big-pickle".into(),
+            external_model: "default".into(),
             speed: "balanced".into(),
             approval_policy: "risky".into(),
             background_verification: true,
@@ -188,6 +190,7 @@ impl Default for AgentSettings {
                 "coding".into(),
                 "verification".into(),
                 "pi-delegation".into(),
+                "external-harnesses".into(),
             ],
             default_adapter: "native".into(),
             wsl_distro: "Ubuntu".into(),
@@ -285,11 +288,20 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
             "Dictation dictionary must be at most 1000 characters of printable text".into(),
         );
     }
-    one_of(&settings.agent.runtime, &["native", "pi"], "agent runtime")?;
+    one_of(
+        &settings.agent.runtime,
+        &["native", "pi", "codex", "claude", "antigravity", "eve"],
+        "agent runtime",
+    )?;
     if settings.agent.pi_model.chars().count() > 200
         || settings.agent.pi_model.chars().any(char::is_control)
     {
         return Err("Pi model must be at most 200 printable characters".into());
+    }
+    if settings.agent.external_model.chars().count() > 200
+        || settings.agent.external_model.chars().any(char::is_control)
+    {
+        return Err("External harness model must be at most 200 printable characters".into());
     }
     one_of(
         &settings.agent.speed,
@@ -312,6 +324,7 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         "desktop-context",
         "voice",
         "pi-delegation",
+        "external-harnesses",
         "computer-use",
     ];
     if settings.agent.enabled_capabilities.len() > allowed_capabilities.len()

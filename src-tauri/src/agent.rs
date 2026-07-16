@@ -11,9 +11,9 @@
 //! - Project memory files (AGENTS.md / CLAUDE.md / README) auto-loaded
 //! - Read-only research sub-agents to investigate without bloating context
 //! - Verification loop: run build/test/lint and iterate until green
-//! - Multi-protocol provider abstraction: OpenAI, Anthropic, Google, Qwen,
-//!   DeepSeek, Xiaomi, Local (Ollama/LM Studio), any OpenAI-compatible custom
-//!   endpoint.
+//! - Multi-protocol provider abstraction: OpenAI, Anthropic, Google, OpenCode
+//!   Zen, Qwen, DeepSeek, Xiaomi, Local (Ollama/LM Studio), and any
+//!   OpenAI-compatible custom endpoint.
 
 use std::time::{Duration, Instant};
 use std::{
@@ -53,6 +53,8 @@ const MAX_CONTEXT_CHARS: usize = 80_000;
 const KEEP_RECENT_MESSAGES: usize = 8;
 const MAX_RECOVERY_ITERS: usize = 5;
 const MAX_PROVIDER_RETRIES: usize = 3;
+const MAX_OPENCODE_AUTH_BYTES: u64 = 128 * 1024;
+const MAX_STORED_API_KEY_BYTES: usize = 4 * 1024;
 
 fn find_pi_launcher() -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
@@ -71,6 +73,7 @@ enum Provider {
     OpenAi,
     Anthropic,
     Google,
+    OpenCode,
     Local,
     DeepSeek,
     Xiaomi,
@@ -84,6 +87,7 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
         "openai" => Ok(Provider::OpenAi),
         "anthropic" => Ok(Provider::Anthropic),
         "google" | "gemini" => Ok(Provider::Google),
+        "opencode" | "opencode-zen" | "zen" => Ok(Provider::OpenCode),
         "local" | "ollama" | "lmstudio" => Ok(Provider::Local),
         "deepseek" => Ok(Provider::DeepSeek),
         "xiaomi" => Ok(Provider::Xiaomi),
@@ -91,7 +95,7 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
         "omniroute" | "omni-route" | "omni" => Ok(Provider::OmniRoute),
         "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, qwen, deepseek, xiaomi, local, omniroute, compatible"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible"
         )),
     }
 }
@@ -101,6 +105,7 @@ fn provider_name(provider: Provider) -> &'static str {
         Provider::OpenAi => "openai",
         Provider::Anthropic => "anthropic",
         Provider::Google => "google",
+        Provider::OpenCode => "opencode",
         Provider::Local => "local",
         Provider::DeepSeek => "deepseek",
         Provider::Xiaomi => "xiaomi",
@@ -238,6 +243,7 @@ fn default_base(provider: Provider) -> &'static str {
         Provider::OpenAi => "https://api.openai.com/v1",
         Provider::Anthropic => "https://api.anthropic.com",
         Provider::Google => "https://generativelanguage.googleapis.com",
+        Provider::OpenCode => "https://opencode.ai/zen/v1",
         Provider::Local => "http://127.0.0.1:11434/v1",
         Provider::DeepSeek => "https://api.deepseek.com",
         Provider::Xiaomi => "https://api.xiaomi.com/v1",
@@ -253,6 +259,7 @@ fn provider_label(provider: Provider) -> &'static str {
         Provider::OpenAi => "OpenAI",
         Provider::Anthropic => "Anthropic",
         Provider::Google => "Google Gemini",
+        Provider::OpenCode => "OpenCode Zen",
         Provider::DeepSeek => "DeepSeek",
         Provider::Xiaomi => "Xiaomi",
         Provider::Qwen => "Qwen",
@@ -274,6 +281,7 @@ pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'stat
             "GEMINI_API_KEY",
             "GOOGLE_GENERATIVE_AI_API_KEY",
         ],
+        "opencode" => &["OPENCODE_API_KEY"],
         "deepseek" => &["DEEPSEEK_API_KEY"],
         "qwen" => &["DASHSCOPE_API_KEY"],
         "xiaomi" => &["XIAOMI_API_KEY"],
@@ -324,6 +332,43 @@ fn resolve_key_with(
 /// without exposing native environment values to the webview.
 fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
     resolve_key_with(provider, api_key, |name| std::env::var(name).ok())
+        .or_else(|| stored_opencode_api_key(provider))
+}
+
+fn parse_stored_opencode_api_key(value: &Value, provider: Provider) -> Option<String> {
+    let entry = value.get(provider_name(provider))?;
+    if entry.get("type").and_then(Value::as_str) != Some("api") {
+        return None;
+    }
+    let key = entry.get("key")?.as_str()?.trim();
+    if key.is_empty() || key.len() > MAX_STORED_API_KEY_BYTES || key.chars().any(char::is_control) {
+        return None;
+    }
+    Some(key.to_string())
+}
+
+/// Reuse API credentials already stored by OpenCode without sending the key to
+/// the renderer. OAuth records are intentionally ignored because their token
+/// lifecycles are provider-specific and must not be repurposed as API keys.
+fn stored_opencode_api_key(provider: Provider) -> Option<String> {
+    let path = dirs::home_dir()?.join(".local/share/opencode/auth.json");
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    if metadata.file_type().is_symlink()
+        || !metadata.is_file()
+        || metadata.len() > MAX_OPENCODE_AUTH_BYTES
+    {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    let value: Value = serde_json::from_str(&content).ok()?;
+    parse_stored_opencode_api_key(&value, provider)
+}
+
+pub(crate) fn provider_key_available(provider: &str) -> bool {
+    parse_provider(provider)
+        .ok()
+        .and_then(|parsed| resolve_key(parsed, &None))
+        .is_some()
 }
 
 /// Sensible default model per provider so vibecoding needs no configuration
@@ -333,6 +378,7 @@ fn default_model(provider: Provider, role: AgentRole) -> &'static str {
         Provider::OpenAi => "gpt-4o-mini",
         Provider::Anthropic => "claude-3-5-sonnet-latest",
         Provider::Google => "gemini-1.5-flash",
+        Provider::OpenCode => "deepseek-v4-flash-free",
         Provider::DeepSeek => "deepseek-chat",
         Provider::Xiaomi => "mixtral-8x7b-instruct",
         Provider::Qwen => "qwen-plus",
@@ -397,6 +443,10 @@ fn validate_provider_base(provider: Provider, base: &str) -> Result<String, Stri
         || parsed_ip
             .as_ref()
             .is_some_and(std::net::IpAddr::is_loopback);
+
+    if provider == Provider::OpenCode && (url.scheme() != "https" || host != "opencode.ai") {
+        return Err("OpenCode Zen must use the official https://opencode.ai endpoint".to_string());
+    }
 
     if provider == Provider::Local {
         if !loopback || !matches!(url.scheme(), "http" | "https") {
@@ -600,8 +650,7 @@ fn tool_defs() -> Vec<ToolDef> {
                     "question": { "type": "string", "description": "One investigation (backward-compatible)" },
                     "questions": { "type": "array", "items": { "type": "string" }, "description": "Independent investigations to run concurrently (bounded by native Settings, max 8)" },
                     "path": { "type": "string", "description": "Optional relative scope" }
-                },
-                "anyOf": [{ "required": ["question"] }, { "required": ["questions"] }]
+                }
             }),
         },
         ToolDef {
@@ -715,13 +764,14 @@ fn tool_display(name: &str) -> String {
     display.to_string()
 }
 
-/// Load project memory files (AGENTS.md, CLAUDE.md, GEMINI.md, README, .whim/*)
+/// Load project memory files (including Eve's filesystem-authored instructions)
 /// so the agent starts with durable, repo-specific context.
 fn load_memory_at(root: &Path) -> String {
     let candidates = [
         "AGENTS.md",
         "CLAUDE.md",
         "GEMINI.md",
+        "agent/instructions.md",
         "README.md",
         ".whim/agent.md",
         ".whim/notes.md",
@@ -1115,6 +1165,7 @@ async fn chat(
     let resolved_key = resolve_key(provider, api_key);
     match provider {
         Provider::OpenAi
+        | Provider::OpenCode
         | Provider::Local
         | Provider::DeepSeek
         | Provider::Xiaomi
@@ -2355,6 +2406,7 @@ async fn wait_for_operation_cancelled(state: &BackendState, operation_id: &str) 
     }
 }
 
+#[cfg(test)]
 fn pi_environment_name_is_sensitive(name: &std::ffi::OsStr) -> bool {
     let upper = name.to_string_lossy().to_ascii_uppercase();
     upper.ends_with("_API_KEY")
@@ -2502,11 +2554,7 @@ async fn run_pi_agent<R: tauri::Runtime>(
     }
     // Pi resolves credentials from its own protected auth store. Do not leak
     // unrelated process-level provider credentials into the subprocess.
-    for (name, _) in std::env::vars_os() {
-        if pi_environment_name_is_sensitive(&name) {
-            command.env_remove(name);
-        }
-    }
+    crate::backend::external_harness::scrub_provider_credentials(&mut command);
     command
         .arg(format!("@{}", prompt_path.to_string_lossy()))
         .current_dir(&root)
@@ -2620,6 +2668,1026 @@ async fn run_pi_agent<R: tauri::Runtime>(
             success,
             exit_code,
             stdout,
+            stderr,
+            stdout_truncated,
+            stderr_truncated,
+            timed_out,
+            cancelled,
+            duration_ms: start.elapsed().as_millis(),
+        },
+    })
+}
+
+fn external_harness_enabled(settings: &AppSettings) -> bool {
+    settings
+        .agent
+        .enabled_capabilities
+        .iter()
+        .any(|capability| capability == "external-harnesses")
+}
+
+fn external_harness_can_mutate(
+    mode: AgentRole,
+    profile: &HarnessProfile,
+    settings: &AppSettings,
+) -> bool {
+    profile.allowed_tools.is_none()
+        && profile.allowed_write_paths.is_none()
+        && settings.agent.approval_policy == "risky"
+        && mode.permits_tool("edit_file")
+        && mode.permits_tool("write_file")
+        && capability_allows_tool(&resolved_capabilities(settings, mode.as_str()), "edit_file")
+}
+
+fn external_runtime_can_mutate(
+    runtime: &str,
+    mode: AgentRole,
+    profile: &HarnessProfile,
+    settings: &AppSettings,
+) -> bool {
+    runtime == "codex" && external_harness_can_mutate(mode, profile, settings)
+}
+
+fn codex_output_text(stdout: &str) -> Option<String> {
+    let mut text = None;
+    for line in stdout.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let event_type = value
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if event_type == "item.completed" {
+            let item = value.get("item").unwrap_or(&Value::Null);
+            if item.get("type").and_then(Value::as_str) == Some("agent_message") {
+                if let Some(candidate) = item.get("text").and_then(Value::as_str) {
+                    text = Some(candidate.to_string());
+                }
+            }
+        }
+        if let Some(candidate) = value.get("text").and_then(Value::as_str) {
+            text = Some(candidate.to_string());
+        }
+    }
+    text.filter(|value| !value.trim().is_empty())
+}
+
+fn claude_output_text(stdout: &str) -> Option<String> {
+    let value = serde_json::from_str::<Value>(stdout).ok()?;
+    value
+        .get("result")
+        .and_then(Value::as_str)
+        .or_else(|| value.get("text").and_then(Value::as_str))
+        .map(ToOwned::to_owned)
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn plain_output_text(stdout: &str) -> Option<String> {
+    let text = stdout.trim();
+    (!text.is_empty()).then(|| text.to_string())
+}
+
+fn stage_antigravity_prompt(root: &Path, prompt: &str) -> Result<(PathBuf, String), String> {
+    use std::io::Write as _;
+
+    let relative_directory = Path::new(".whim/context/external-prompts");
+    let directory =
+        crate::backend::workspace::ensure_directory_chain(root, relative_directory, true)?;
+    let file_name = format!("agy-{}.md", uuid::Uuid::new_v4());
+    let relative_path = relative_directory.join(&file_name);
+    let prompt_path = directory.join(file_name);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&prompt_path)
+        .map_err(|error| format!("Could not securely stage Antigravity input: {error}"))?;
+    if let Err(error) = file.write_all(prompt.as_bytes()) {
+        drop(file);
+        let _ = std::fs::remove_file(&prompt_path);
+        return Err(format!("Could not stage Antigravity input: {error}"));
+    }
+    Ok((
+        prompt_path,
+        relative_path.to_string_lossy().replace('\\', "/"),
+    ))
+}
+
+fn bounded_external_error(stderr: &str, stdout: &str, runtime: &str) -> String {
+    let detail = if stderr.trim().is_empty() {
+        stdout
+    } else {
+        stderr
+    };
+    if detail.trim().is_empty() {
+        format!("{runtime} returned no assistant output")
+    } else {
+        detail.trim().chars().take(2_000).collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct EveSessionCursor {
+    session_id: String,
+    continuation_token: String,
+    stream_index: u64,
+}
+
+#[derive(Debug)]
+struct EveTurnOutcome {
+    events: Vec<Value>,
+    assistant_text: String,
+    cursor: EveSessionCursor,
+    model: Option<String>,
+    failure: Option<String>,
+}
+
+#[derive(Default)]
+struct EveStreamState {
+    events: Vec<Value>,
+    assistant_text: String,
+    emitted_text: bool,
+    continuation_token: Option<String>,
+    failure: Option<String>,
+    stream_index: u64,
+}
+
+const MAX_EVE_CONTROL_RESPONSE_BYTES: usize = 1024 * 1024;
+const MAX_EVE_STREAM_BYTES: usize = 8 * 1024 * 1024;
+const MAX_EVE_STREAM_EVENTS: usize = 10_000;
+const MAX_EVE_ASSISTANT_BYTES: usize = 1024 * 1024;
+
+fn safe_eve_session_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 512
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
+}
+
+fn decode_eve_cursor(value: Option<&str>) -> Result<Option<EveSessionCursor>, String> {
+    let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
+        return Ok(None);
+    };
+    if value.len() > 8_192 {
+        return Err("Eve session cursor exceeds the safe size limit".into());
+    }
+    let cursor: EveSessionCursor = serde_json::from_str(value)
+        .map_err(|_| "Eve session cursor is invalid; start a new task session".to_string())?;
+    if !safe_eve_session_id(&cursor.session_id)
+        || cursor.continuation_token.is_empty()
+        || cursor.continuation_token.len() > 4_096
+    {
+        return Err("Eve session cursor contains invalid fields".into());
+    }
+    Ok(Some(cursor))
+}
+
+fn encode_eve_cursor(cursor: &EveSessionCursor) -> Result<String, String> {
+    serde_json::to_string(cursor).map_err(|error| format!("Cannot preserve Eve session: {error}"))
+}
+
+fn valid_eve_loopback_url(value: &str) -> Option<String> {
+    let url = reqwest::Url::parse(value).ok()?;
+    if url.scheme() != "http"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1"))
+    {
+        return None;
+    }
+    Some(value.trim_end_matches('/').to_string())
+}
+
+fn find_eve_server_url(value: &Value) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            for key in ["serverUrl", "url"] {
+                if let Some(url) = map
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .and_then(valid_eve_loopback_url)
+                {
+                    return Some(url);
+                }
+            }
+            map.values().find_map(find_eve_server_url)
+        }
+        Value::Array(values) => values.iter().find_map(find_eve_server_url),
+        _ => None,
+    }
+}
+
+fn eve_server_url(root: &Path) -> String {
+    let from_state =
+        crate::backend::workspace::resolve_existing(root, ".eve/dev-server-state.v1.json", false)
+            .ok()
+            .and_then(|path| {
+                std::fs::metadata(&path)
+                    .ok()
+                    .filter(|metadata| metadata.len() > 0 && metadata.len() <= 64 * 1024)
+                    .and_then(|_| std::fs::read_to_string(path).ok())
+            })
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .and_then(|value| find_eve_server_url(&value));
+    from_state.unwrap_or_else(|| "http://127.0.0.1:2000".into())
+}
+
+fn eve_info_model(info: &Value) -> Option<String> {
+    info.pointer("/agent/model/id")
+        .and_then(Value::as_str)
+        .or_else(|| info.get("model").and_then(Value::as_str))
+        .or_else(|| info.pointer("/model/id").and_then(Value::as_str))
+        .and_then(|model| if model.is_empty() { None } else { Some(model) })
+        .map(str::to_string)
+}
+
+fn eve_error_message(event: &Value) -> Option<String> {
+    event
+        .pointer("/data/error/message")
+        .or_else(|| event.pointer("/data/message"))
+        .and_then(Value::as_str)
+        .map(|message| message.chars().take(2_000).collect())
+}
+
+fn apply_eve_stream_event<R: tauri::Runtime>(
+    app: &WebviewWindow<R>,
+    operation_id: &str,
+    event: Value,
+    state: &mut EveStreamState,
+) -> Result<bool, String> {
+    state.stream_index = state.stream_index.saturating_add(1);
+    match event
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+    {
+        "message.appended" => {
+            if let Some(delta) = event
+                .pointer("/data/messageDelta")
+                .or_else(|| event.pointer("/data/delta"))
+                .and_then(Value::as_str)
+                .filter(|delta| !delta.is_empty())
+            {
+                if state.assistant_text.len().saturating_add(delta.len()) > MAX_EVE_ASSISTANT_BYTES
+                {
+                    return Err("Eve assistant output exceeds the safe size limit".into());
+                }
+                state.assistant_text.push_str(delta);
+                state.emitted_text = true;
+                record_agent_event(
+                    app,
+                    operation_id,
+                    &mut state.events,
+                    AgentEvent::Text { text: delta.into() },
+                );
+            }
+        }
+        "message.completed" => {
+            let finish_reason = event.pointer("/data/finishReason").and_then(Value::as_str);
+            if finish_reason != Some("tool-calls") {
+                if let Some(message) = event.pointer("/data/message").and_then(Value::as_str) {
+                    if message.len() > MAX_EVE_ASSISTANT_BYTES {
+                        return Err("Eve assistant output exceeds the safe size limit".into());
+                    }
+                    state.assistant_text = message.to_string();
+                    if !state.emitted_text && !message.trim().is_empty() {
+                        record_agent_event(
+                            app,
+                            operation_id,
+                            &mut state.events,
+                            AgentEvent::Text {
+                                text: message.into(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        "reasoning.appended" => {
+            if let Some(delta) = event
+                .pointer("/data/reasoningDelta")
+                .or_else(|| event.pointer("/data/delta"))
+                .and_then(Value::as_str)
+                .filter(|delta| !delta.is_empty())
+            {
+                record_agent_event(
+                    app,
+                    operation_id,
+                    &mut state.events,
+                    AgentEvent::Reasoning {
+                        part: ReasoningPart { text: delta.into() },
+                    },
+                );
+            }
+        }
+        "actions.requested" => emit_agent_progress(
+            app,
+            operation_id,
+            "Eve requested sandbox or authored tool actions.".into(),
+        ),
+        "action.result" => emit_agent_progress(
+            app,
+            operation_id,
+            "An Eve action completed at a durable step boundary.".into(),
+        ),
+        "input.requested" => {
+            let message = "Eve is waiting for human input. Reply with the requested answer, or `approve` / `deny` for an approval.".to_string();
+            state.assistant_text = message.clone();
+            record_agent_event(
+                app,
+                operation_id,
+                &mut state.events,
+                AgentEvent::Text { text: message },
+            );
+            return Ok(true);
+        }
+        "authorization.required" => {
+            let url = event
+                .pointer("/data/authorization/url")
+                .and_then(Value::as_str)
+                .filter(|url| url.starts_with("https://"));
+            let message = match url {
+                Some(url) => format!("Eve paused for connection authorization: {url}"),
+                None => "Eve paused for connection authorization. Open the Eve client to complete sign-in.".into(),
+            };
+            state.assistant_text = message.clone();
+            record_agent_event(
+                app,
+                operation_id,
+                &mut state.events,
+                AgentEvent::Text { text: message },
+            );
+            return Ok(false);
+        }
+        "step.failed" | "turn.failed" | "session.failed" => {
+            state.failure = Some(
+                eve_error_message(&event)
+                    .unwrap_or_else(|| "Eve reported a failed durable turn".into()),
+            );
+            if event.get("type").and_then(Value::as_str) == Some("session.failed") {
+                return Ok(true);
+            }
+        }
+        "session.waiting" => {
+            state.continuation_token = event
+                .pointer("/data/continuationToken")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            return Ok(true);
+        }
+        "session.completed" => return Ok(true),
+        _ => {}
+    }
+    Ok(false)
+}
+
+async fn eve_json_response(
+    mut response: reqwest::Response,
+    label: &str,
+) -> Result<(reqwest::StatusCode, Value), String> {
+    let status = response.status();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("Cannot read {label}: {error}"))?
+    {
+        if bytes.len().saturating_add(chunk.len()) > MAX_EVE_CONTROL_RESPONSE_BYTES {
+            return Err(format!("{label} exceeds the safe response size limit"));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let value =
+        serde_json::from_slice(&bytes).map_err(|error| format!("Cannot parse {label}: {error}"))?;
+    Ok((status, value))
+}
+
+async fn run_eve_http_turn<R: tauri::Runtime>(
+    app: &WebviewWindow<R>,
+    client: &reqwest::Client,
+    base: &str,
+    prompt: &str,
+    previous: Option<EveSessionCursor>,
+    operation_id: &str,
+    active_session: &std::sync::Mutex<Option<String>>,
+) -> Result<EveTurnOutcome, String> {
+    let info_response = client
+        .get(format!("{base}/eve/v1/info"))
+        .send()
+        .await
+        .map_err(|error| format!("Cannot reach the local Eve runtime at {base}: {error}"))?;
+    let (info_status, info) = eve_json_response(info_response, "Eve runtime info").await?;
+    if !info_status.is_success() {
+        return Err(format!(
+            "Local Eve runtime rejected inspection with HTTP {}",
+            info_status
+        ));
+    }
+    let model = eve_info_model(&info);
+    let (post_url, body, start_index, fallback_session, fallback_token) = match previous {
+        Some(cursor) => (
+            format!("{base}/eve/v1/session/{}", cursor.session_id),
+            json!({
+                "continuationToken": cursor.continuation_token.clone(),
+                "message": prompt,
+            }),
+            cursor.stream_index,
+            Some(cursor.session_id),
+            Some(cursor.continuation_token),
+        ),
+        None => (
+            format!("{base}/eve/v1/session"),
+            json!({ "message": prompt }),
+            0,
+            None,
+            None,
+        ),
+    };
+    let response = client
+        .post(post_url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| format!("Eve session request failed: {error}"))?;
+    let (response_status, metadata) = eve_json_response(response, "Eve session response").await?;
+    if !response_status.is_success() {
+        return Err(format!(
+            "Eve session returned HTTP {response_status}: {metadata}"
+        ));
+    }
+    let session_id = metadata
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or(fallback_session)
+        .ok_or_else(|| "Eve did not return a sessionId".to_string())?;
+    if !safe_eve_session_id(&session_id) {
+        return Err("Eve returned an unsafe sessionId".into());
+    }
+    let initial_token = metadata
+        .get("continuationToken")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or(fallback_token)
+        .ok_or_else(|| "Eve did not return a continuationToken".to_string())?;
+    if initial_token.len() > 4_096 {
+        return Err("Eve returned an oversized continuationToken".into());
+    }
+    if let Ok(mut active) = active_session.lock() {
+        *active = Some(session_id.clone());
+    }
+    emit_agent_progress(
+        app,
+        operation_id,
+        format!("Connected to Eve durable session {session_id}."),
+    );
+    let mut response = client
+        .get(format!(
+            "{base}/eve/v1/session/{session_id}/stream?startIndex={start_index}"
+        ))
+        .send()
+        .await
+        .map_err(|error| format!("Cannot open Eve session stream: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Eve session stream returned HTTP {}",
+            response.status()
+        ));
+    }
+    let mut state = EveStreamState {
+        stream_index: start_index,
+        ..EveStreamState::default()
+    };
+    let mut buffer = Vec::<u8>::new();
+    let mut boundary = false;
+    let mut received_bytes = 0_usize;
+    let mut received_events = 0_usize;
+    while !boundary {
+        let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| format!("Eve session stream failed: {error}"))?
+        else {
+            break;
+        };
+        received_bytes = received_bytes.saturating_add(chunk.len());
+        if received_bytes > MAX_EVE_STREAM_BYTES {
+            return Err("Eve session stream exceeds the safe size limit".into());
+        }
+        buffer.extend_from_slice(&chunk);
+        if buffer.len() > MAX_EVE_CONTROL_RESPONSE_BYTES && !buffer.contains(&b'\n') {
+            return Err("Eve emitted an oversized NDJSON event".into());
+        }
+        while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
+            let line = buffer.drain(..=newline).collect::<Vec<_>>();
+            let line = String::from_utf8_lossy(&line);
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let event = serde_json::from_str::<Value>(line)
+                .map_err(|error| format!("Eve emitted invalid NDJSON: {error}"))?;
+            received_events = received_events.saturating_add(1);
+            if received_events > MAX_EVE_STREAM_EVENTS {
+                return Err("Eve session stream emitted too many events".into());
+            }
+            boundary = apply_eve_stream_event(app, operation_id, event, &mut state)?;
+            if boundary {
+                break;
+            }
+        }
+    }
+    if !boundary && !buffer.iter().all(u8::is_ascii_whitespace) {
+        let event = serde_json::from_slice::<Value>(&buffer)
+            .map_err(|error| format!("Eve ended with invalid NDJSON: {error}"))?;
+        boundary = apply_eve_stream_event(app, operation_id, event, &mut state)?;
+    }
+    if !boundary {
+        return Err("Eve session stream ended before a durable turn boundary".into());
+    }
+    let continuation_token = state.continuation_token.unwrap_or(initial_token);
+    Ok(EveTurnOutcome {
+        events: state.events,
+        assistant_text: state.assistant_text,
+        cursor: EveSessionCursor {
+            session_id,
+            continuation_token,
+            stream_index: state.stream_index,
+        },
+        model,
+        failure: state.failure,
+    })
+}
+
+async fn cancel_eve_turn(base: &str, session_id: Option<String>) {
+    let Some(session_id) = session_id.filter(|id| safe_eve_session_id(id)) else {
+        return;
+    };
+    if let Ok(client) = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(5))
+        .no_proxy()
+        .build()
+    {
+        let _ = client
+            .post(format!("{base}/eve/v1/session/{session_id}/cancel"))
+            .send()
+            .await;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_eve_agent<R: tauri::Runtime>(
+    app: &WebviewWindow<R>,
+    state: State<'_, BackendState>,
+    root: PathBuf,
+    prompt: &str,
+    mode: AgentRole,
+    timeout_ms: u64,
+    operation_id: &str,
+    previous_session: Option<&str>,
+) -> Result<AgentRunResult, String> {
+    let project = crate::backend::eve::inspect_eve_root(&root);
+    if !project.detected {
+        return Err("The Eve runtime requires an Eve project in the selected workspace".into());
+    }
+    let previous = decode_eve_cursor(previous_session)?;
+    let base = eve_server_url(&root);
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_millis(timeout_ms))
+        .no_proxy()
+        .build()
+        .map_err(|error| format!("Cannot create Eve HTTP client: {error}"))?;
+    crate::backend::register_agent_operation(&state, operation_id, "eve-agent", &root)?;
+    let start = Instant::now();
+    let active_session = std::sync::Mutex::new(None);
+    let bounded_prompt = format!(
+        "Whim desktop role: {}. Keep authority within the Eve project's authored tools, approvals, and sandbox.\n\n{}",
+        mode.as_str(),
+        prompt
+    );
+    let run = run_eve_http_turn(
+        app,
+        &client,
+        &base,
+        &bounded_prompt,
+        previous,
+        operation_id,
+        &active_session,
+    );
+    tokio::pin!(run);
+    let outcome = tokio::select! {
+        result = &mut run => Some(result),
+        _ = sleep(Duration::from_millis(timeout_ms)) => None,
+        _ = wait_for_operation_cancelled(&state, operation_id) => {
+            let session = active_session.lock().ok().and_then(|value| value.clone());
+            cancel_eve_turn(&base, session).await;
+            crate::backend::finish_operation(&state, operation_id);
+            let mut events = Vec::new();
+            record_agent_event(app, operation_id, &mut events, AgentEvent::Error {
+                error: AgentErrorDetail { code: Some("EVE_CANCELLED".into()), message: "Eve turn was cancelled".into() }
+            });
+            return Ok(AgentRunResult {
+                events,
+                malformed_event_lines: 0,
+                session_id: previous_session.map(str::to_string),
+                model_id: Some("eve/project-model".into()),
+                command: CommandResult {
+                    operation_id: operation_id.into(), command: "Eve durable session".into(), cwd: root.to_string_lossy().into_owned(), success: false, exit_code: None, stdout: String::new(), stderr: "Eve turn was cancelled".into(), stdout_truncated: false, stderr_truncated: false, timed_out: false, cancelled: true, duration_ms: start.elapsed().as_millis()
+                }
+            });
+        }
+    };
+    crate::backend::finish_operation(&state, operation_id);
+    let Some(outcome) = outcome else {
+        let session = active_session.lock().ok().and_then(|value| value.clone());
+        cancel_eve_turn(&base, session).await;
+        let mut events = Vec::new();
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Error {
+                error: AgentErrorDetail {
+                    code: Some("EVE_TIMEOUT".into()),
+                    message: format!("Eve turn timed out after {timeout_ms} ms"),
+                },
+            },
+        );
+        return Ok(AgentRunResult {
+            events,
+            malformed_event_lines: 0,
+            session_id: previous_session.map(str::to_string),
+            model_id: Some("eve/project-model".into()),
+            command: CommandResult {
+                operation_id: operation_id.into(),
+                command: "Eve durable session".into(),
+                cwd: root.to_string_lossy().into_owned(),
+                success: false,
+                exit_code: None,
+                stdout: String::new(),
+                stderr: format!("Eve turn timed out after {timeout_ms} ms"),
+                stdout_truncated: false,
+                stderr_truncated: false,
+                timed_out: true,
+                cancelled: false,
+                duration_ms: start.elapsed().as_millis(),
+            },
+        });
+    };
+    let outcome = outcome?;
+    let cursor = encode_eve_cursor(&outcome.cursor)?;
+    let success = outcome.failure.is_none() && !outcome.assistant_text.trim().is_empty();
+    let mut events = outcome.events;
+    if let Some(failure) = outcome.failure.as_ref() {
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Error {
+                error: AgentErrorDetail {
+                    code: Some("EVE_RUNTIME".into()),
+                    message: failure.clone(),
+                },
+            },
+        );
+    } else if outcome.assistant_text.trim().is_empty() {
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Error {
+                error: AgentErrorDetail {
+                    code: Some("EVE_EMPTY".into()),
+                    message: "Eve reached a durable boundary without assistant output".into(),
+                },
+            },
+        );
+    }
+    Ok(AgentRunResult {
+        events,
+        malformed_event_lines: 0,
+        session_id: Some(cursor),
+        model_id: outcome.model.or_else(|| Some("eve/project-model".into())),
+        command: CommandResult {
+            operation_id: operation_id.into(),
+            command: "Eve durable session".into(),
+            cwd: root.to_string_lossy().into_owned(),
+            success,
+            exit_code: None,
+            stdout: outcome.assistant_text,
+            stderr: outcome.failure.unwrap_or_default(),
+            stdout_truncated: false,
+            stderr_truncated: false,
+            timed_out: false,
+            cancelled: false,
+            duration_ms: start.elapsed().as_millis(),
+        },
+    })
+}
+
+/// Run a subscription-backed external harness without reading or copying its
+/// cached OAuth credentials. Whim still owns the workspace lease, role/profile
+/// intersection, sandbox choice, cancellation, timeout, and bounded output.
+#[allow(clippy::too_many_arguments)]
+async fn run_external_agent<R: tauri::Runtime>(
+    app: &WebviewWindow<R>,
+    state: State<'_, BackendState>,
+    root: PathBuf,
+    prompt: &str,
+    mode: AgentRole,
+    timeout_ms: u64,
+    operation_id: &str,
+    profile: &HarnessProfile,
+    profile_configured: bool,
+    settings: &AppSettings,
+    runtime: &str,
+) -> Result<AgentRunResult, String> {
+    if !matches!(runtime, "codex" | "claude" | "antigravity") {
+        return Err(format!("Unsupported external harness '{runtime}'"));
+    }
+    let launcher_name = if runtime == "antigravity" {
+        "agy"
+    } else {
+        runtime
+    };
+    let launcher = crate::backend::external_harness::find_launcher(launcher_name).ok_or_else(|| {
+        match runtime {
+            "codex" => "Codex runtime is selected but the `codex` command is not installed or not on PATH".to_string(),
+            "claude" => "Claude runtime is selected but Claude Code is not installed or not on PATH".to_string(),
+            _ => "Google Antigravity runtime is selected but the `agy` command is not installed or not on PATH".to_string(),
+        }
+    })?;
+    crate::backend::external_harness::ensure_subscription_auth(runtime, &launcher).await?;
+    crate::backend::register_agent_operation(&state, operation_id, runtime, &root)?;
+    let start = Instant::now();
+    let memory = project_memory_for_run(&root, settings);
+    let system = build_system_prompt(
+        &root.to_string_lossy(),
+        &memory,
+        mode.as_str(),
+        profile_configured.then_some(profile),
+        settings,
+    );
+    let external_boundary = if runtime == "antigravity" {
+        "External harness boundary: Whim owns permissions and the workspace lease. Work read-only. Do not edit files, run terminal commands, use web or MCP tools, spawn subagents, broaden authority, or request hidden credentials."
+    } else {
+        "External harness boundary: Whim owns permissions and the workspace lease. Do not broaden authority, request hidden credentials, or modify files outside the current root."
+    };
+    let combined_prompt =
+        format!("{system}\n\n{external_boundary}\n\n<user_request>\n{prompt}\n</user_request>");
+    // Codex exposes an enforceable workspace-write sandbox. Claude Code and
+    // Antigravity do not currently provide equivalent root confinement, so
+    // Whim keeps those adapters read-only.
+    let can_mutate = external_runtime_can_mutate(runtime, mode, profile, settings);
+    let mut command = crate::backend::external_harness::command_for_launcher(&launcher);
+    let mut staged_prompt_path = None;
+    if runtime == "codex" {
+        command.args([
+            "exec",
+            "--json",
+            "--color",
+            "never",
+            "--ephemeral",
+            "--skip-git-repo-check",
+            "--sandbox",
+            if can_mutate {
+                "workspace-write"
+            } else {
+                "read-only"
+            },
+            "--cd",
+        ]);
+        command.arg(&root);
+        if settings.agent.external_model != "default"
+            && !settings.agent.external_model.trim().is_empty()
+        {
+            command.args(["--model", settings.agent.external_model.trim()]);
+        }
+        command.arg("-");
+    } else if runtime == "claude" {
+        let tools = if can_mutate {
+            "Read,Grep,Glob,Edit,Write"
+        } else {
+            "Read,Grep,Glob"
+        };
+        command.args([
+            "-p",
+            "--bare",
+            "--output-format",
+            "json",
+            "--max-turns",
+            match settings.agent.speed.as_str() {
+                "fast" => "6",
+                "thorough" => "18",
+                _ => "12",
+            },
+            "--tools",
+            tools,
+            "--allowedTools",
+            tools,
+            "--disallowedTools",
+            if can_mutate {
+                "Bash,PowerShell,Agent,NotebookEdit,WebFetch,WebSearch"
+            } else {
+                "Bash,PowerShell,Agent,Edit,Write,NotebookEdit,WebFetch,WebSearch"
+            },
+            "--permission-mode",
+            if can_mutate { "dontAsk" } else { "plan" },
+            "--strict-mcp-config",
+        ]);
+        if settings.agent.external_model != "default"
+            && !settings.agent.external_model.trim().is_empty()
+        {
+            command.args(["--model", settings.agent.external_model.trim()]);
+        }
+    } else {
+        let (prompt_path, relative_prompt_path) =
+            match stage_antigravity_prompt(&root, &combined_prompt) {
+                Ok(staged) => staged,
+                Err(error) => {
+                    crate::backend::finish_operation(&state, operation_id);
+                    return Err(error);
+                }
+            };
+        staged_prompt_path = Some(prompt_path);
+        command.args([
+            "--mode",
+            "plan",
+            "--sandbox",
+            "--print-timeout",
+            &format!("{}s", timeout_ms.saturating_add(999) / 1_000),
+        ]);
+        if settings.agent.external_model != "default"
+            && !settings.agent.external_model.trim().is_empty()
+        {
+            command.args(["--model", settings.agent.external_model.trim()]);
+        }
+        command.args([
+            "-p",
+            &format!(
+                "Read `{relative_prompt_path}` from the current workspace and follow it exactly. Remain read-only: do not edit files, run commands, use web or MCP tools, or spawn subagents."
+            ),
+        ]);
+    }
+    // Subscription-backed harnesses own their cached sign-in. Removing API
+    // credentials prevents an ambient key from silently changing billing.
+    crate::backend::external_harness::scrub_provider_credentials(&mut command);
+    command
+        .current_dir(&root)
+        .stdin(if runtime == "antigravity" {
+            Stdio::null()
+        } else {
+            Stdio::piped()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            if let Some(path) = staged_prompt_path.as_ref() {
+                let _ = std::fs::remove_file(path);
+            }
+            crate::backend::finish_operation(&state, operation_id);
+            return Err(format!("Could not start {runtime}: {error}"));
+        }
+    };
+    if runtime != "antigravity" {
+        let Some(mut stdin) = child.stdin.take() else {
+            let _ = child.kill().await;
+            crate::backend::finish_operation(&state, operation_id);
+            return Err(format!("Could not open {runtime} input"));
+        };
+        use tokio::io::AsyncWriteExt;
+        if let Err(error) = stdin.write_all(combined_prompt.as_bytes()).await {
+            let _ = child.kill().await;
+            crate::backend::finish_operation(&state, operation_id);
+            return Err(format!("Could not write {runtime} input: {error}"));
+        }
+    }
+    let stdout_task = child
+        .stdout
+        .take()
+        .map(|stream| tokio::spawn(read_limited_stream(stream)));
+    let stderr_task = child
+        .stderr
+        .take()
+        .map(|stream| tokio::spawn(read_limited_stream(stream)));
+    emit_agent_progress(
+        app,
+        operation_id,
+        format!(
+            "{} started with {} workspace access and its own subscription session.",
+            match runtime {
+                "codex" => "Codex",
+                "claude" => "Claude Code",
+                _ => "Google Antigravity",
+            },
+            if can_mutate {
+                "bounded write"
+            } else {
+                "read-only"
+            }
+        ),
+    );
+    let (exit_code, timed_out, cancelled, wait_error) = tokio::select! {
+        result = child.wait() => match result {
+            Ok(status) => (status.code(), false, false, None),
+            Err(error) => (None, false, false, Some(format!("{runtime} failed while waiting: {error}"))),
+        },
+        _ = sleep(Duration::from_millis(timeout_ms)) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            (None, true, false, None)
+        },
+        _ = wait_for_operation_cancelled(&state, operation_id) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            (None, false, true, None)
+        }
+    };
+    let (stdout, stdout_truncated) = match stdout_task {
+        Some(task) => task.await.unwrap_or_else(|_| (String::new(), false)),
+        None => (String::new(), false),
+    };
+    let (stderr, stderr_truncated) = match stderr_task {
+        Some(task) => task.await.unwrap_or_else(|_| (String::new(), false)),
+        None => (String::new(), false),
+    };
+    if let Some(path) = staged_prompt_path.as_ref() {
+        let _ = std::fs::remove_file(path);
+    }
+    crate::backend::finish_operation(&state, operation_id);
+    let assistant_text = match runtime {
+        "codex" => codex_output_text(&stdout),
+        "claude" => claude_output_text(&stdout),
+        _ => plain_output_text(&stdout),
+    };
+    let success = exit_code == Some(0)
+        && !timed_out
+        && !cancelled
+        && assistant_text
+            .as_ref()
+            .is_some_and(|text| !text.trim().is_empty());
+    let mut events = Vec::new();
+    if let Some(text) = assistant_text.as_ref().filter(|_| success) {
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Text { text: text.clone() },
+        );
+    } else {
+        let message = if cancelled {
+            format!("{runtime} was cancelled")
+        } else if timed_out {
+            format!("{runtime} timed out after {timeout_ms} ms")
+        } else if let Some(error) = wait_error {
+            error
+        } else {
+            bounded_external_error(&stderr, &stdout, runtime)
+        };
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Error {
+                error: AgentErrorDetail {
+                    code: Some(format!("{}_RUNTIME", runtime.to_ascii_uppercase())),
+                    message,
+                },
+            },
+        );
+    }
+    Ok(AgentRunResult {
+        events,
+        malformed_event_lines: 0,
+        session_id: None,
+        model_id: Some(if settings.agent.external_model == "default" {
+            format!("{runtime}/subscription-default")
+        } else {
+            format!("{runtime}/{}", settings.agent.external_model)
+        }),
+        command: CommandResult {
+            operation_id: operation_id.to_string(),
+            command: format!(
+                "{runtime} subscription harness ({})",
+                if can_mutate {
+                    "workspace-write"
+                } else {
+                    "read-only"
+                }
+            ),
+            cwd: root.to_string_lossy().into_owned(),
+            success,
+            exit_code,
+            stdout: assistant_text.unwrap_or_default(),
             stderr,
             stdout_truncated,
             stderr_truncated,
@@ -3794,13 +4862,10 @@ pub async fn fetch_provider_models(
                 .filter(|base| !base.trim().is_empty())
                 .unwrap_or("https://generativelanguage.googleapis.com");
             let base = validate_provider_base(provider_enum, base)?;
-            let url = format!(
-                "{}/v1beta/models?key={}",
-                base.trim_end_matches('/'),
-                api_key
-            );
+            let url = format!("{}/v1beta/models", base.trim_end_matches('/'));
             let response = client
                 .get(&url)
+                .header("x-goog-api-key", api_key)
                 .send()
                 .await
                 .map_err(|error| format!("Google models request failed: {error}"))?;
@@ -3828,6 +4893,7 @@ pub async fn fetch_provider_models(
             Ok(dedupe_model_ids(ids))
         }
         Provider::OpenAi
+        | Provider::OpenCode
         | Provider::Local
         | Provider::DeepSeek
         | Provider::Xiaomi
@@ -3943,6 +5009,54 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let settings = crate::backend::lock(&state.settings, "settings")
         .map_err(|error| format!("WHIM:AGENT_START|{error}"))?
         .clone();
+    if settings.agent.runtime == "eve" {
+        if !external_harness_enabled(&settings) {
+            return Err(
+                "WHIM:AGENT_START|External agent runtimes are disabled by the capability setting"
+                    .to_string(),
+            );
+        }
+        return run_eve_agent(
+            &window,
+            state,
+            root,
+            &request.prompt,
+            mode,
+            timeout_ms,
+            &request.operation_id,
+            request.session_id.as_deref(),
+        )
+        .await
+        .map_err(|error| format!("WHIM:AGENT_RUN|{error}"));
+    }
+    if matches!(
+        settings.agent.runtime.as_str(),
+        "codex" | "claude" | "antigravity"
+    ) {
+        if !external_harness_enabled(&settings) {
+            return Err(
+                "WHIM:AGENT_START|External harnesses are disabled by the capability setting"
+                    .to_string(),
+            );
+        }
+        let runtime = settings.agent.runtime.clone();
+        let result = run_external_agent(
+            &window,
+            state,
+            root,
+            &request.prompt,
+            mode,
+            timeout_ms,
+            &request.operation_id,
+            &profile,
+            profile_configured,
+            &settings,
+            &runtime,
+        )
+        .await
+        .map_err(|error| format!("WHIM:AGENT_RUN|{error}"))?;
+        return Ok(result);
+    }
     if settings.agent.runtime == "pi" {
         if !pi_delegation_enabled(&settings, mode) {
             return Err(
@@ -3992,7 +5106,7 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
             Some((resolved, base)) => (parse_provider(&resolved).unwrap_or(Provider::Local), base),
             None => {
                 return Err(
-                    "WHIM:AGENT_START|No provider available. Run Ollama or LM Studio locally, or set a cloud API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, DEEPSEEK_API_KEY, DASHSCOPE_API_KEY, XIAOMI_API_KEY) in your environment."
+                    "WHIM:AGENT_START|No provider available. Run Ollama or LM Studio locally, connect OpenCode Zen, or set a supported cloud API key. Whim also reuses bounded API-key records from OpenCode's local auth store."
                         .to_string(),
                 )
             }
@@ -4041,7 +5155,7 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     // would burn three provider retries on a 401 before surfacing anything.
     if provider_requires_key(provider) && resolve_key(provider, &api_key).is_none() {
         return Err(format!(
-            "WHIM:AGENT_START|API key required for {}. Open Providers, select it, and paste your key (or set the {} env var).",
+            "WHIM:AGENT_START|API key required for {}. Open Providers, paste a key, set the {} env var, or connect an API key through OpenCode's local auth store.",
             provider_label(provider),
             provider_env_var(provider).unwrap_or("API key")
         ));
@@ -4099,10 +5213,7 @@ mod tests {
         assert!(parse_provider("compatible").is_ok());
         assert_eq!(parse_provider("omniroute").unwrap(), Provider::OmniRoute);
         assert!(parse_provider("XIAOMI").is_ok());
-        assert!(
-            parse_provider("opencode").is_err(),
-            "opencode is not a valid Whim provider — Whim uses its own native agent"
-        );
+        assert_eq!(parse_provider("opencode").unwrap(), Provider::OpenCode);
         assert!(parse_provider("nonsense").is_err());
     }
 
@@ -4147,6 +5258,9 @@ mod tests {
     fn provider_base_url_rejects_query_fragment_cleartext_and_credentials() {
         // Valid HTTPS cloud endpoint is accepted.
         assert!(validate_provider_base(Provider::OpenAi, "https://api.openai.com/v1").is_ok());
+        assert!(validate_provider_base(Provider::OpenCode, "https://opencode.ai/zen/v1").is_ok());
+        assert!(validate_provider_base(Provider::OpenCode, "https://example.com/zen/v1").is_err());
+        assert!(validate_provider_base(Provider::OpenCode, "http://opencode.ai/zen/v1").is_err());
         // Cleartext HTTP to a non-loopback host is rejected.
         assert!(validate_provider_base(Provider::OpenAi, "http://api.openai.com/v1").is_err());
         // Query strings and fragments are rejected (could smuggle tokens/params).
@@ -4201,6 +5315,91 @@ mod tests {
         assert!(!pi_environment_name_is_sensitive(std::ffi::OsStr::new(
             "PATH"
         )));
+    }
+
+    #[test]
+    fn external_harness_output_parsers_return_only_assistant_text() {
+        let codex = r#"{"type":"thread.started","thread_id":"abc"}
+{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"Codex result"}}"#;
+        assert_eq!(codex_output_text(codex), Some("Codex result".into()));
+        let claude =
+            r#"{"type":"result","subtype":"success","result":"Claude result","session_id":"abc"}"#;
+        assert_eq!(claude_output_text(claude), Some("Claude result".into()));
+        assert_eq!(
+            plain_output_text("\nAntigravity result\n"),
+            Some("Antigravity result".into())
+        );
+    }
+
+    #[test]
+    fn eve_cursor_and_loopback_endpoint_validation_fail_closed() {
+        let cursor = EveSessionCursor {
+            session_id: "wrun_01ARYZ6S41TSV4RRFFQ69G5FAV".into(),
+            continuation_token: "eve:resume-token".into(),
+            stream_index: 17,
+        };
+        let encoded = encode_eve_cursor(&cursor).unwrap();
+        assert_eq!(decode_eve_cursor(Some(&encoded)).unwrap(), Some(cursor));
+        assert!(decode_eve_cursor(Some(r#"{"sessionId":"../escape"}"#)).is_err());
+        assert_eq!(
+            valid_eve_loopback_url("http://127.0.0.1:2000"),
+            Some("http://127.0.0.1:2000".into())
+        );
+        assert!(valid_eve_loopback_url("https://agent.example.com").is_none());
+        assert!(valid_eve_loopback_url("http://user:pass@localhost:2000").is_none());
+        let state = json!({ "apps": { "workspace": { "serverUrl": "http://localhost:2400/" } } });
+        assert_eq!(
+            find_eve_server_url(&state).as_deref(),
+            Some("http://localhost:2400")
+        );
+        assert_eq!(
+            eve_info_model(&json!({ "agent": { "model": { "id": "openai/gpt-5-mini" } } }))
+                .as_deref(),
+            Some("openai/gpt-5-mini")
+        );
+    }
+
+    #[test]
+    fn external_harness_mutation_fails_closed_for_narrow_profiles() {
+        let settings = AppSettings::default();
+        let unrestricted = HarnessProfile::default();
+        assert!(external_harness_can_mutate(
+            AgentRole::Implementer,
+            &unrestricted,
+            &settings
+        ));
+        let narrowed = HarnessProfile::parse(
+            r#"{"allowedTools":["read_file","edit_file","write_file"],"allowedWritePaths":["src"]}"#,
+        )
+        .unwrap();
+        assert!(!external_harness_can_mutate(
+            AgentRole::Implementer,
+            &narrowed,
+            &settings
+        ));
+        assert!(!external_harness_can_mutate(
+            AgentRole::Planner,
+            &unrestricted,
+            &settings
+        ));
+        assert!(external_runtime_can_mutate(
+            "codex",
+            AgentRole::Implementer,
+            &unrestricted,
+            &settings
+        ));
+        assert!(!external_runtime_can_mutate(
+            "claude",
+            AgentRole::Implementer,
+            &unrestricted,
+            &settings
+        ));
+        assert!(!external_runtime_can_mutate(
+            "antigravity",
+            AgentRole::Implementer,
+            &unrestricted,
+            &settings
+        ));
     }
 
     #[test]
@@ -4811,6 +6010,10 @@ mod tests {
     #[test]
     fn provider_credentials_support_aliases_without_exposing_environment_values() {
         assert_eq!(
+            provider_environment_variables("opencode"),
+            &["OPENCODE_API_KEY"]
+        );
+        assert_eq!(
             provider_environment_variables("google"),
             &[
                 "GOOGLE_API_KEY",
@@ -4829,6 +6032,35 @@ mod tests {
             |_| Some("environment-key".to_string()),
         );
         assert_eq!(explicit.as_deref(), Some("session-key"));
+    }
+
+    #[test]
+    fn opencode_auth_store_accepts_only_bounded_api_key_records() {
+        let records = json!({
+            "google": { "type": "api", "key": "  google-native-key  " },
+            "opencode": { "type": "api", "key": "zen-native-key" },
+            "anthropic": { "type": "oauth", "access": "must-not-be-reused" }
+        });
+        assert_eq!(
+            parse_stored_opencode_api_key(&records, Provider::Google).as_deref(),
+            Some("google-native-key")
+        );
+        assert_eq!(
+            parse_stored_opencode_api_key(&records, Provider::OpenCode).as_deref(),
+            Some("zen-native-key")
+        );
+        assert_eq!(
+            parse_stored_opencode_api_key(&records, Provider::Anthropic),
+            None
+        );
+
+        let oversized = json!({
+            "opencode": { "type": "api", "key": "x".repeat(MAX_STORED_API_KEY_BYTES + 1) }
+        });
+        assert_eq!(
+            parse_stored_opencode_api_key(&oversized, Provider::OpenCode),
+            None
+        );
     }
 
     /// Verifies that run_native_agent's success/error derivation from events

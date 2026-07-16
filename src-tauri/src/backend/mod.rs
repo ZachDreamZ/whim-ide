@@ -12,7 +12,10 @@ pub mod chat;
 pub mod computer;
 pub mod context;
 pub mod deployment;
+pub mod eve;
 pub mod execution;
+pub mod external_harness;
+pub mod media;
 pub mod orchestration;
 pub mod plugins;
 pub mod productivity;
@@ -21,6 +24,7 @@ pub mod reflector;
 pub mod settings;
 pub mod voice;
 pub mod whim_route;
+pub mod workflows;
 pub mod workspace;
 
 #[cfg(test)]
@@ -167,8 +171,9 @@ pub(crate) fn finish_operation(state: &BackendState, operation_id: &str) {
 
 /// Detect the best available provider with zero configuration. Local models
 /// win when explicitly pointed at; otherwise the first cloud provider whose
-/// API key is present in the environment is chosen; as a final fallback we
-/// assume a local Ollama instance so a run can still be attempted.
+/// API key is available to Whim is chosen. Availability includes supported
+/// environment aliases and bounded API-key records in OpenCode's local auth
+/// store. As a final fallback we assume local Ollama so a run can be attempted.
 pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
     let omniroute = "127.0.0.1:20128"
         .parse()
@@ -216,18 +221,17 @@ pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
             return Some(("local".to_string(), Some(base.to_string())));
         }
     }
-    for (provider, env_var) in [
-        ("openai", "OPENAI_API_KEY"),
-        ("anthropic", "ANTHROPIC_API_KEY"),
-        ("google", "GOOGLE_API_KEY"),
-        ("deepseek", "DEEPSEEK_API_KEY"),
-        ("qwen", "DASHSCOPE_API_KEY"),
-        ("xiaomi", "XIAOMI_API_KEY"),
+    for provider in [
+        "opencode",
+        "openai",
+        "anthropic",
+        "google",
+        "deepseek",
+        "qwen",
+        "xiaomi",
     ] {
-        if let Ok(value) = std::env::var(env_var) {
-            if !value.trim().is_empty() {
-                return Some((provider.to_string(), None));
-            }
+        if crate::agent::provider_key_available(provider) {
+            return Some((provider.to_string(), None));
         }
     }
     Some((

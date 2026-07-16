@@ -1176,6 +1176,8 @@ fn preview_script_for_root(root: &Path, port: u16) -> Result<String, String> {
         format!(" -- --host 127.0.0.1 --port {port}")
     } else if lower.contains("next") {
         format!(" -- --hostname 127.0.0.1 --port {port}")
+    } else if lower.contains("eve dev") {
+        format!(" -- --no-ui --host 127.0.0.1 --port {port}")
     } else {
         String::new()
     };
@@ -1202,15 +1204,19 @@ mod preview_tests {
     fn preview_command_uses_project_runner_and_framework_port_flags() {
         let vite = fixture(r#"{"scripts":{"dev":"vite"}}"#, Some("pnpm-lock.yaml"));
         let next = fixture(r#"{"scripts":{"dev":"next dev"}}"#, None);
+        let eve = fixture(r#"{"scripts":{"dev":"eve dev"}}"#, None);
 
         let vite_script = preview_script_for_root(&vite, 3210).expect("vite preview command");
         let next_script = preview_script_for_root(&next, 4321).expect("next preview command");
+        let eve_script = preview_script_for_root(&eve, 2000).expect("eve preview command");
 
         assert!(vite_script.contains("pnpm run dev -- --host 127.0.0.1 --port 3210"));
         assert!(next_script.contains("npm run dev -- --hostname 127.0.0.1 --port 4321"));
+        assert!(eve_script.contains("npm run dev -- --no-ui --host 127.0.0.1 --port 2000"));
 
         std::fs::remove_dir_all(vite).expect("remove vite fixture");
         std::fs::remove_dir_all(next).expect("remove next fixture");
+        std::fs::remove_dir_all(eve).expect("remove eve fixture");
     }
 
     #[test]
@@ -1711,6 +1717,7 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         capabilities: capabilities("omniroute"),
     });
     let cloud: &[(&str, &str)] = &[
+        ("opencode", "OpenCode Zen"),
         ("openai", "OpenAI"),
         ("anthropic", "Anthropic"),
         ("google", "Google Gemini"),
@@ -1719,9 +1726,7 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         ("xiaomi", "Xiaomi"),
     ];
     for (provider, label) in cloud {
-        let has = crate::agent::provider_environment_variables(provider)
-            .iter()
-            .any(|name| std::env::var(name).is_ok_and(|value| !value.trim().is_empty()));
+        let has = crate::agent::provider_key_available(provider);
         out.push(ProviderStatus {
             provider: provider.to_string(),
             label: label.to_string(),

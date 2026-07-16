@@ -34,7 +34,8 @@ export function inspectProject(entries: readonly WorkspaceEntry[], packageJson?:
       const pkg = JSON.parse(packageJson) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
       scripts = pkg.scripts ?? {};
       const dependencies = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-      if (dependencies.next) framework = "Next.js";
+      if (dependencies.eve) framework = "Vercel Eve";
+      else if (dependencies.next) framework = "Next.js";
       else if (dependencies.vite || dependencies["@vitejs/plugin-react"]) framework = "Vite";
       else if (dependencies["@sveltejs/kit"]) framework = "SvelteKit";
       else if (dependencies.nuxt) framework = "Nuxt";

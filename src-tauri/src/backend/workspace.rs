@@ -229,7 +229,7 @@ pub(crate) fn resolve_existing(
     Ok(canonical)
 }
 
-fn ensure_directory_chain(
+pub(crate) fn ensure_directory_chain(
     root: &Path,
     relative: &Path,
     create_missing: bool,

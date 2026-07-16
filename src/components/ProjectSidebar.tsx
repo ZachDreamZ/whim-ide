@@ -18,6 +18,8 @@ import {
   Sparkles,
   Blocks,
   CalendarClock,
+  Clapperboard,
+  Orbit,
   Settings2,
 } from "lucide-react";
 import type { ViewId } from "./WorkspaceRail";
@@ -222,6 +224,9 @@ export function ProjectSidebar({
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "plugins" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("plugins")}>
             <Blocks size={16} /> Plugins
           </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "eve" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("eve")}>
+            <Orbit size={16} /> Eve Agents
+          </button>
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "sites" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("sites")}>
             <Globe2 size={16} /> Sites
           </button>
@@ -230,6 +235,9 @@ export function ProjectSidebar({
           </button>
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "chat" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("chat")}>
             <MessageSquareText size={16} /> Chat
+          </button>
+          <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "creative" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("creative")}>
+            <Clapperboard size={16} /> Creative Studio
           </button>
           <div className="h-px bg-white/5 my-1" />
           <button className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === "orchestrate" ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`} onClick={() => onViewChange("orchestrate")}><CircleDot size={16} /> Tasks</button>

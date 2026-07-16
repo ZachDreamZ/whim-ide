@@ -79,6 +79,14 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
         enabled: true,
     },
     AgentCapabilitySpec {
+        id: "external-harnesses",
+        description: "Run Codex or Claude Code through their own subscription-backed sessions.",
+        instructions: "Never read or copy external harness tokens. Intersect every run with Whim role, profile, sandbox, cancellation, and timeout limits.",
+        tools: &[],
+        defer_loading: true,
+        enabled: true,
+    },
+    AgentCapabilitySpec {
         id: "computer-use",
         description: "Inspect and invoke visible Windows controls through native UI Automation.",
         instructions: "Operate only visible user-selected applications, prefer accessibility roles and automation IDs, and verify every action from a fresh bounded inspection.",
