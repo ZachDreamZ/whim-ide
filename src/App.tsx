@@ -26,6 +26,7 @@ const PullRequestsHub = lazy(() => import("./components/PullRequestsHub").then(m
 const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then(m => ({ default: m.NativeBrowserHub })));
 const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
 const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
+import { AppShell } from "./components/AppShell";
 import { CommandPalette } from "./components/CommandPalette";
 import { SearchPanel } from "./components/SearchPanel";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
@@ -418,26 +419,22 @@ function App() {
       )}
       <Titlebar projectName={projectName} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProjectClick={openWorkspace} />
       <div className="app-body">
-        {view !== "autopilot" && view !== "settings" ? (
-          <div className="build-workspace">
-            <ProjectSidebar
-              activeView={view}
-              onViewChange={setView}
-              workspace={workspacePath ?? "No workspace open"}
-              loading={treeLoading}
-              branch={branch}
-              onOpenWorkspace={openWorkspace}
-              onRefresh={() => void refreshWorkspace()}
-              onTaskSelect={(job) => void openSidebarTask(job)}
-              onChatSelect={openSidebarChat}
-            />
-            <div className="workbench">
-              <div className="workbench-main agent-first">
-                <AnimatePresence mode="wait">
-                <Suspense fallback={<LoadingFallback />}>
-                {view === "build" ? (
-                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
-                  <MissionControl
+        {view === "build" ? (
+          <AppShell
+            sidebarProps={{
+              activeView: view,
+              onViewChange: setView,
+              workspace: workspacePath ?? "No workspace open",
+              loading: treeLoading,
+              branch: branch,
+              onOpenWorkspace: openWorkspace,
+              onRefresh: () => void refreshWorkspace(),
+              onTaskSelect: (job) => void openSidebarTask(job),
+              onChatSelect: openSidebarChat,
+            }}
+          >
+            <Suspense fallback={<LoadingFallback />}>
+              <MissionControl
                     workspace={workspacePath}
                     workspaceEntries={entries}
                     model={runModel}
@@ -457,8 +454,41 @@ function App() {
                     onRunComplete={() => { void refreshWorkspace(); window.dispatchEvent(new Event("whim:history-changed")); }}
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                   />
-                  </motion.div>
-                ) : view === "chat" ? (
+            </Suspense>
+            {readOnlyFile && (
+              <section className="read-only-file" aria-label="File viewer">
+                <header className="read-only-file-header">
+                  <span>{currentFileName}</span>
+                  <button type="button" onClick={closeReadOnlyFile} aria-label="Close file">Close</button>
+                </header>
+                {fileLoading ? (
+                  <p className="palette-empty">Reading…</p>
+                ) : fileError ? (
+                  <p className="file-error">{fileError}</p>
+                ) : (
+                  <pre className="read-only-file-content">{readOnlyFile.content}</pre>
+                )}
+              </section>
+            )}
+          </AppShell>
+        ) : view !== "autopilot" && view !== "settings" ? (
+          <div className="build-workspace">
+            <ProjectSidebar
+              activeView={view}
+              onViewChange={setView}
+              workspace={workspacePath ?? "No workspace open"}
+              loading={treeLoading}
+              branch={branch}
+              onOpenWorkspace={openWorkspace}
+              onRefresh={() => void refreshWorkspace()}
+              onTaskSelect={(job) => void openSidebarTask(job)}
+              onChatSelect={openSidebarChat}
+            />
+            <div className="workbench">
+              <div className="workbench-main agent-first">
+                <AnimatePresence mode="wait">
+                <Suspense fallback={<LoadingFallback />}>
+                {view === "chat" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <ChatHub
                     workspace={workspacePath}
@@ -530,21 +560,6 @@ function App() {
                 ) : null}
                 </Suspense>
                 </AnimatePresence>
-                {view === "build" && readOnlyFile && (
-                  <section className="read-only-file" aria-label="File viewer">
-                    <header className="read-only-file-header">
-                      <span>{currentFileName}</span>
-                      <button type="button" onClick={closeReadOnlyFile} aria-label="Close file">Close</button>
-                    </header>
-                    {fileLoading ? (
-                      <p className="palette-empty">Reading…</p>
-                    ) : fileError ? (
-                      <p className="file-error">{fileError}</p>
-                    ) : (
-                      <pre className="read-only-file-content">{readOnlyFile.content}</pre>
-                    )}
-                  </section>
-                )}
               </div>
             </div>
           </div>
