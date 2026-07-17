@@ -17,25 +17,34 @@ export function GeneralSettings({ settings, onChange, saving }: Props) {
     setUpdateStatus("checking");
     setUpdateError(null);
     try {
-      const { checkUpdate } = await import("@tauri-apps/plugin-updater");
-      const result = await checkUpdate();
-      if (result?.shouldUpdate && result?.manifest?.version) {
-        setUpdateVersion(result.manifest.version);
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        setUpdateVersion(update.version);
         setUpdateStatus("available");
       } else {
         setUpdateStatus("uptodate");
       }
     } catch (err) {
-      setUpdateStatus("error");
-      setUpdateError(err instanceof Error ? err.message : "Update check failed");
+      const msg = err instanceof Error ? err.message : "";
+      // 404 from the update endpoint just means no release published yet
+      if (msg.includes("404") || msg.includes("not found") || msg.includes("timeout")) {
+        setUpdateStatus("uptodate");
+      } else {
+        setUpdateStatus("error");
+        setUpdateError(msg || "Update check failed");
+      }
     }
   }, []);
 
   const doInstall = useCallback(async () => {
     setInstalling(true);
     try {
-      const { installUpdate } = await import("@tauri-apps/plugin-updater");
-      await installUpdate();
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        await update.downloadAndInstall();
+      }
     } catch {
       setInstalling(false);
     }
