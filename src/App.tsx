@@ -27,6 +27,7 @@ const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then
 const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
 const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
 import { CommandPalette } from "./components/CommandPalette";
+import { SearchPanel } from "./components/SearchPanel";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
 import { AppearanceSettings } from "./components/settings/pages/AppearanceSettings";
@@ -54,7 +55,7 @@ const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] }
 const defaultCredentials: CredentialReport = { environmentNames: [], envFiles: [] };
 const defaultProfile: ProjectProfile = { framework: null, packageManager: null, checkCommand: null, devCommand: null };
 
-type ReadOnlyFile = { path: string; content: string };
+type ReadOnlyFile = { path: string; content: string; scrollToLine?: number | null };
 
 function App() {
   const [view, setView] = useState<ViewId>("build");
@@ -84,6 +85,7 @@ function App() {
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
   const [, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const booted = useRef(false);
   const fileRequest = useRef(0);
@@ -180,7 +182,7 @@ function App() {
     if (credentialsResult.status === "fulfilled") setCredentials(credentialsResult.value);
   }, []);
 
-  const loadReadOnlyFile = useCallback(async (root: string, path: string) => {
+  const loadReadOnlyFile = useCallback(async (root: string, path: string, line?: number) => {
     const request = ++fileRequest.current;
     setActiveFile(path);
     setReadOnlyFile(null);
@@ -198,7 +200,7 @@ function App() {
       const content = await bridge.readFile(root, path);
       clearTimeout(safetyTimer);
       if (request !== fileRequest.current) return;
-      setReadOnlyFile({ path, content });
+      setReadOnlyFile({ path, content, scrollToLine: line ?? null });
       localStorage.setItem(`whim:last-file:${root}`, path);
     } catch (error) {
       clearTimeout(safetyTimer);
@@ -277,6 +279,10 @@ function App() {
         setView("build");
         requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-files")));
       }
+      if (event.shiftKey && key === "f") {
+        event.preventDefault();
+        setSearchOpen((value) => !value);
+      }
       if (key === "n") {
         event.preventDefault();
         setView("build");
@@ -340,10 +346,14 @@ function App() {
     } catch { /* errors are already displayed in the file surface */ }
   }, [loadTreeAndProfile, loadGitState, workspacePath]);
 
-  const chooseFile = useCallback(async (path: string) => {
+  const chooseFile = useCallback(async (path: string, line?: number) => {
     if (!workspacePath) return;
     setFileError(null);
-    await loadReadOnlyFile(workspacePath, path);
+    if (line) {
+      await loadReadOnlyFile(workspacePath, path, line);
+    } else {
+      await loadReadOnlyFile(workspacePath, path);
+    }
   }, [loadReadOnlyFile, workspacePath]);
 
   const closeReadOnlyFile = useCallback(() => {
@@ -557,6 +567,7 @@ function App() {
         </div>
       </footer>}
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
+      {workspacePath && <SearchPanel workspace={workspacePath} open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={chooseFile} />}
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}
     </div>
   );

@@ -33,6 +33,7 @@ pub mod whim_route;
 pub mod workflows;
 pub mod workspace;
 pub mod fs_watcher;
+pub mod search;
 
 #[cfg(test)]
 mod tests;

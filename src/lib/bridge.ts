@@ -447,6 +447,15 @@ export type ProviderStatus = {
   catalogAvailable: boolean;
 };
 
+export type SearchResult = {
+  path: string;
+  line: number;
+  column: number;
+  lineText: string;
+  contextBefore: string[];
+  contextAfter: string[];
+};
+
 export type DiscoveredProvider = {
   provider: string;
   label: string;
@@ -1066,6 +1075,15 @@ export const bridge = {
   async stopCodebaseWatcher(): Promise<void> {
     if (!inTauri()) return;
     return call<void>("stop_codebase_watcher", {});
+  },
+
+  async searchWorkspace(
+    path: string,
+    query: string,
+    options?: { useRegex?: boolean; caseSensitive?: boolean; contextLines?: number; maxResults?: number; includeGlob?: string; excludeGlob?: string }
+  ): Promise<SearchResult[]> {
+    if (!inTauri()) return [];
+    return call<SearchResult[]>("search_workspace", { path, query, options: options ?? {} });
   },
 
   async deployPreflight(workspace: string, target: string): Promise<NativeResult> {

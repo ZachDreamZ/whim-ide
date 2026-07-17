@@ -44,6 +44,7 @@ pub fn run() {
             backend::codebase_index::get_codebase_index_structured,
             backend::fs_watcher::start_codebase_watcher,
             backend::fs_watcher::stop_codebase_watcher,
+            backend::search::search_workspace,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,
