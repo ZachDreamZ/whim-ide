@@ -51,18 +51,6 @@ const STATUS_LABEL: Record<OrchestrationJobStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_TONE: Record<OrchestrationJobStatus, string> = {
-  queued: "neutral",
-  running: "active",
-  paused: "neutral",
-  interrupted: "warn",
-  completed: "good",
-  failed: "bad",
-  cancelled: "neutral",
-};
-
-// Map a job's current status to the controls that are legally available.
-// Dispatch is separate (a queued job has not started running yet).
 function availableActions(status: OrchestrationJobStatus): CardAction[] {
   switch (status) {
     case "queued":
@@ -110,7 +98,6 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
       const nextJobs = await bridge.listProjectOrchestrationJobs();
       setJobs(nextJobs);
     } catch (error) {
-      // Non-fatal: keep the last known list if a background poll fails.
       const message = error instanceof Error ? error.message : "Could not load tasks.";
       showToast(message);
     }
@@ -194,8 +181,6 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
       showToast(error instanceof Error ? error.message : "Could not schedule a retry.");
     }
   };
-
-  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
 
   return (
     <main className="hub-page orchestrate-page">
@@ -321,90 +306,76 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
           ) : (
             <ul className="orchestrate-list">
               {jobs.map((job) => {
-                const tone = STATUS_TONE[job.status];
                 const actions = availableActions(job.status);
                 const isSelected = job.id === selectedJobId;
                 return (
                   <li
                     key={job.id}
-                    className={`orchestrate-card ${isSelected ? "selected" : ""}`}
+                    className={`orchestrate-item ${isSelected ? "selected" : ""}`}
                     onClick={() => setSelectedJobId(job.id)}
                   >
-                    <div className="orchestrate-card-head">
+                    <span className={`task-status ${job.status}`}>{STATUS_LABEL[job.status]}</span>
+                    <div className="orchestrate-item-head">
                       <strong>{job.title}</strong>
-                      <span className={`status-pill ${tone}`}>{STATUS_LABEL[job.status]}</span>
-                    </div>
-                    <div className="orchestrate-card-meta">
-                      <span>
-                        <ShieldCheck size={11} /> {job.risk} risk
-                      </span>
-                      <span>
-                        <BarChart3 size={11} /> {evidenceSummary(job)}
-                      </span>
-                      <span className="mode-tag">{displayWorkflowMode(job.mode)}</span>
+                      <div className="orchestrate-item-meta">
+                        <span>{displayWorkflowMode(job.mode)}</span>
+                        <span><ShieldCheck size={10} /> {job.risk} risk</span>
+                        <span><BarChart3 size={10} /> {evidenceSummary(job)}</span>
+                      </div>
                     </div>
                     {isSelected && (
                       <div
-                        className="orchestrate-card-actions"
+                        className="orchestrate-item-actions"
                         onClick={(event) => event.stopPropagation()}
                       >
                         {job.status === "queued" && (
                           <button
-                            className="primary-action"
                             type="button"
+                            title="Dispatch"
                             onClick={() => void dispatchJob(job.id)}
                             disabled={dispatching || !native}
                           >
-                            {dispatching ? (
-                              <LoaderCircle className="spin" size={13} />
-                            ) : (
-                              <Rocket size={13} />
-                            )}{" "}
-                            Dispatch
+                            {dispatching ? <LoaderCircle className="spin" size={12} /> : <Rocket size={12} />}
                           </button>
                         )}
                         {actions.includes("pause") && (
-                          <button
-                            className="secondary-action"
-                            type="button"
-                            onClick={() => void transitionJob(job.id, "pause")}
-                            disabled={!native}
-                          >
-                            <PauseCircle size={13} /> Pause
+                          <button type="button" title="Pause" onClick={() => void transitionJob(job.id, "pause")} disabled={!native}>
+                            <PauseCircle size={12} />
                           </button>
                         )}
                         {actions.includes("resume") && (
-                          <button
-                            className="secondary-action"
-                            type="button"
-                            onClick={() => void transitionJob(job.id, "resume")}
-                            disabled={!native}
-                          >
-                            <PlayCircle size={13} /> Resume
+                          <button type="button" title="Resume" onClick={() => void transitionJob(job.id, "resume")} disabled={!native}>
+                            <PlayCircle size={12} />
                           </button>
                         )}
                         {actions.includes("retry") && (
-                          <button
-                            className="secondary-action"
-                            type="button"
-                            onClick={() => void retryJob(job.id)}
-                            disabled={!native}
-                          >
-                            <RotateCcw size={13} /> Retry
+                          <button type="button" title="Retry" onClick={() => void retryJob(job.id)} disabled={!native}>
+                            <RotateCcw size={12} />
                           </button>
                         )}
                         {actions.includes("cancel") && (
-                          <button
-                            className="ghost-action"
-                            type="button"
-                            onClick={() => void transitionJob(job.id, "cancel")}
-                            disabled={!native}
-                          >
-                            <Square size={13} /> Cancel
+                          <button type="button" title="Cancel" onClick={() => void transitionJob(job.id, "cancel")} disabled={!native}>
+                            <Square size={12} />
                           </button>
                         )}
                       </div>
                     )}
+                    <div className="orchestrate-detail" onClick={(event) => event.stopPropagation()}>
+                      <p className="orchestrate-intent">{job.intent}</p>
+                      <div className="orchestrate-stats">
+                        <span>
+                          <CheckCircle2 size={11} /> Attempt {job.attempt}
+                        </span>
+                        <span>
+                          <CircleDashed size={11} /> {job.operationIds.length} operation(s)
+                        </span>
+                        {job.summary && (
+                          <span className="summary">
+                            <AlertTriangle size={11} /> {job.summary}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </li>
                 );
               })}
@@ -412,33 +383,6 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
           )}
         </section>
       </div>
-
-      {selectedJob && (
-        <section className="orchestrate-detail">
-          <div className="section-heading-row">
-            <div>
-              <span className="section-kicker">
-                <CircleDashed size={12} /> Task detail
-              </span>
-              <h2>{selectedJob.title}</h2>
-            </div>
-          </div>
-          <p className="orchestrate-intent">{selectedJob.intent}</p>
-          <div className="orchestrate-stats">
-            <span>
-              <CheckCircle2 size={12} /> Attempt {selectedJob.attempt}
-            </span>
-            <span>
-              <CircleDashed size={12} /> {selectedJob.operationIds.length} operation(s)
-            </span>
-            {selectedJob.summary && (
-              <span className="summary">
-                <AlertTriangle size={12} /> {selectedJob.summary}
-              </span>
-            )}
-          </div>
-        </section>
-      )}
 
       {toast && (
         <div className="toast">
