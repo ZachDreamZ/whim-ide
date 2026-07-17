@@ -13,10 +13,8 @@ import "./App.css";
 import { Titlebar } from "./components/Titlebar";
 import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-const MissionControl = lazy(() => import("./components/MissionControl").then(m => ({ default: m.MissionControl })));
 const ChatHub = lazy(() => import("./components/ChatHub").then(m => ({ default: m.ChatHub })));
 const CreativeStudio = lazy(() => import("./components/CreativeStudio").then(m => ({ default: m.CreativeStudio })));
-const OrchestrationPanel = lazy(() => import("./components/OrchestrationPanel").then(m => ({ default: m.OrchestrationPanel })));
 const ProviderHub = lazy(() => import("./components/ProviderHub").then(m => ({ default: m.ProviderHub })));
 const EcosystemHub = lazy(() => import("./components/EcosystemHub").then(m => ({ default: m.EcosystemHub })));
 const ScheduledTasksHub = lazy(() => import("./components/ScheduledTasksHub").then(m => ({ default: m.ScheduledTasksHub })));
@@ -26,6 +24,7 @@ const PullRequestsHub = lazy(() => import("./components/PullRequestsHub").then(m
 const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then(m => ({ default: m.NativeBrowserHub })));
 const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
 const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
+import { AgentChatView } from "./components/AgentChatView";
 import { AppShell } from "./components/AppShell";
 import { CommandPalette } from "./components/CommandPalette";
 import { SearchPanel } from "./components/SearchPanel";
@@ -64,14 +63,14 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
-  const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
+
   const [treeLoading, setTreeLoading] = useState(false);
   const [, setTreeError] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState("");
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [openedJobId, setOpenedJobId] = useState<string | null>(null);
+  const [, setOpenedJobId] = useState<string | null>(null);
   const [openedChatId, setOpenedChatId] = useState<string | null>(null);
 
   const [models] = useState<string[]>([]);
@@ -81,6 +80,7 @@ function App() {
   const [agentModel, setAgentModel] = useState(() => localStorage.getItem("whim:agent:model") ?? "");
   const [environment, setEnvironment] = useState<EnvironmentReport>(defaultEnvironment);
   const [credentials, setCredentials] = useState<CredentialReport>(defaultCredentials);
+  const [_entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
@@ -371,7 +371,7 @@ function App() {
         await activateWorkspace(await bridge.useWorkspace(job.workspace));
       }
       setOpenedJobId(job.id);
-      setView("orchestrate");
+      setView("build");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not open this task.");
     }
@@ -435,28 +435,15 @@ function App() {
             branch={branch}
             changesCount={changes.length}
           >
-            <Suspense fallback={<LoadingFallback />}>
-              <MissionControl
-                    workspace={workspacePath}
-                    workspaceEntries={entries}
-                    model={runModel}
-                    models={models}
-                    onModelChange={onRunModelChange}
-                    hasProvider={agentReady}
-                    onOpenProviders={() => setView("providers")}
-                    provider={agentProvider}
-                    apiKey={agentApiKey}
-                    baseUrl={agentBaseUrl}
-                    voice={appSettings.voice.voice}
-                    voiceLanguage={appSettings.voice.language}
-                    voiceDictionary={appSettings.voice.dictionary}
-                    showSuggestedPrompts={appSettings.general.suggestedPrompts}
-                    enterToSend={appSettings.chat.enterToSend}
-                    showCopyActions={appSettings.chat.showCopyActions}
-                    onRunComplete={() => { void refreshWorkspace(); window.dispatchEvent(new Event("whim:history-changed")); }}
-                    onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
-                  />
-            </Suspense>
+              <AgentChatView
+                workspace={workspacePath}
+                provider={agentProvider}
+                apiKey={agentApiKey}
+                baseUrl={agentBaseUrl}
+                model={runModel}
+                onRunComplete={() => { void refreshWorkspace(); window.dispatchEvent(new Event("whim:history-changed")); }}
+                onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
+              />
             {readOnlyFile && (
               <section className="read-only-file" aria-label="File viewer">
                 <header className="read-only-file-header">
@@ -550,10 +537,6 @@ function App() {
                 ) : view === "ecosystem" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   {workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")}
-                  </motion.div>
-                ) : view === "orchestrate" ? (
-                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
-                  {workspacePath ? <OrchestrationPanel workspace={workspacePath} initialJobId={openedJobId} /> : workspaceGate("Orchestrate needs a workspace")}
                   </motion.div>
                 ) : view === "ship" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>

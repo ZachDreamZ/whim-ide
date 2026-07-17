@@ -18,7 +18,7 @@ import {
 export type ViewId = "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "browser" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
 
 const items: { id: ViewId; label: string; icon: LucideIcon; accent?: boolean }[] = [
-  { id: "build", label: "New task", icon: LayoutDashboard },
+  { id: "build", label: "New chat", icon: LayoutDashboard },
   { id: "scheduled", label: "Scheduled", icon: ListChecks },
   { id: "plugins", label: "Plugins", icon: Blocks },
   { id: "eve", label: "Eve Agents", icon: Orbit, accent: true },
