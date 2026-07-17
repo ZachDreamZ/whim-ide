@@ -28,6 +28,9 @@ dist-ssr
 # Build artifacts
 artifacts/
 coverage/
+
+# Updater signing key (private — do not commit)
+tauri-updater.key
 .tsbuildinfo
 
 # OS
