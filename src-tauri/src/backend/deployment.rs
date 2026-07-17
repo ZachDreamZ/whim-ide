@@ -1726,6 +1726,7 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         ("xiaomi", "Xiaomi"),
         ("zenmux", "ZenMux"),
         ("xai", "xAI (Grok)"),
+        ("orcarouter", "OrcaRouter"),
     ];
     for (provider, label) in cloud {
         let has = crate::agent::provider_key_available(provider);

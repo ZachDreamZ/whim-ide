@@ -68,6 +68,7 @@ pub(crate) enum Provider {
     Compatible,
     ZenMux,
     XAi,
+    OrcaRouter,
 }
 
 pub(crate) fn parse_provider(value: &str) -> Result<Provider, String> {
@@ -84,8 +85,9 @@ pub(crate) fn parse_provider(value: &str) -> Result<Provider, String> {
         "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
         "zenmux" => Ok(Provider::ZenMux),
         "xai" | "grok" => Ok(Provider::XAi),
+        "orcarouter" | "orca-router" | "orca" => Ok(Provider::OrcaRouter),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai, orcarouter"
         )),
     }
 }
@@ -104,6 +106,7 @@ fn provider_name(provider: Provider) -> &'static str {
         Provider::Compatible => "compatible",
         Provider::ZenMux => "zenmux",
         Provider::XAi => "xai",
+        Provider::OrcaRouter => "orcarouter",
     }
 }
 
@@ -245,6 +248,7 @@ fn default_base(provider: Provider) -> &'static str {
         Provider::Compatible => "",
         Provider::ZenMux => "https://zenmux.ai/api/v1",
         Provider::XAi => "https://api.x.ai/v1",
+        Provider::OrcaRouter => "https://api.orcarouter.ai/v1",
     }
 }
 
@@ -263,6 +267,7 @@ fn provider_label(provider: Provider) -> &'static str {
         Provider::Compatible => "OpenAI-Compatible",
         Provider::ZenMux => "ZenMux",
         Provider::XAi => "xAI (Grok)",
+        Provider::OrcaRouter => "OrcaRouter",
     }
 }
 
@@ -289,6 +294,7 @@ pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'stat
         "omniroute" => &["OMNIROUTE_API_KEY"],
         "zenmux" => &["ZENMUX_API_KEY"],
         "xai" => &["XAI_API_KEY"],
+        "orcarouter" => &["ORCAROUTER_API_KEY"],
         _ => &[],
     }
 }
@@ -399,6 +405,7 @@ pub(crate) fn default_model(provider: Provider, role: AgentRole) -> &'static str
         Provider::Compatible => "local-model",
         Provider::ZenMux => "claude-3-5-sonnet-latest",
         Provider::XAi => "grok-4.5",
+        Provider::OrcaRouter => "openai/gpt-4o-mini",
     }
 }
 
@@ -1180,7 +1187,8 @@ async fn chat(
         | Provider::OmniRoute
         | Provider::Compatible
         | Provider::ZenMux
-        | Provider::XAi => {
+        | Provider::XAi
+        | Provider::OrcaRouter => {
             chat_openai_style(base, &resolved_key, model, system, messages, tools).await
         }
         Provider::Anthropic => {
@@ -4366,7 +4374,8 @@ pub async fn fetch_provider_models(
         | Provider::OmniRoute
         | Provider::Compatible
         | Provider::ZenMux
-        | Provider::XAi => {
+        | Provider::XAi
+        | Provider::OrcaRouter => {
             if api_key.is_empty() && provider_requires_key(provider_enum) {
                 return Err("An API key is required to list these models.".into());
             }

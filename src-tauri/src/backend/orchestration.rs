@@ -572,7 +572,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
     }
 
     let sub_task_count = sub_tasks.len();
-    let has_deps = sub_tasks.iter().any(|st| !st.deps.is_empty());
+    let _has_deps = sub_tasks.iter().any(|st| !st.deps.is_empty());
 
     // 4. Spawn the background coordinator
     let app = window.clone();
