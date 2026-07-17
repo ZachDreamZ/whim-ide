@@ -998,6 +998,14 @@ export const bridge = {
     return call<PullRequestStatus>("inspect_pull_requests", { workspace });
   },
 
+  async githubConnect(): Promise<string> {
+    return call<string>("github_connect");
+  },
+
+  async githubDisconnect(): Promise<void> {
+    return call<void>("github_disconnect");
+  },
+
   async getOrchestrationJob(workspace: string, jobId: string): Promise<OrchestrationJobDetail> {
     return call<OrchestrationJobDetail>("get_orchestration_job", {
       request: { workspace, jobId },

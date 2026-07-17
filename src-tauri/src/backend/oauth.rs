@@ -469,6 +469,11 @@ fn store_token(token: &OAuthToken) -> Result<(), String> {
         .map_err(|e| format!("Keyring set failed: {e}"))
 }
 
+/// Load a stored token from the OS keyring (public for callers).
+pub async fn get_stored_token(provider_id: &str) -> Option<OAuthToken> {
+    load_stored_token(provider_id).ok().flatten()
+}
+
 /// Load a stored token from the OS keyring.
 fn load_stored_token(provider_id: &str) -> Result<Option<OAuthToken>, String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, &keyring_entry_name(provider_id))

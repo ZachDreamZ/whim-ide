@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::State;
+use tauri::{Manager, State};
 use tokio::{
     process::Command,
     time::{timeout, Duration},
@@ -509,6 +509,110 @@ async fn search_pull_requests(
     parse_pull_requests(&result.stdout, relationship)
 }
 
+/// Make an authenticated GET request to the GitHub REST API.
+async fn github_api_get(token: &str, path: &str) -> Result<Vec<Value>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let url = format!("https://api.github.com{path}");
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "Whim-IDE/0.4.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("GitHub API error {status}: {body}"));
+    }
+
+    response
+        .json::<Vec<Value>>()
+        .await
+        .map_err(|e| format!("Failed to parse GitHub API response: {e}"))
+}
+
+/// Search pull requests using the GitHub API with an OAuth token.
+async fn search_pull_requests_via_api(
+    token: &str,
+    filter_query: &str,
+    relationship: &str,
+) -> Result<Vec<PullRequestItem>, String> {
+    let query = urlencoding(&format!("{filter_query}@me is:pr is:open sort:updated-desc"));
+    let path = format!("/search/issues?q={query}&per_page=50");
+    let items = github_api_get(token, &path).await?;
+
+    // GitHub search API wraps results in .items
+    let items = if items.len() == 1 && items[0].get("items").is_some() {
+        items[0]["items"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        items
+    };
+
+    Ok(items
+        .into_iter()
+        .filter_map(|value| {
+            let number = value["number"].as_u64()?;
+            let title = value["title"].as_str()?.to_string();
+            let state = value["state"].as_str()?.to_string();
+            let is_draft = value["draft"].as_bool().unwrap_or(false);
+            let html_url = value["html_url"].as_str()?.to_string();
+
+            // Parse repo full name from repository_url
+            let repo = value["repository_url"]
+                .as_str()
+                .and_then(|url| url.rsplit('/').next())
+                .or_else(|| value["repository"].as_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            let author = value["user"]["login"].as_str().map(String::from);
+            let updated_at = value["updated_at"].as_str().map(String::from);
+
+            Some(PullRequestItem {
+                number,
+                title,
+                state,
+                is_draft,
+                url: html_url,
+                head_ref_name: value["head"]["ref"].as_str().unwrap_or("").to_string(),
+                base_ref_name: value["base"]["ref"].as_str().unwrap_or("").to_string(),
+                author,
+                updated_at,
+                repository: repo,
+                relationship: relationship.to_string(),
+            })
+        })
+        .collect())
+}
+
+fn urlencoding(input: &str) -> String {
+    // Simple URL encoder for query params
+    let mut result = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        match byte {
+            b' ' => result.push_str("%20"),
+            b'@' => result.push_str("%40"),
+            b':' => result.push_str("%3A"),
+            b'-' => result.push_str("%2D"),
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'.' | b'~' => {
+                result.push(byte as char);
+            }
+            _ => result.push_str(&format!("%{:02X}", byte)),
+        }
+    }
+    result
+}
+
 #[tauri::command]
 pub async fn inspect_pull_requests(
     state: State<'_, BackendState>,
@@ -535,49 +639,117 @@ pub async fn inspect_pull_requests(
     } else {
         None
     };
-    let auth = output(&root, "gh", &["auth", "status"])
-        .await
-        .map(|value| value.status.success())
-        .unwrap_or(false);
-    if !auth {
-        return Ok(PullRequestStatus {
-            is_repository,
-            branch,
-            remote_url: remote,
-            github_authenticated: false,
-            account_login: None,
-            pull_requests: vec![],
-            previously_reviewed: vec![],
-            message: Some(
-                "GitHub CLI is not authenticated. Run gh auth login, then refresh.".into(),
-            ),
-        });
+
+    // Try OAuth token first, then fall back to gh CLI
+    let token = crate::backend::oauth::get_stored_token("github").await;
+    let (gh_auth, account, authored, reviewing, reviewed) = if let Some(ref token) = token {
+        let api_token = token.access_token.clone();
+        let account = get_github_login_via_api(&api_token).await.ok();
+        let (a, r, rev) = tokio::join!(
+            search_pull_requests_via_api(&api_token, "author", "authored"),
+            search_pull_requests_via_api(&api_token, "review-requested", "reviewing"),
+            search_pull_requests_via_api(&api_token, "reviewed-by", "reviewed"),
+        );
+        (true, account, a, r, rev)
+    } else {
+        let gh_ok = output(&root, "gh", &["auth", "status"])
+            .await
+            .map(|value| value.status.success())
+            .unwrap_or(false);
+        if !gh_ok {
+            return Ok(PullRequestStatus {
+                is_repository,
+                branch,
+                remote_url: remote,
+                github_authenticated: false,
+                account_login: None,
+                pull_requests: vec![],
+                previously_reviewed: vec![],
+                message: Some(
+                    "GitHub not connected. Use \"Connect GitHub\" in the pull requests panel to sign in.".into(),
+                ),
+            });
+        }
+        let (a, r, rev) = tokio::join!(
+            search_pull_requests(&root, "--author", "open", "authored"),
+            search_pull_requests(&root, "--review-requested", "open", "reviewing"),
+            search_pull_requests(&root, "--reviewed-by", "closed", "reviewed"),
+        );
+        let account = output(&root, "gh", &["api", "user", "--jq", ".login"])
+            .await
+            .ok()
+            .filter(|result| result.status.success())
+            .map(|result| String::from_utf8_lossy(&result.stdout).trim().to_string())
+            .filter(|value| !value.is_empty());
+        (true, account, a, r, rev)
+    };
+
+    let mut pull_requests = match authored {
+        Ok(prs) => prs,
+        Err(_) => vec![],
+    };
+    if let Ok(prs) = reviewing {
+        pull_requests.extend(prs);
     }
-    let (authored, reviewing, reviewed) = tokio::join!(
-        search_pull_requests(&root, "--author", "open", "authored"),
-        search_pull_requests(&root, "--review-requested", "open", "reviewing"),
-        search_pull_requests(&root, "--reviewed-by", "closed", "reviewed"),
-    );
-    let mut pull_requests = authored?;
-    pull_requests.extend(reviewing?);
     pull_requests.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     pull_requests.dedup_by(|a, b| a.url == b.url);
-    let account = output(&root, "gh", &["api", "user", "--jq", ".login"])
-        .await
-        .ok()
-        .filter(|result| result.status.success())
-        .map(|result| String::from_utf8_lossy(&result.stdout).trim().to_string())
-        .filter(|value| !value.is_empty());
+    let previously = reviewed.unwrap_or_default();
     Ok(PullRequestStatus {
         is_repository,
         branch,
         remote_url: remote,
-        github_authenticated: true,
+        github_authenticated: gh_auth,
         account_login: account,
         pull_requests,
-        previously_reviewed: reviewed?,
+        previously_reviewed: previously,
         message: None,
     })
+}
+
+/// Get the GitHub login of the authenticated user via API.
+async fn get_github_login_via_api(token: &str) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let response = client
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "Whim-IDE/0.4.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await
+        .map_err(|e| format!("GitHub user API failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("GitHub user API error: {}", response.status()));
+    }
+    let body: Value = response.json().await
+        .map_err(|e| format!("Failed to parse GitHub user: {e}"))?;
+    body["login"]
+        .as_str()
+        .map(String::from)
+        .ok_or_else(|| "GitHub user response missing 'login'".into())
+}
+
+/// Connect GitHub via OAuth and return the authenticated account login.
+#[tauri::command]
+pub async fn github_connect() -> Result<String, String> {
+    // Start the OAuth flow for GitHub
+    let req = crate::backend::oauth::AuthUrlRequest {
+        provider_id: "github".into(),
+        client_id: None,
+        redirect_uri: None,
+    };
+    let token = crate::backend::oauth::oauth_authorize(req).await?;
+    // Fetch the account login from GitHub
+    let login = get_github_login_via_api(&token.access_token).await?;
+    Ok(login)
+}
+
+/// Disconnect GitHub by clearing the stored OAuth token.
+#[tauri::command]
+pub async fn github_disconnect() -> Result<(), String> {
+    std::future::ready(crate::backend::oauth::oauth_clear_token("github".into())).await
 }
 
 #[cfg(test)]

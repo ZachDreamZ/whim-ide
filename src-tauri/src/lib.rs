@@ -103,6 +103,8 @@ pub fn run() {
             backend::productivity::mark_scheduled_task_run,
             backend::productivity::inspect_sites_workspace,
             backend::productivity::inspect_pull_requests,
+            backend::productivity::github_connect,
+            backend::productivity::github_disconnect,
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,
