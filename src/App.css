@@ -204,6 +204,7 @@ a:focus-visible {
 .window-controls { position: relative; z-index: 60; }
 .window-controls button { width: 45px; border: 0; border-radius: 0; background: transparent; color: #8f98a6; display: grid; place-items: center; cursor: pointer; }
 .window-controls button:hover { color: white; background: rgba(255,255,255,.075); }
+.window-controls button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .window-controls .window-close:hover { background: #c42b1c; }
 
 .app-body { min-width: 0; min-height: 0; display: flex; overflow: hidden; }
