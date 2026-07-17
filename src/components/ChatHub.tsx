@@ -8,6 +8,7 @@ import {
   agentEventsToParts,
   bridge,
   errorMessage,
+  partsToText,
   type ChatThread,
   type ChatThreadMessage,
   type ChatThreadSummary,
@@ -52,15 +53,6 @@ function storedToUi(message: ChatThreadMessage): UIMessage {
     role: message.role,
     parts: [{ type: "text", text: message.content }],
   } as UIMessage;
-}
-
-function partsToText(parts: ReturnType<typeof agentEventsToParts>, fallback: string) {
-  const text = parts.flatMap((part) => {
-    if (part.type === "text" && typeof part.text === "string") return [part.text];
-    if (part.type === "error") return [`${part.title}: ${part.message}`];
-    return [];
-  }).join("\n\n").trim();
-  return text || fallback.trim() || "Whim Chat finished without a text response.";
 }
 
 function boundedConversation(messages: ChatThreadMessage[]) {

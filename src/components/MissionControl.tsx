@@ -34,6 +34,7 @@ import {
   agentRunEvidence,
   bridge,
   errorMessage,
+  partsToText,
   type OrchestrationJob,
   type OrchestrationJobDetail,
   type OrchestrationJobOutcome,
@@ -157,6 +158,7 @@ export function MissionControl({
   const intentBriefRequest = useRef(0);
   const lastLiveLedgerRefresh = useRef(0);
   const streamingMsgId = useRef<string | null>(null);
+  const sessionThreadId = useRef<string | null>(null);
   const [taskJobs, setTaskJobs] = useState<OrchestrationJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<OrchestrationJob | null>(null);
   const [taskDetail, setTaskDetail] = useState<OrchestrationJobDetail | null>(null);
@@ -546,6 +548,24 @@ export function MissionControl({
     void loadIntentBrief();
   }, [executionTarget, loadIntentBrief, refreshTaskLedger, workspace]);
 
+  // Restore last agent session on mount — survives hub switch and app quit
+  useEffect(() => {
+    let stored: string | null = null;
+    try { stored = localStorage.getItem("whim:lastSessionThreadId"); } catch { void 0; /* localStorage fallback */ }
+    if (!stored || !bridge.isNative()) return;
+    bridge.getChatThread(stored).then((thread) => {
+      sessionThreadId.current = thread.id;
+      const restored: UIMessage[] = thread.messages.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        parts: [{ type: "text", text: m.content }],
+      }));
+      setMessages(restored);
+    }).catch(() => { /* stale reference — clean up silently */
+      try { localStorage.removeItem("whim:lastSessionThreadId"); } catch { void 0; /* stale ref fallback */ }
+    });
+  }, []);
+
   useEffect(() => {
     if (!bridge.isNative() || !taskJobs.some((job) => job.status === "running")) return;
     const interval = window.setInterval(() => void refreshTaskLedger(), 1_000);
@@ -769,6 +789,33 @@ export function MissionControl({
       } else {
         setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", parts } as unknown as UIMessage]);
       }
+
+      // Persist session to chat history so it survives hub switch or app quit
+      const persistSession = async () => {
+        if (!bridge.isNative()) return;
+        try {
+          const now = Date.now();
+          const threadId = sessionThreadId.current ?? crypto.randomUUID();
+          sessionThreadId.current = threadId;
+          const assistText = partsToText(parts, result.stdout?.trim() || (result.success ? "" : result.message || ""));
+          // Build messages from current state — user msg + final assistant parts
+          const msgs: import("../lib/bridge").ChatThreadMessage[] = [
+            { id: userMessage.id, role: "user", content, createdAtMs: now },
+            { id: crypto.randomUUID(), role: "assistant", content: assistText, createdAtMs: now },
+          ];
+          await bridge.saveChatThread({
+            id: threadId,
+            title: "Agent: " + content.slice(0, 80).replace(/\n/g, " "),
+            createdAtMs: now,
+            updatedAtMs: now,
+            model: model || "auto",
+            messages: msgs,
+          });
+          try { localStorage.setItem("whim:lastSessionThreadId", threadId); } catch { void 0; /* local storage unavailable */ }
+        } catch { void 0; /* non-critical persistence */ }
+      };
+      void persistSession();
+
       if (result.cancelled) {
         trackerRef.current?.transitionTo("FAILED");
       } else if (!result.success) {

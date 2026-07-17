@@ -1225,6 +1225,16 @@ export function agentEventsToParts(events: unknown[]): Record<string, unknown>[]
   return events.map(agentEventToPart).filter(Boolean) as Record<string, unknown>[];
 }
 
+/** Flatten agent event parts to a plain text string for persistence. */
+export function partsToText(parts: Record<string, unknown>[], fallback: string): string {
+  const text = parts.flatMap((part) => {
+    if (part.type === "text" && typeof part.text === "string") return [part.text];
+    if (part.type === "error") return [`${part.title}: ${part.message}`];
+    return [];
+  }).join("\n\n").trim();
+  return text || fallback.trim() || "Whim agent completed.";
+}
+
 /**
  * A tiny, safe status line for the native live-event rail. It never renders
  * raw tool output or provider reasoning; detailed evidence remains in the
