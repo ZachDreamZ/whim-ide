@@ -67,6 +67,7 @@ enum Provider {
     OmniRoute,
     Compatible,
     ZenMux,
+    XAi,
 }
 
 fn parse_provider(value: &str) -> Result<Provider, String> {
@@ -82,8 +83,9 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
         "omniroute" | "omni-route" | "omni" => Ok(Provider::OmniRoute),
         "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
         "zenmux" => Ok(Provider::ZenMux),
+        "xai" | "grok" => Ok(Provider::XAi),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai"
         )),
     }
 }
@@ -101,6 +103,7 @@ fn provider_name(provider: Provider) -> &'static str {
         Provider::OmniRoute => "omniroute",
         Provider::Compatible => "compatible",
         Provider::ZenMux => "zenmux",
+        Provider::XAi => "xai",
     }
 }
 
@@ -241,6 +244,7 @@ fn default_base(provider: Provider) -> &'static str {
         Provider::OmniRoute => "http://127.0.0.1:20128/v1",
         Provider::Compatible => "",
         Provider::ZenMux => "https://zenmux.ai/api/v1",
+        Provider::XAi => "https://api.x.ai/v1",
     }
 }
 
@@ -258,6 +262,7 @@ fn provider_label(provider: Provider) -> &'static str {
         Provider::Local => "Local (Ollama / LM Studio)",
         Provider::Compatible => "OpenAI-Compatible",
         Provider::ZenMux => "ZenMux",
+        Provider::XAi => "xAI (Grok)",
     }
 }
 
@@ -283,6 +288,7 @@ pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'stat
         "xiaomi" => &["XIAOMI_API_KEY"],
         "omniroute" => &["OMNIROUTE_API_KEY"],
         "zenmux" => &["ZENMUX_API_KEY"],
+        "xai" => &["XAI_API_KEY"],
         _ => &[],
     }
 }
@@ -392,6 +398,7 @@ fn default_model(provider: Provider, role: AgentRole) -> &'static str {
         },
         Provider::Compatible => "local-model",
         Provider::ZenMux => "claude-3-5-sonnet-latest",
+        Provider::XAi => "grok-4.5",
     }
 }
 
@@ -1172,7 +1179,8 @@ async fn chat(
         | Provider::Qwen
         | Provider::OmniRoute
         | Provider::Compatible
-        | Provider::ZenMux => {
+        | Provider::ZenMux
+        | Provider::XAi => {
             chat_openai_style(base, &resolved_key, model, system, messages, tools).await
         }
         Provider::Anthropic => {
@@ -4357,7 +4365,8 @@ pub async fn fetch_provider_models(
         | Provider::Qwen
         | Provider::OmniRoute
         | Provider::Compatible
-        | Provider::ZenMux => {
+        | Provider::ZenMux
+        | Provider::XAi => {
             if api_key.is_empty() && provider_requires_key(provider_enum) {
                 return Err("An API key is required to list these models.".into());
             }
