@@ -52,6 +52,7 @@ export type ProjectSidebarProps = {
 const primaryItems = [
   { id: "build", label: "New chat", icon: Sparkles },
   { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+  { id: "plugins", label: "Plugins", icon: Sparkles },
 ] satisfies { id: ViewId; label: string; icon: typeof Sparkles }[];
 
 const moreItems = [
@@ -346,6 +347,10 @@ export function ProjectSidebar({
 
       {/* Bottom */}
       <div className="border-t border-border px-2 py-2">
+        <div className="flex items-center gap-2 px-2 py-1 text-[10px] text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+          <span>API usage — idle</span>
+        </div>
         <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[11px] text-muted-foreground">
           <span className={`size-1.5 shrink-0 rounded-full ${workspace !== "No workspace open" ? "bg-emerald-400" : "bg-muted-foreground"}`} />
           <span className="min-w-0 flex-1 truncate">{workspace !== "No workspace open" ? projectName(workspace) : "No project open"}</span>

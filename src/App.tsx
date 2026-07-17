@@ -59,6 +59,20 @@ type ReadOnlyFile = { path: string; content: string; scrollToLine?: number | nul
 
 function App() {
   const [view, setView] = useState<ViewId>("build");
+  const [chatResetKey, setChatResetKey] = useState(0);
+
+  const handleViewChange = useCallback((nextView: ViewId) => {
+    if (nextView === "build" && view === "build") {
+      // Already on build view — treat as "New chat"
+      setChatResetKey((k) => k + 1);
+    }
+    setView(nextView);
+  }, [view]);
+
+  const handleNewChat = useCallback(() => {
+    setChatResetKey((k) => k + 1);
+    setView("build");
+  }, []);
   const [activeSettingsCategory, setActiveSettingsCategory] = useState("general");
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -286,7 +300,7 @@ function App() {
       }
       if (key === "n") {
         event.preventDefault();
-        setView("build");
+        handleNewChat();
         requestAnimationFrame(() => window.dispatchEvent(new Event("whim:focus-agent")));
       }
       if (key === "j") {
@@ -378,6 +392,7 @@ function App() {
   }, [activateWorkspace, workspacePath]);
 
   const openSidebarChat = useCallback((thread: ChatThreadSummary) => {
+    // Legacy: old chat threads use ChatHub; new threads go through build view
     setOpenedChatId(thread.id);
     setView("chat");
   }, []);
@@ -423,7 +438,7 @@ function App() {
           <AppShell
             sidebarProps={{
               activeView: view,
-              onViewChange: setView,
+              onViewChange: handleViewChange,
               workspace: workspacePath ?? "No workspace open",
               loading: treeLoading,
               branch: branch,
@@ -436,6 +451,7 @@ function App() {
             changesCount={changes.length}
           >
               <AgentChatView
+                key={chatResetKey}
                 workspace={workspacePath}
                 provider={agentProvider}
                 apiKey={agentApiKey}
@@ -464,7 +480,7 @@ function App() {
           <div className="build-workspace">
             <ProjectSidebar
               activeView={view}
-              onViewChange={setView}
+              onViewChange={handleViewChange}
               workspace={workspacePath ?? "No workspace open"}
               loading={treeLoading}
               branch={branch}

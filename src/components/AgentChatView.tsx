@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { bridge } from "../lib/bridge";
+import type { ChatThread } from "../lib/bridge";
 import { AgentConversation } from "./AgentConversation";
 import { EmptyChatState } from "./EmptyChatState";
 
@@ -12,6 +13,7 @@ type AgentChatViewProps = {
   model?: string;
   onRunComplete?: () => void;
   onActivityChange?: (running: boolean) => void;
+  resetKey?: number;
 };
 
 interface NativeEvent {
@@ -26,6 +28,10 @@ interface NativeEvent {
   message?: string;
   status?: string;
   [key: string]: unknown;
+}
+
+function generateTitle(content: string): string {
+  return content.replace(/\s+/g, " ").trim().slice(0, 64) || "New chat";
 }
 
 function parseAgentEvent(event: NativeEvent): UIMessage["parts"][0] | null {
@@ -59,7 +65,21 @@ function parseAgentEvent(event: NativeEvent): UIMessage["parts"][0] | null {
     } as UIMessage["parts"][0];
   }
 
+  if (event.type === "file-change" || event.type === "file_edit") {
+    return {
+      type: "text" as const,
+      text: `[File changed] ${event.summary ?? event.content ?? ""}`,
+    } as UIMessage["parts"][0];
+  }
+
   return null;
+}
+
+function collectText(parts: UIMessage["parts"][0][]): string {
+  return parts
+    .filter((p) => p.type === "text")
+    .map((p) => (p as { text: string }).text)
+    .join("\n");
 }
 
 export function AgentChatView({
@@ -70,19 +90,69 @@ export function AgentChatView({
   model,
   onRunComplete,
   onActivityChange,
+  resetKey,
 }: AgentChatViewProps) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const sessionIdRef = useRef<string | undefined>(undefined);
+  const threadIdRef = useRef<string | undefined>(undefined);
+  const threadCreatedRef = useRef(false);
 
+  // Reset conversation when resetKey changes
   useEffect(() => {
-    if (messages.length === 0) {
-      const timer = setTimeout(() => {
-        window.dispatchEvent(new Event("whim:focus-agent"));
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [messages.length]);
+    setMessages([]);
+    sessionIdRef.current = undefined;
+    threadIdRef.current = undefined;
+    threadCreatedRef.current = false;
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event("whim:focus-agent"));
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [resetKey]);
+
+  // Persist conversation to backend
+  const persistThread = useCallback(
+    async (userContent: string, allParts: UIMessage["parts"][0][]) => {
+      try {
+        const threadId = threadIdRef.current ?? crypto.randomUUID();
+        threadIdRef.current = threadId;
+        threadCreatedRef.current = true;
+
+        const text = collectText(allParts);
+        const title = generateTitle(userContent);
+
+        const thread: ChatThread = {
+          id: threadId,
+          title,
+          createdAtMs: Date.now(),
+          updatedAtMs: Date.now(),
+          model: model ?? null,
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: userContent,
+              createdAtMs: Date.now(),
+            },
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: text || "(no text response)",
+              createdAtMs: Date.now(),
+            },
+          ],
+        };
+
+        await bridge.saveChatThread(thread);
+
+        // Notify sidebar to refresh
+        window.dispatchEvent(new Event("whim:history-changed"));
+      } catch {
+        // Persistence is best-effort; core chat still works
+      }
+    },
+    [model]
+  );
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -92,14 +162,12 @@ export function AgentChatView({
 
       const operationId = crypto.randomUUID();
 
-      // Create user message
       const userMsg = {
         id: crypto.randomUUID(),
         role: "user" as const,
         parts: [{ type: "text" as const, text: content }],
       } as unknown as UIMessage;
 
-      // Create initial assistant message
       const assistantMsg = {
         id: crypto.randomUUID(),
         role: "assistant" as const,
@@ -119,7 +187,7 @@ export function AgentChatView({
           apiKey,
           baseUrl,
           operationId,
-          sessionId: sessionIdRef.current,
+          sessionId: sessionIdRef.current ?? threadIdRef.current,
           autoContinue: true,
           onEvent: (event) => {
             const part = parseAgentEvent(event as NativeEvent);
@@ -145,6 +213,9 @@ export function AgentChatView({
           sessionIdRef.current = result.sessionId;
         }
 
+        // Persist after completion
+        void persistThread(content, collectedParts);
+
         onRunComplete?.();
       } catch (error) {
         const errorText = error instanceof Error ? error.message : "Request failed";
@@ -168,7 +239,7 @@ export function AgentChatView({
         onActivityChange?.(false);
       }
     },
-    [workspace, provider, apiKey, baseUrl, model, isRunning, onRunComplete, onActivityChange]
+    [workspace, provider, apiKey, baseUrl, model, isRunning, onRunComplete, onActivityChange, persistThread]
   );
 
   const handleStop = useCallback(() => {
