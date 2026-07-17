@@ -71,6 +71,7 @@ function App() {
 
   const handleNewChat = useCallback(() => {
     setChatResetKey((k) => k + 1);
+    setActiveThreadId(null);
     setView("build");
   }, []);
   const [activeSettingsCategory, setActiveSettingsCategory] = useState("general");
@@ -85,7 +86,7 @@ function App() {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [, setOpenedJobId] = useState<string | null>(null);
-  const [openedChatId, setOpenedChatId] = useState<string | null>(null);
+
 
   const [models] = useState<string[]>([]);
   const [agentProvider, setAgentProvider] = useState(() => localStorage.getItem("whim:agent:provider") ?? "auto");
@@ -391,10 +392,11 @@ function App() {
     }
   }, [activateWorkspace, workspacePath]);
 
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
   const openSidebarChat = useCallback((thread: ChatThreadSummary) => {
-    // Legacy: old chat threads use ChatHub; new threads go through build view
-    setOpenedChatId(thread.id);
-    setView("chat");
+    setActiveThreadId(thread.id);
+    setView("build");
   }, []);
 
 
@@ -453,6 +455,7 @@ function App() {
               <AgentChatView
                 key={chatResetKey}
                 workspace={workspacePath}
+                initialThreadId={activeThreadId}
                 provider={agentProvider}
                 apiKey={agentApiKey}
                 baseUrl={agentBaseUrl}
@@ -511,7 +514,7 @@ function App() {
                     enterToSend={appSettings.chat.enterToSend}
                     showCopyActions={appSettings.chat.showCopyActions}
                     persistHistory={appSettings.chat.persistHistory}
-                    initialThreadId={openedChatId}
+                    initialThreadId={null}
                   />
                   </motion.div>
                 ) : view === "browser" ? (

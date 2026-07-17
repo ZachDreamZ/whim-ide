@@ -1,9 +1,13 @@
-import { useRef, type ReactNode } from "react";
+import { lazy, useRef, type ReactNode } from "react";
 import type { UIMessage } from "ai";
 import { useSmartAutoScroll } from "../hooks/useSmartAutoScroll";
 import { TimelineEvent } from "./TimelineEvent";
 import { MessageComposer } from "./MessageComposer";
 import { FileChangeCard, type FileChange } from "./FileChangeCard";
+
+const Markdown = lazy(() =>
+  import("./agent-elements/markdown").then((m) => ({ default: m.Markdown }))
+);
 
 type AgentConversationProps = {
   messages: UIMessage[];
@@ -60,9 +64,9 @@ export function AgentConversation({
                   const p = part as Record<string, unknown>;
                   if (isTextPart(p)) {
                     return (
-                      <p key={i} className="message-text">
-                        {String(p.text ?? "")}
-                      </p>
+                      <div key={i} className="message-text">
+                        <Markdown content={String(p.text ?? "")} />
+                      </div>
                     );
                   }
                   if (isToolPart(p)) {
