@@ -23,3 +23,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts
+artifacts/
+coverage/
+.tsbuildinfo
+
+# OS
+Thumbs.db
