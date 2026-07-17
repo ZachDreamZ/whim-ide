@@ -17,16 +17,16 @@ const ocrEngine = new OnnxOcrAdapter();
 let ocrPipeline: OcrPipeline | null = null;
 ocrEngine.init().then(() => {
     ocrPipeline = new OcrPipeline(ocrEngine);
-    console.log("OCR Pipeline Initialized");
+    console.debug("OCR Pipeline Initialized");
 }).catch(console.error);
 
 wss.on('connection', (ws) => {
-    console.log('Tauri backend connected to Sidecar.');
+    console.debug('Tauri backend connected to Sidecar.');
 
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message.toString());
-            console.log('Received command:', data.command);
+            console.debug('Received command:', data.command);
 
             if (data.command === 'run_openai_agent') {
                 ws.send(JSON.stringify({ status: 'running', agent: 'openai', task: data.task }));
@@ -251,5 +251,5 @@ export class BrowserSession {
 
 const PORT = process.env.SIDECAR_PORT || 8765;
 server.listen(PORT, () => {
-    console.log(`Node execution sidecar running on port ${PORT}`);
+    console.debug(`Node execution sidecar running on port ${PORT}`);
 });

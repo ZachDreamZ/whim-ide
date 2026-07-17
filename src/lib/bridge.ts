@@ -162,6 +162,11 @@ export type ChatThreadSummary = {
   preview: string;
 };
 
+export type NativeBrowserState = {
+  open: boolean;
+  url?: string | null;
+};
+
 export type AppSettings = {
   version: number;
   general: {
@@ -196,9 +201,6 @@ export type AppSettings = {
   };
   computerUse: { enabled: boolean; screenCapture: boolean; appContext: boolean };
   agent: {
-    runtime: "native" | "pi" | "codex" | "claude" | "antigravity" | "eve";
-    piModel: string;
-    externalModel: string;
     speed: "fast" | "balanced" | "thorough";
     approvalPolicy: "always" | "risky";
     backgroundVerification: boolean;
@@ -206,10 +208,6 @@ export type AppSettings = {
     deferCapabilities: boolean;
     maxParallelAgents: number;
     enabledCapabilities: string[];
-    defaultAdapter: string;
-    wslDistro: string;
-    containerImage: string;
-    remoteHost: string;
   };
 };
 
@@ -231,20 +229,13 @@ export const defaultAppSettings: AppSettings = {
   voice: { voice: "alloy", language: "auto", dictionary: "" },
   computerUse: { enabled: false, screenCapture: true, appContext: true },
   agent: {
-    runtime: "native",
-    piModel: "opencode/big-pickle",
-    externalModel: "default",
     speed: "balanced",
     approvalPolicy: "risky",
     backgroundVerification: true,
     autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
-    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "external-harnesses"],
-    defaultAdapter: "native",
-    wslDistro: "Ubuntu",
-    containerImage: "ubuntu:latest",
-    remoteHost: "user@localhost",
+    enabledCapabilities: ["workspace", "research", "coding", "verification"],
   },
 };
 
@@ -442,38 +433,7 @@ export type LocalProviderStatus = {
   detail: string;
 };
 
-export type ExternalHarnessStatus = {
-  id: "codex" | "claude" | "antigravity" | "eve" | "pi" | "opencode";
-  name: string;
-  available: boolean;
-  authenticated: boolean;
-  authKind: string;
-  version?: string | null;
-  path?: string | null;
-  capabilities: string[];
-  setupHint: string;
-};
 
-export type EveProjectStatus = {
-  detected: boolean;
-  layout?: string | null;
-  packageVersion?: string | null;
-  cliAvailable: boolean;
-  cliPath?: string | null;
-  instructionsPath?: string | null;
-  skills: string[];
-  tools: string[];
-  channels: string[];
-  schedules: string[];
-  evals: string[];
-  compileStatus?: string | null;
-  model?: string | null;
-  diagnosticErrors?: number | null;
-  diagnosticWarnings?: number | null;
-  createRoute?: string | null;
-  continueRoute?: string | null;
-  streamRoute?: string | null;
-};
 
 export type MediaRuntimeStatus = {
   codexAvailable: boolean;
@@ -634,6 +594,11 @@ export const bridge = {
     });
   },
 
+  async ensureProjectContext(workspace: string): Promise<string> {
+    if (!inTauri()) return ".whim/HANDOFF.md";
+    return call<string>("ensure_project_context", { workspace });
+  },
+
   async listGitWorktrees(): Promise<GitWorktree[]> {
     if (!inTauri()) return [];
     return call<GitWorktree[]>("list_git_worktrees");
@@ -727,20 +692,7 @@ export const bridge = {
     return result.providers;
   },
 
-  async externalHarnesses(): Promise<ExternalHarnessStatus[]> {
-    if (!inTauri()) return [];
-    return call<ExternalHarnessStatus[]>("discover_external_harnesses");
-  },
 
-  async inspectEveWorkspace(workspace: string): Promise<EveProjectStatus> {
-    return call<EveProjectStatus>("inspect_eve_workspace", { workspace });
-  },
-
-  async validateEveWorkspace(workspace: string): Promise<EveProjectStatus> {
-    return call<EveProjectStatus>("validate_eve_workspace", {
-      request: { workspace, confirmed: true },
-    });
-  },
 
   async mediaRuntimeStatus(): Promise<MediaRuntimeStatus> {
     if (!inTauri()) return { codexAvailable: false, codexAuthenticated: false, codexAuthKind: "unavailable", ffmpegAvailable: false, windowsVoiceAvailable: false };
@@ -1063,6 +1015,11 @@ export const bridge = {
     await openNativeUrl(url);
   },
 
+  async nativeBrowserAction(action: "open" | "navigate" | "back" | "forward" | "reload" | "focus" | "close" | "state", url?: string): Promise<NativeBrowserState> {
+    if (!inTauri()) return { open: false, url: null };
+    return call<NativeBrowserState>("native_browser_action", { action, url });
+  },
+
   async listChatThreads(): Promise<ChatThreadSummary[]> {
     if (!inTauri()) return [];
     return call<ChatThreadSummary[]>("list_chat_threads");
@@ -1167,49 +1124,57 @@ function sanitizeText(value: string): string {
     .slice(0, 64_000);
 }
 
-export function agentEventsToParts(events: unknown[]): Record<string, unknown>[] {
-  const parts: Record<string, unknown>[] = [];
-  for (const eventValue of events) {
-    const event = record(eventValue);
-    if (!event) continue;
-    const type = String(event.type ?? "");
-    // Treat agent output as untrusted data: only render known, safe event
-    // shapes. Unknown types (including any injected "action" directives)
-    // are dropped rather than forwarded into the UI.
-    if (!KNOWN_EVENT_TYPES.includes(type as (typeof KNOWN_EVENT_TYPES)[number])) continue;
-    const part = record(event.part);
-    if (type === "text") {
-      const text = sanitizeText(typeof part?.text === "string" ? part.text : typeof event.text === "string" ? event.text : "");
-      if (text) parts.push({ type: "text", text });
-      continue;
-    }
-    if (type === "reasoning") {
-      const thought = sanitizeText(typeof part?.text === "string" ? part.text : "");
-      if (thought) parts.push({ type: "tool-Thinking", toolCallId: String(part?.id ?? crypto.randomUUID()), state: "output-available", input: { thought }, output: thought });
-      continue;
-    }
-    if (type === "tool_use" && part) {
-      const state = record(part.state);
-      const status = String(state?.status ?? "completed");
-      const toolName = displayToolName(String(part.tool ?? "Tool"));
-      parts.push({
-        type: `tool-${toolName}`,
-        toolCallId: String(part.id ?? crypto.randomUUID()),
-        state: status === "error" ? "output-error" : status === "running" || status === "pending" ? "input-streaming" : "output-available",
-        input: record(state?.input) ?? state?.input ?? {},
-        output: state?.output ?? (status === "error" ? { error: state?.error ?? "Tool failed" } : undefined),
-        errorText: status === "error" ? String(state?.error ?? "Tool failed") : undefined,
-      });
-      continue;
-    }
-    if (type === "error") {
-      const error = record(event.error);
-      const data = record(error?.data);
-      const message = typeof data?.message === "string" ? data.message : typeof error?.message === "string" ? error.message : "The agent reported an error.";
-      parts.push({ type: "error", title: "Agent error", message });
-    }
+/** Convert a single untrusted agent event to a UI part, or null if not displayable. */
+export function agentEventToPart(eventValue: unknown): Record<string, unknown> | null {
+  const event = record(eventValue);
+  if (!event) return null;
+  const type = String(event.type ?? "");
+  if (!KNOWN_EVENT_TYPES.includes(type as (typeof KNOWN_EVENT_TYPES)[number])) return null;
+  const part = record(event.part);
+  if (type === "text") {
+    const text = sanitizeText(typeof part?.text === "string" ? part.text : typeof event.text === "string" ? event.text : "");
+    if (!text) return null;
+    return { type: "text", text };
   }
-  return parts;
+  if (type === "reasoning") {
+    const thought = sanitizeText(typeof part?.text === "string" ? part.text : "");
+    if (!thought) return null;
+    return { type: "tool-Thinking", toolCallId: String(part?.id ?? crypto.randomUUID()), state: "output-available", input: { thought }, output: thought };
+  }
+  if (type === "tool_use" && part) {
+    const state = record(part.state);
+    const status = String(state?.status ?? "completed");
+    const toolName = displayToolName(String(part.tool ?? "Tool"));
+    return {
+      type: `tool-${toolName}`,
+      toolCallId: String(part.id ?? crypto.randomUUID()),
+      state: status === "error" ? "output-error" : status === "running" || status === "pending" ? "input-streaming" : "output-available",
+      input: record(state?.input) ?? state?.input ?? {},
+      output: state?.output ?? (status === "error" ? { error: state?.error ?? "Tool failed" } : undefined),
+      errorText: status === "error" ? String(state?.error ?? "Tool failed") : undefined,
+    };
+  }
+  if (type === "error") {
+    const error = record(event.error);
+    const data = record(error?.data);
+    const message = typeof data?.message === "string" ? data.message : typeof error?.message === "string" ? error.message : "The agent reported an error.";
+    return { type: "error", title: "Agent error", message };
+  }
+  return null;
+}
+
+export function agentEventsToParts(events: unknown[]): Record<string, unknown>[] {
+  return events.map(agentEventToPart).filter(Boolean) as Record<string, unknown>[];
+}
+
+/** Flatten agent event parts to a plain text string for persistence. */
+export function partsToText(parts: Record<string, unknown>[], fallback: string): string {
+  const text = parts.flatMap((part) => {
+    if (part.type === "text" && typeof part.text === "string") return [part.text];
+    if (part.type === "error") return [`${part.title}: ${part.message}`];
+    return [];
+  }).join("\n\n").trim();
+  return text || fallback.trim() || "Whim agent completed.";
 }
 
 /**

@@ -1,0 +1,28 @@
+{
+  "patterns": [
+    {
+      "signature": "fatal:",
+      "toolName": "bash",
+      "count": 1,
+      "firstSeen": 1784274727343,
+      "lastSeen": 1784274727343,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk git add src/App.css src/components/OrchestrationPanel.tsx src/components/MissionControl.tsx src/lib/bridge.ts && rtk git commit ",
+      "exampleOutput": "ok 4 files changed, 171 insertions(+), 205 deletions(-)\nok 0240096\nfatal: unable to access 'https://github.com/ZachDreamZ/whim-ide.git/': Recv failure: Connection was reset\n\n\nCommand exited with code 128",
+      "evalCreated": false,
+      "category": "functionality"
+    },
+    {
+      "signature": "FAIL  src/components/ChatHub.test.tsx",
+      "toolName": "bash",
+      "count": 1,
+      "firstSeen": 1784275705696,
+      "lastSeen": 1784275705696,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk npm run check 2>&1 | rtk grep -E \"FAIL|failed|Error\" | rtk head -10",
+      "exampleOutput": "7:C:\\Users\\Vendex\\Documents\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src\\components\\ErrorBoundary.tsx\n84: ❯ src/components/ChatHub.test.tsx (1 test | 1 failed) 1413ms\n86: Test Files  1 failed | 33 passed (34)\n87:      Tests  1 failed | 85 passed (86)\n93: FAIL  src/components/ChatHub.test.tsx > ChatHub > ru",
+      "evalCreated": false,
+      "category": "test-failure"
+    }
+  ],
+  "totalAdaptations": 0,
+  "lastCheck": 1784275469870
+}

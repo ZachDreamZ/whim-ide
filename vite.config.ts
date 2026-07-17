@@ -44,5 +44,13 @@ export default defineConfig(async () => ({
   },
   build: {
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/motion")) return "vendor-motion";
+          if (id.includes("node_modules/@tabler/icons-react")) return "vendor-icons";
+        },
+      },
+    },
   },
 }));

@@ -190,6 +190,7 @@ async fn codex_output(args: &[&str]) -> Result<std::process::Output, String> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::backend::execution::hide_console(&mut command);
     timeout(Duration::from_secs(30), command.output())
         .await
         .map_err(|_| "Codex plugin command timed out".to_string())?

@@ -8,6 +8,7 @@ import {
   agentEventsToParts,
   bridge,
   errorMessage,
+  partsToText,
   type ChatThread,
   type ChatThreadMessage,
   type ChatThreadSummary,
@@ -30,6 +31,7 @@ type ChatHubProps = {
   enterToSend: boolean;
   showCopyActions: boolean;
   persistHistory: boolean;
+  initialThreadId?: string | null;
 };
 
 type AttachedTextFile = {
@@ -51,15 +53,6 @@ function storedToUi(message: ChatThreadMessage): UIMessage {
     role: message.role,
     parts: [{ type: "text", text: message.content }],
   } as UIMessage;
-}
-
-function partsToText(parts: ReturnType<typeof agentEventsToParts>, fallback: string) {
-  const text = parts.flatMap((part) => {
-    if (part.type === "text" && typeof part.text === "string") return [part.text];
-    if (part.type === "error") return [`${part.title}: ${part.message}`];
-    return [];
-  }).join("\n\n").trim();
-  return text || fallback.trim() || "Whim Chat finished without a text response.";
 }
 
 function boundedConversation(messages: ChatThreadMessage[]) {
@@ -85,6 +78,7 @@ export function ChatHub({
   enterToSend,
   showCopyActions,
   persistHistory,
+  initialThreadId,
 }: ChatHubProps) {
   const native = bridge.isNative();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
@@ -127,6 +121,7 @@ export function ChatHub({
     if (!persistHistory || !native) return;
     await bridge.saveChatThread(thread);
     await refreshThreads();
+    window.dispatchEvent(new Event("whim:history-changed"));
   }, [native, persistHistory, refreshThreads]);
 
   const newChat = useCallback(() => {
@@ -156,8 +151,14 @@ export function ChatHub({
       await bridge.deleteChatThread(id);
       if (activeThreadRef.current?.id === id) newChat();
       await refreshThreads();
+      window.dispatchEvent(new Event("whim:history-changed"));
     } catch (cause) { setError(errorMessage(cause)); }
   }, [native, newChat, refreshThreads]);
+
+  useEffect(() => {
+    if (!initialThreadId || activeThreadRef.current?.id === initialThreadId || status !== "ready") return;
+    void openThread(initialThreadId);
+  }, [initialThreadId, openThread, status]);
 
   const attachWorkspaceFiles = useCallback(async () => {
     if (!native || !workspace) {

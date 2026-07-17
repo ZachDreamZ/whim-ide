@@ -20,8 +20,10 @@ export default defineConfig([
       },
     },
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "no-control-regex": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "no-control-regex": "warn",
+      "no-console": "warn",
+      "react-hooks/exhaustive-deps": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },

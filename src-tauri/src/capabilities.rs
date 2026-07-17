@@ -40,9 +40,9 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
     },
     AgentCapabilitySpec {
         id: "coding",
-        description: "Edit workspace files with reversible checkpoints and strict role gates.",
-        instructions: "Read before editing, prefer targeted edits, checkpoint risky work, and never mutate in read-only modes.",
-        tools: &["write_file", "edit_file", "checkpoint", "rollback", "tunnel"],
+        description: "Implement directly or delegate bounded workspace changes with reversible checkpoints and strict role gates.",
+        instructions: "Read before editing, prefer targeted edits, delegate only when useful, checkpoint risky work, and never mutate in read-only modes.",
+        tools: &["write_file", "edit_file", "delegate_task", "checkpoint", "rollback", "tunnel"],
         defer_loading: true,
         enabled: true,
     },
@@ -70,22 +70,7 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
         defer_loading: true,
         enabled: true,
     },
-    AgentCapabilitySpec {
-        id: "pi-delegation",
-        description: "Run the installed Pi coding agent as a bounded alternate runtime.",
-        instructions: "Use Pi's own credential store, force role-appropriate tool allowlists, hide subprocess windows, and enforce cancellation and timeout bounds.",
-        tools: &[],
-        defer_loading: true,
-        enabled: true,
-    },
-    AgentCapabilitySpec {
-        id: "external-harnesses",
-        description: "Run Codex or Claude Code through their own subscription-backed sessions.",
-        instructions: "Never read or copy external harness tokens. Intersect every run with Whim role, profile, sandbox, cancellation, and timeout limits.",
-        tools: &[],
-        defer_loading: true,
-        enabled: true,
-    },
+
     AgentCapabilitySpec {
         id: "computer-use",
         description: "Inspect and invoke visible Windows controls through native UI Automation.",

@@ -76,9 +76,6 @@ pub struct ComputerUseSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentSettings {
-    pub runtime: String,
-    pub pi_model: String,
-    pub external_model: String,
     pub speed: String,
     pub approval_policy: String,
     pub background_verification: bool,
@@ -86,10 +83,6 @@ pub struct AgentSettings {
     pub defer_capabilities: bool,
     pub max_parallel_agents: u8,
     pub enabled_capabilities: Vec<String>,
-    pub default_adapter: String,
-    pub wsl_distro: String,
-    pub container_image: String,
-    pub remote_host: String,
 }
 
 impl Default for AppSettings {
@@ -175,9 +168,6 @@ impl Default for ComputerUseSettings {
 impl Default for AgentSettings {
     fn default() -> Self {
         Self {
-            runtime: "native".into(),
-            pi_model: "opencode/big-pickle".into(),
-            external_model: "default".into(),
             speed: "balanced".into(),
             approval_policy: "risky".into(),
             background_verification: true,
@@ -189,13 +179,7 @@ impl Default for AgentSettings {
                 "research".into(),
                 "coding".into(),
                 "verification".into(),
-                "pi-delegation".into(),
-                "external-harnesses".into(),
             ],
-            default_adapter: "native".into(),
-            wsl_distro: "Ubuntu".into(),
-            container_image: "ubuntu:latest".into(),
-            remote_host: "user@localhost".into(),
         }
     }
 }
@@ -288,21 +272,7 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
             "Dictation dictionary must be at most 1000 characters of printable text".into(),
         );
     }
-    one_of(
-        &settings.agent.runtime,
-        &["native", "pi", "codex", "claude", "antigravity", "eve"],
-        "agent runtime",
-    )?;
-    if settings.agent.pi_model.chars().count() > 200
-        || settings.agent.pi_model.chars().any(char::is_control)
-    {
-        return Err("Pi model must be at most 200 printable characters".into());
-    }
-    if settings.agent.external_model.chars().count() > 200
-        || settings.agent.external_model.chars().any(char::is_control)
-    {
-        return Err("External harness model must be at most 200 printable characters".into());
-    }
+
     one_of(
         &settings.agent.speed,
         &["fast", "balanced", "thorough"],
@@ -323,8 +293,6 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         "verification",
         "desktop-context",
         "voice",
-        "pi-delegation",
-        "external-harnesses",
         "computer-use",
     ];
     if settings.agent.enabled_capabilities.len() > allowed_capabilities.len()
@@ -411,7 +379,6 @@ mod tests {
         let settings = AppSettings::default();
         validate_settings(&settings).unwrap();
         assert_eq!(settings.agent.approval_policy, "risky");
-        assert_eq!(settings.agent.runtime, "native");
         assert!(settings.agent.background_verification);
         assert!(settings.agent.autonomous_janitor);
         assert!(settings.personalization.enabled);

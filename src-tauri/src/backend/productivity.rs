@@ -469,6 +469,7 @@ async fn output(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::backend::execution::hide_console(&mut command);
     timeout(PROCESS_TIMEOUT, command.output())
         .await
         .map_err(|_| format!("{program} timed out"))?

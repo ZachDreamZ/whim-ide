@@ -21,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             backend::workspace::select_workspace,
+            backend::workspace::ensure_project_context,
             backend::workspace::get_selected_workspace,
             backend::workspace::list_workspace,
             backend::workspace::list_workspace_tree,
@@ -35,15 +36,14 @@ pub fn run() {
             backend::chat::save_chat_thread,
             backend::chat::delete_chat_thread,
             backend::chat::clear_chat_threads,
+            backend::browser::native_browser_action,
             capabilities::list_agent_capabilities,
             backend::voice::transcribe_voice,
             backend::voice::synthesize_voice,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,
-            backend::external_harness::discover_external_harnesses,
-            backend::eve::inspect_eve_workspace,
-            backend::eve::validate_eve_workspace,
+
             backend::media::media_runtime_status,
             backend::media::generate_media,
             backend::media::read_media_artifact,

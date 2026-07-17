@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Check,
   CloudOff,
@@ -12,19 +13,19 @@ import "./App.css";
 import { Titlebar } from "./components/Titlebar";
 import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-import { MissionControl } from "./components/MissionControl";
-import { ChatHub } from "./components/ChatHub";
-import { CreativeStudio } from "./components/CreativeStudio";
-import { EveHub } from "./components/EveHub";
-import { OrchestrationPanel } from "./components/OrchestrationPanel";
-import { ProviderHub } from "./components/ProviderHub";
-import { EcosystemHub } from "./components/EcosystemHub";
-import { ScheduledTasksHub } from "./components/ScheduledTasksHub";
-import { PluginsHub } from "./components/PluginsHub";
-import { SitesHub } from "./components/SitesHub";
-import { PullRequestsHub } from "./components/PullRequestsHub";
-import { ShipHub } from "./components/ShipHub";
-import { AutopilotHub } from "./components/AutopilotHub";
+const MissionControl = lazy(() => import("./components/MissionControl").then(m => ({ default: m.MissionControl })));
+const ChatHub = lazy(() => import("./components/ChatHub").then(m => ({ default: m.ChatHub })));
+const CreativeStudio = lazy(() => import("./components/CreativeStudio").then(m => ({ default: m.CreativeStudio })));
+const OrchestrationPanel = lazy(() => import("./components/OrchestrationPanel").then(m => ({ default: m.OrchestrationPanel })));
+const ProviderHub = lazy(() => import("./components/ProviderHub").then(m => ({ default: m.ProviderHub })));
+const EcosystemHub = lazy(() => import("./components/EcosystemHub").then(m => ({ default: m.EcosystemHub })));
+const ScheduledTasksHub = lazy(() => import("./components/ScheduledTasksHub").then(m => ({ default: m.ScheduledTasksHub })));
+const PluginsHub = lazy(() => import("./components/PluginsHub").then(m => ({ default: m.PluginsHub })));
+const SitesHub = lazy(() => import("./components/SitesHub").then(m => ({ default: m.SitesHub })));
+const PullRequestsHub = lazy(() => import("./components/PullRequestsHub").then(m => ({ default: m.PullRequestsHub })));
+const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then(m => ({ default: m.NativeBrowserHub })));
+const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
+const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
@@ -41,9 +42,11 @@ import {
   type AppSettings,
   type CredentialReport,
   type EnvironmentReport,
+  type OrchestrationJob,
+  type ChatThreadSummary,
   type WorkspaceInfo,
 } from "./lib/bridge";
-import { chooseInitialFile, inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
+import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
 import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
 
@@ -61,11 +64,13 @@ function App() {
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
-  const [treeError, setTreeError] = useState<string | null>(null);
+  const [, setTreeError] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState("");
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [openedJobId, setOpenedJobId] = useState<string | null>(null);
+  const [openedChatId, setOpenedChatId] = useState<string | null>(null);
 
   const [models] = useState<string[]>([]);
   const [agentProvider, setAgentProvider] = useState(() => localStorage.getItem("whim:agent:provider") ?? "auto");
@@ -74,7 +79,7 @@ function App() {
   const [agentModel, setAgentModel] = useState(() => localStorage.getItem("whim:agent:model") ?? "");
   const [environment, setEnvironment] = useState<EnvironmentReport>(defaultEnvironment);
   const [credentials, setCredentials] = useState<CredentialReport>(defaultCredentials);
-  const [profile, setProfile] = useState<ProjectProfile>(defaultProfile);
+  const [, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
   const [, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
@@ -246,13 +251,14 @@ function App() {
     setActiveFile("");
     setReadOnlyFile(null);
     setChanges([]);
-    const nextEntries = await loadTreeAndProfile(info.path);
+    await bridge.ensureProjectContext(info.path).catch((error) => {
+      setToast(`Project context was not initialized: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    await loadTreeAndProfile(info.path);
     void loadGitState(info.path);
     void refreshProviders();
-    const recentFile = localStorage.getItem(`whim:last-file:${info.path}`);
-    const initial = recentFile && nextEntries.some((entry) => entry.kind === "file" && entry.path.replace(/\\/g, "/") === recentFile.replace(/\\/g, "/")) ? recentFile : chooseInitialFile(nextEntries);
-    if (initial) await loadReadOnlyFile(info.path, initial);
-  }, [loadReadOnlyFile, loadGitState, loadTreeAndProfile, refreshProviders]);
+    window.dispatchEvent(new Event("whim:history-changed"));
+  }, [loadGitState, loadTreeAndProfile, refreshProviders]);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -348,13 +354,24 @@ function App() {
 
   const refreshCurrentProviders = refreshProviders;
 
+  const openSidebarTask = useCallback(async (job: OrchestrationJob) => {
+    try {
+      if (!workspacePath || workspacePath.replace(/\\/g, "/").toLowerCase() !== job.workspace.replace(/\\/g, "/").toLowerCase()) {
+        await activateWorkspace(await bridge.useWorkspace(job.workspace));
+      }
+      setOpenedJobId(job.id);
+      setView("orchestrate");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not open this task.");
+    }
+  }, [activateWorkspace, workspacePath]);
 
-  const contextItems = useMemo(() => [
-    ...(profile.framework ? [{ id: "framework", label: profile.framework, tone: "violet" as const }] : []),
-    ...(profile.packageManager ? [{ id: "packages", label: profile.packageManager, tone: "mint" as const }] : []),
-    ...(models.length ? [{ id: "models", label: `${models.length} connected models`, tone: "coral" as const }] : []),
-  ], [models.length, profile.framework, profile.packageManager]);
-  const readme = entries.find((entry) => entry.kind === "file" && /(^|\/)readme\.md$/i.test(entry.path));
+  const openSidebarChat = useCallback((thread: ChatThreadSummary) => {
+    setOpenedChatId(thread.id);
+    setView("chat");
+  }, []);
+
+
   const currentFileName = activeFile ? activeFile.split(/[\\/]/).pop() : "No file";
 
   const workspaceGate = (title: string) => (
@@ -397,23 +414,19 @@ function App() {
               activeView={view}
               onViewChange={setView}
               workspace={workspacePath ?? "No workspace open"}
-              activeFile={activeFile}
-              entries={entries}
               loading={treeLoading}
-              error={treeError}
               branch={branch}
-              livingBrief={readme ? { eyebrow: "Project guide", title: readme.path } : null}
-              contextItems={contextItems}
-              filterShortcut="Ctrl P"
-              onFileSelect={chooseFile}
               onOpenWorkspace={openWorkspace}
               onRefresh={() => void refreshWorkspace()}
-              onOpenActions={workspacePath ? () => void bridge.reveal(workspacePath) : undefined}
-              onOpenBrief={readme ? () => void chooseFile(readme.path) : undefined}
+              onTaskSelect={(job) => void openSidebarTask(job)}
+              onChatSelect={openSidebarChat}
             />
             <div className="workbench">
               <div className="workbench-main agent-first">
+                <AnimatePresence mode="wait">
+                <Suspense fallback={<LoadingFallback />}>
                 {view === "build" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <MissionControl
                     workspace={workspacePath}
                     workspaceEntries={entries}
@@ -431,10 +444,12 @@ function App() {
                     showSuggestedPrompts={appSettings.general.suggestedPrompts}
                     enterToSend={appSettings.chat.enterToSend}
                     showCopyActions={appSettings.chat.showCopyActions}
-                    onRunComplete={() => void refreshWorkspace()}
+                    onRunComplete={() => { void refreshWorkspace(); window.dispatchEvent(new Event("whim:history-changed")); }}
                     onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                   />
+                  </motion.div>
                 ) : view === "chat" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <ChatHub
                     workspace={workspacePath}
                     provider={agentProvider}
@@ -451,10 +466,19 @@ function App() {
                     enterToSend={appSettings.chat.enterToSend}
                     showCopyActions={appSettings.chat.showCopyActions}
                     persistHistory={appSettings.chat.persistHistory}
+                    initialThreadId={openedChatId}
                   />
+                  </motion.div>
+                ) : view === "browser" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  <NativeBrowserHub />
+                  </motion.div>
                 ) : view === "creative" ? (
-                  workspacePath ? <CreativeStudio workspace={workspacePath} onOpenConfiguration={() => { setActiveSettingsCategory("configuration"); setView("settings"); }} /> : workspaceGate("Creative Studio needs a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <CreativeStudio workspace={workspacePath} onOpenConfiguration={() => { setActiveSettingsCategory("configuration"); setView("settings"); }} /> : workspaceGate("Creative Studio needs a workspace")}
+                  </motion.div>
                 ) : view === "providers" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <ProviderHub onRefresh={refreshCurrentProviders}
                     agentProvider={agentProvider} agentApiKey={agentApiKey} agentBaseUrl={agentBaseUrl} agentModel={agentModel}
                     onAgentProfileChange={(patch) => {
@@ -464,23 +488,38 @@ function App() {
                       if (patch.model !== undefined) setAgentModel(patch.model);
                     }}
                   />
+                  </motion.div>
                 ) : view === "scheduled" ? (
-                  workspacePath ? <ScheduledTasksHub workspace={workspacePath} /> : workspaceGate("Scheduled tasks need a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <ScheduledTasksHub workspace={workspacePath} /> : workspaceGate("Scheduled tasks need a workspace")}
+                  </motion.div>
                 ) : view === "plugins" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <PluginsHub />
-                ) : view === "eve" ? (
-                  workspacePath ? <EveHub workspace={workspacePath} onOpenFile={(path) => { setView("build"); void chooseFile(path); }} /> : workspaceGate("Eve Agents needs a workspace")
+                  </motion.div>
                 ) : view === "sites" ? (
-                  workspacePath ? <SitesHub workspace={workspacePath} /> : workspaceGate("Sites needs a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <SitesHub workspace={workspacePath} /> : workspaceGate("Sites needs a workspace")}
+                  </motion.div>
                 ) : view === "pullRequests" ? (
-                  workspacePath ? <PullRequestsHub workspace={workspacePath} /> : workspaceGate("Pull requests need a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <PullRequestsHub workspace={workspacePath} /> : workspaceGate("Pull requests need a workspace")}
+                  </motion.div>
                 ) : view === "ecosystem" ? (
-                  workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <EcosystemHub workspace={workspacePath} /> : workspaceGate("Ecosystem needs a workspace")}
+                  </motion.div>
                 ) : view === "orchestrate" ? (
-                  workspacePath ? <OrchestrationPanel workspace={workspacePath} /> : workspaceGate("Orchestrate needs a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <OrchestrationPanel workspace={workspacePath} initialJobId={openedJobId} /> : workspaceGate("Orchestrate needs a workspace")}
+                  </motion.div>
                 ) : view === "ship" ? (
-                  workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  {workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")}
+                  </motion.div>
                 ) : null}
+                </Suspense>
+                </AnimatePresence>
                 {view === "build" && readOnlyFile && (
                   <section className="read-only-file" aria-label="File viewer">
                     <header className="read-only-file-header">
@@ -500,7 +539,9 @@ function App() {
             </div>
           </div>
         ) : (
-          workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")
+          <Suspense fallback={<LoadingFallback />}>
+          {workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")}
+          </Suspense>
         )}
       </div>
       {appSettings.general.showBottomPanel && <footer className="statusbar">
@@ -517,6 +558,14 @@ function App() {
       </footer>}
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}
+    </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-[#0b0d0d]">
+      <div className="text-sm text-[#666]">Loading…</div>
     </div>
   );
 }

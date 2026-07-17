@@ -32,7 +32,7 @@ const WORKFLOWS: Record<MissionAgentMode, MissionWorkflow> = {
   auto: {
     agent: "auto",
     jobMode: "auto",
-    instruction: "Orchestrate a workflow of specialized agents to solve the user's intent. Do not execute work directly; delegate each bounded task to the appropriate role.",
+    instruction: "Own the user's outcome end to end in Vibe mode. Inspect and research first when useful, decide without unnecessary questions, implement the result directly, and verify it. Delegate bounded work only when it helps; do not stop at a plan or ask the user to switch modes to enable editing.",
   },
   planner: {
     agent: "planner",

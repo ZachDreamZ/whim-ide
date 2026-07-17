@@ -8,6 +8,7 @@ use std::{
     },
 };
 
+pub mod browser;
 pub mod chat;
 pub mod computer;
 pub mod context;

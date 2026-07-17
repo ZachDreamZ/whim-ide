@@ -1724,6 +1724,8 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         ("deepseek", "DeepSeek"),
         ("qwen", "Qwen"),
         ("xiaomi", "Xiaomi"),
+        ("zenmux", "ZenMux"),
+        ("xai", "xAI (Grok)"),
     ];
     for (provider, label) in cloud {
         let has = crate::agent::provider_key_available(provider);

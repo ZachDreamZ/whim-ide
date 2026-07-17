@@ -119,9 +119,9 @@ export function VoiceOrb({ onClose, provider, apiKey, baseUrl, voice, language, 
       </div>
       <p>{message}</p>
       <div className="voice-controls">
-        <button onClick={() => { setMuted(!muted); stream.current?.getAudioTracks().forEach((track) => { track.enabled = muted; }); }}>{muted ? <MicOff size={15}/> : <Mic size={15}/>} {muted ? "Unmute" : "Mute"}</button>
-        <button className="voice-primary" onClick={() => void finish()} disabled={phase !== "listening"}>Transcribe</button>
-        <button onClick={() => void speak()} disabled={!speakText || phase === "thinking"}><Volume2 size={15}/> Read response</button>
+        <button className="focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none" onClick={() => { setMuted(!muted); stream.current?.getAudioTracks().forEach((track) => { track.enabled = muted; }); }}>{muted ? <MicOff size={15}/> : <Mic size={15}/>} {muted ? "Unmute" : "Mute"}</button>
+        <button className="voice-primary focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none" onClick={() => void finish()} disabled={phase !== "listening"}>Transcribe</button>
+        <button className="focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none" onClick={() => void speak()} disabled={!speakText || phase === "thinking"}><Volume2 size={15}/> Read response</button>
       </div>
     </section>
   </div>;

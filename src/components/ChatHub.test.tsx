@@ -19,6 +19,10 @@ vi.mock("../lib/bridge", () => ({
     deleteChatThread: vi.fn(), cancelOperation: vi.fn(), runAgent: vi.fn(), readFileContent: vi.fn(), openGptSection: vi.fn(),
   },
   agentEventsToParts: vi.fn(),
+  partsToText: (parts: Record<string, unknown>[], fallback: string) => {
+    const text = parts.flatMap((p) => typeof p.text === "string" ? [p.text] : []).join("\n\n").trim();
+    return text || fallback;
+  },
   errorMessage: (cause: unknown) => cause instanceof Error ? cause.message : String(cause),
 }));
 
