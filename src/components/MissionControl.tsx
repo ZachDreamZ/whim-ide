@@ -879,7 +879,7 @@ export function MissionControl({
                 type="button"
                 onClick={() => setMode(mode === "implementer" ? DEFAULT_MISSION_MODE : "implementer")}
                 className={`mission-mode-toggle${mode === "implementer" ? " active" : ""}`}
-                title="Code Canvas"
+                title="Optional implementation focus — Vibe already edits and verifies automatically"
               >
                 <WandSparkles size={14} />
                 <span>Canvas</span>

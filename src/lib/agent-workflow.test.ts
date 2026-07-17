@@ -10,6 +10,8 @@ describe("agent workflow routing", () => {
     const request = resolveMissionRequest("Build the feature");
     expect(request.workflow.agent).toBe("auto");
     expect(request.workflow.jobMode).toBe("auto");
+    expect(request.workflow.instruction).toContain("implement the result directly");
+    expect(request.workflow.instruction).not.toContain("Do not execute work directly");
     expect(displayWorkflowMode(request.workflow.jobMode)).toBe("Vibe");
   });
 

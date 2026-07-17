@@ -30,6 +30,7 @@ type ChatHubProps = {
   enterToSend: boolean;
   showCopyActions: boolean;
   persistHistory: boolean;
+  initialThreadId?: string | null;
 };
 
 type AttachedTextFile = {
@@ -85,6 +86,7 @@ export function ChatHub({
   enterToSend,
   showCopyActions,
   persistHistory,
+  initialThreadId,
 }: ChatHubProps) {
   const native = bridge.isNative();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
@@ -127,6 +129,7 @@ export function ChatHub({
     if (!persistHistory || !native) return;
     await bridge.saveChatThread(thread);
     await refreshThreads();
+    window.dispatchEvent(new Event("whim:history-changed"));
   }, [native, persistHistory, refreshThreads]);
 
   const newChat = useCallback(() => {
@@ -156,8 +159,14 @@ export function ChatHub({
       await bridge.deleteChatThread(id);
       if (activeThreadRef.current?.id === id) newChat();
       await refreshThreads();
+      window.dispatchEvent(new Event("whim:history-changed"));
     } catch (cause) { setError(errorMessage(cause)); }
   }, [native, newChat, refreshThreads]);
+
+  useEffect(() => {
+    if (!initialThreadId || activeThreadRef.current?.id === initialThreadId || status !== "ready") return;
+    void openThread(initialThreadId);
+  }, [initialThreadId, openThread, status]);
 
   const attachWorkspaceFiles = useCallback(async () => {
     if (!native || !workspace) {

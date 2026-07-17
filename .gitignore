@@ -11,7 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
-.whim/context/
+.whim/
 
 # Editor directories and files
 .vscode/*

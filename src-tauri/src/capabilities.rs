@@ -40,9 +40,9 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
     },
     AgentCapabilitySpec {
         id: "coding",
-        description: "Edit workspace files with reversible checkpoints and strict role gates.",
-        instructions: "Read before editing, prefer targeted edits, checkpoint risky work, and never mutate in read-only modes.",
-        tools: &["write_file", "edit_file", "checkpoint", "rollback", "tunnel"],
+        description: "Implement directly or delegate bounded workspace changes with reversible checkpoints and strict role gates.",
+        instructions: "Read before editing, prefer targeted edits, delegate only when useful, checkpoint risky work, and never mutate in read-only modes.",
+        tools: &["write_file", "edit_file", "delegate_task", "checkpoint", "rollback", "tunnel"],
         defer_loading: true,
         enabled: true,
     },

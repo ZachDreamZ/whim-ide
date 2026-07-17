@@ -162,6 +162,11 @@ export type ChatThreadSummary = {
   preview: string;
 };
 
+export type NativeBrowserState = {
+  open: boolean;
+  url?: string | null;
+};
+
 export type AppSettings = {
   version: number;
   general: {
@@ -634,6 +639,11 @@ export const bridge = {
     });
   },
 
+  async ensureProjectContext(workspace: string): Promise<string> {
+    if (!inTauri()) return ".whim/HANDOFF.md";
+    return call<string>("ensure_project_context", { workspace });
+  },
+
   async listGitWorktrees(): Promise<GitWorktree[]> {
     if (!inTauri()) return [];
     return call<GitWorktree[]>("list_git_worktrees");
@@ -1061,6 +1071,11 @@ export const bridge = {
   async openUrl(url: string): Promise<void> {
     if (!inTauri()) requireNative();
     await openNativeUrl(url);
+  },
+
+  async nativeBrowserAction(action: "open" | "navigate" | "back" | "forward" | "reload" | "focus" | "close" | "state", url?: string): Promise<NativeBrowserState> {
+    if (!inTauri()) return { open: false, url: null };
+    return call<NativeBrowserState>("native_browser_action", { action, url });
   },
 
   async listChatThreads(): Promise<ChatThreadSummary[]> {

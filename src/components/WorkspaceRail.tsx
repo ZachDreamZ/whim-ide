@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type ViewId = "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
+export type ViewId = "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "browser" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
 
 const items: { id: ViewId; label: string; icon: LucideIcon; accent?: boolean }[] = [
   { id: "build", label: "New task", icon: LayoutDashboard },

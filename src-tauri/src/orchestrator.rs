@@ -46,8 +46,8 @@ pub enum JobMode {
 impl JobMode {
     pub fn default_risk(self) -> JobRisk {
         match self {
-            Self::Auto | Self::Vibe | Self::Plan | Self::Research => JobRisk::Low,
-            Self::Build | Self::Verify | Self::Review => JobRisk::Medium,
+            Self::Plan | Self::Research => JobRisk::Low,
+            Self::Auto | Self::Vibe | Self::Build | Self::Verify | Self::Review => JobRisk::Medium,
             Self::Ship | Self::Operate => JobRisk::High,
         }
     }

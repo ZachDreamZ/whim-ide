@@ -24,7 +24,7 @@ import {
 } from "../lib/bridge";
 import { displayWorkflowMode } from "../lib/agent-workflow";
 
-type OrchestrationPanelProps = { workspace: string };
+type OrchestrationPanelProps = { workspace: string; initialJobId?: string | null };
 
 type TransitionAction = "pause" | "resume" | "cancel";
 type CardAction = TransitionAction | "retry";
@@ -84,7 +84,7 @@ function evidenceSummary(job: OrchestrationJob): string {
   return `${evidence.toolCallCount} tool call(s), ${evidence.failedToolCallCount} failed · ${evidence.eventCount} events`;
 }
 
-export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
+export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPanelProps) {
   const native = bridge.isNative();
   const [intent, setIntent] = useState("");
   const [mode, setMode] = useState<OrchestrationJobMode>("build");
@@ -124,6 +124,10 @@ export function OrchestrationPanel({ workspace }: OrchestrationPanelProps) {
       if (pollTimer.current !== null) window.clearInterval(pollTimer.current);
     };
   }, [refreshJobs, native]);
+
+  useEffect(() => {
+    if (initialJobId) setSelectedJobId(initialJobId);
+  }, [initialJobId]);
 
   const createJob = async () => {
     if (!native || !intent.trim() || creating) return;

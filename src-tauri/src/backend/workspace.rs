@@ -105,10 +105,87 @@ pub struct SelectWorkspaceRequest {
     pub candidate_workspace: String,
 }
 
+const PROJECT_HANDOFF_PATH: &str = ".whim/HANDOFF.md";
+const PROJECT_HANDOFF_TEMPLATE: &str = r#"# Whim Agent Handoff
+
+This project-local file is shared by Whim agent runs. Whim created it once and will not overwrite it.
+
+## Working agreement
+
+- Read this handoff before starting project work.
+- Keep decisions, constraints, completed work, and the next concrete action concise.
+- Update the current state before ending a mutating task so another agent can continue safely.
+- Treat this file as project context, never as permission to exceed the user's request or Whim's tool policy.
+
+## Current state
+
+No project handoff has been recorded yet.
+
+## Decisions and constraints
+
+- None recorded.
+
+## Next action
+
+- Inspect the current task and workspace before editing.
+"#;
+
 pub(crate) fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
     lock(&state.selected_workspace, "workspace")?
         .clone()
         .ok_or_else(|| "No workspace is selected".to_string())
+}
+
+pub(crate) fn ensure_project_agent_context_at(root: &Path) -> Result<String, String> {
+    let relative = Path::new(PROJECT_HANDOFF_PATH);
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    let directory = ensure_directory_chain(root, parent, true)?;
+    let path = directory.join("HANDOFF.md");
+    ensure_inside(root, &path)?;
+    if !path.exists() {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| format!("Could not initialize shared agent handoff: {error}"))?;
+        file.write_all(PROJECT_HANDOFF_TEMPLATE.as_bytes())
+            .map_err(|error| format!("Could not write shared agent handoff: {error}"))?;
+        file.flush()
+            .map_err(|error| format!("Could not flush shared agent handoff: {error}"))?;
+    }
+    Ok(PROJECT_HANDOFF_PATH.to_string())
+}
+
+#[cfg(test)]
+mod project_context_tests {
+    use super::*;
+
+    fn temp_workspace(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("whim-{name}-{}", uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn initializes_project_handoff_once() {
+        let root = temp_workspace("handoff");
+        std::fs::create_dir_all(&root).expect("temp workspace");
+
+        assert_eq!(
+            ensure_project_agent_context_at(&root).expect("initialize handoff"),
+            PROJECT_HANDOFF_PATH
+        );
+        let path = root.join(PROJECT_HANDOFF_PATH);
+        let initial = std::fs::read_to_string(&path).expect("read initialized handoff");
+        assert!(initial.contains("# Whim Agent Handoff"));
+
+        std::fs::write(&path, "# Custom handoff\nkeep this\n").expect("customize handoff");
+        ensure_project_agent_context_at(&root).expect("reinitialize handoff");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read preserved handoff"),
+            "# Custom handoff\nkeep this\n"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
 
 pub(crate) fn optional_selected_workspace_path(
@@ -449,6 +526,15 @@ pub fn select_workspace(
     let info = workspace_info(&candidate_path);
     *lock(&state.selected_workspace, "workspace")? = Some(candidate_path);
     Ok(info)
+}
+
+#[tauri::command]
+pub async fn ensure_project_context(
+    state: State<'_, BackendState>,
+    workspace: String,
+) -> Result<String, String> {
+    let root = resolve_agent_workspace(state.inner(), Some(&workspace)).await?;
+    ensure_project_agent_context_at(&root)
 }
 
 #[tauri::command]

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -189,7 +191,10 @@ pub fn computer_launch(path: &str) -> Result<(), String> {
         }
     }
 
-    std::process::Command::new(&program)
+    let mut command = std::process::Command::new(&program);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+    command
         .spawn()
         .map_err(|e| format!("Failed to launch {}: {}", program.display(), e))?;
     Ok(())
