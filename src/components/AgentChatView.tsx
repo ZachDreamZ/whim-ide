@@ -19,6 +19,7 @@ type AgentChatViewProps = {
   projectName?: string;
   micSupported?: boolean;
   onOpenProviders?: () => void;
+  onTitleChange?: (title: string) => void;
 };
 
 interface NativeEvent {
@@ -103,6 +104,7 @@ export function AgentChatView({
   projectName,
   micSupported = false,
   onOpenProviders,
+  onTitleChange,
 }: AgentChatViewProps) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -121,6 +123,7 @@ export function AgentChatView({
       .then((thread) => {
         threadIdRef.current = thread.id;
         setConversationTitle(thread.title);
+        onTitleChange?.(thread.title);
         // Convert thread messages to UIMessage format
         const loaded: UIMessage[] = thread.messages.map((m) => ({
           id: m.id,
@@ -143,6 +146,7 @@ export function AgentChatView({
   useEffect(() => {
     setMessages([]);
     setConversationTitle("New chat");
+    onTitleChange?.("New chat");
     sessionIdRef.current = undefined;
     threadIdRef.current = undefined;
     messageHistoryRef.current = [];
@@ -198,6 +202,7 @@ export function AgentChatView({
 
         await bridge.saveChatThread(thread);
         setConversationTitle(title);
+        onTitleChange?.(title);
 
         // Update accumulated history
         messageHistoryRef.current = [

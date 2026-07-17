@@ -60,6 +60,7 @@ type ReadOnlyFile = { path: string; content: string; scrollToLine?: number | nul
 function App() {
   const [view, setView] = useState<ViewId>("build");
   const [chatResetKey, setChatResetKey] = useState(0);
+  const [chatTitle, setChatTitle] = useState("New chat");
 
   const handleViewChange = useCallback((nextView: ViewId) => {
     if (nextView === "build" && view === "build") {
@@ -452,6 +453,7 @@ function App() {
             branch={branch}
             changesCount={changes.length}
             projectName={workspacePath ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? undefined : undefined}
+            title={chatTitle}
             onNewChat={handleNewChat}
           >
               <AgentChatView
@@ -467,6 +469,7 @@ function App() {
                 onOpenFile={(path) => void loadReadOnlyFile(workspacePath ?? "", path)}
                 micSupported={typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia}
                 onOpenProviders={() => setView("providers")}
+                onTitleChange={setChatTitle}
               />
             {readOnlyFile && (
               <section className="read-only-file" aria-label="File viewer">
