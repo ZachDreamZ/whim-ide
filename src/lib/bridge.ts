@@ -201,9 +201,6 @@ export type AppSettings = {
   };
   computerUse: { enabled: boolean; screenCapture: boolean; appContext: boolean };
   agent: {
-    runtime: "native" | "pi" | "codex" | "claude" | "antigravity" | "eve";
-    piModel: string;
-    externalModel: string;
     speed: "fast" | "balanced" | "thorough";
     approvalPolicy: "always" | "risky";
     backgroundVerification: boolean;
@@ -211,10 +208,6 @@ export type AppSettings = {
     deferCapabilities: boolean;
     maxParallelAgents: number;
     enabledCapabilities: string[];
-    defaultAdapter: string;
-    wslDistro: string;
-    containerImage: string;
-    remoteHost: string;
   };
 };
 
@@ -236,20 +229,13 @@ export const defaultAppSettings: AppSettings = {
   voice: { voice: "alloy", language: "auto", dictionary: "" },
   computerUse: { enabled: false, screenCapture: true, appContext: true },
   agent: {
-    runtime: "native",
-    piModel: "opencode/big-pickle",
-    externalModel: "default",
     speed: "balanced",
     approvalPolicy: "risky",
     backgroundVerification: true,
     autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
-    enabledCapabilities: ["workspace", "research", "coding", "verification", "pi-delegation", "external-harnesses"],
-    defaultAdapter: "native",
-    wslDistro: "Ubuntu",
-    containerImage: "ubuntu:latest",
-    remoteHost: "user@localhost",
+    enabledCapabilities: ["workspace", "research", "coding", "verification"],
   },
 };
 
@@ -447,38 +433,7 @@ export type LocalProviderStatus = {
   detail: string;
 };
 
-export type ExternalHarnessStatus = {
-  id: "codex" | "claude" | "antigravity" | "eve" | "pi" | "opencode";
-  name: string;
-  available: boolean;
-  authenticated: boolean;
-  authKind: string;
-  version?: string | null;
-  path?: string | null;
-  capabilities: string[];
-  setupHint: string;
-};
 
-export type EveProjectStatus = {
-  detected: boolean;
-  layout?: string | null;
-  packageVersion?: string | null;
-  cliAvailable: boolean;
-  cliPath?: string | null;
-  instructionsPath?: string | null;
-  skills: string[];
-  tools: string[];
-  channels: string[];
-  schedules: string[];
-  evals: string[];
-  compileStatus?: string | null;
-  model?: string | null;
-  diagnosticErrors?: number | null;
-  diagnosticWarnings?: number | null;
-  createRoute?: string | null;
-  continueRoute?: string | null;
-  streamRoute?: string | null;
-};
 
 export type MediaRuntimeStatus = {
   codexAvailable: boolean;
@@ -737,20 +692,7 @@ export const bridge = {
     return result.providers;
   },
 
-  async externalHarnesses(): Promise<ExternalHarnessStatus[]> {
-    if (!inTauri()) return [];
-    return call<ExternalHarnessStatus[]>("discover_external_harnesses");
-  },
 
-  async inspectEveWorkspace(workspace: string): Promise<EveProjectStatus> {
-    return call<EveProjectStatus>("inspect_eve_workspace", { workspace });
-  },
-
-  async validateEveWorkspace(workspace: string): Promise<EveProjectStatus> {
-    return call<EveProjectStatus>("validate_eve_workspace", {
-      request: { workspace, confirmed: true },
-    });
-  },
 
   async mediaRuntimeStatus(): Promise<MediaRuntimeStatus> {
     if (!inTauri()) return { codexAvailable: false, codexAuthenticated: false, codexAuthKind: "unavailable", ffmpegAvailable: false, windowsVoiceAvailable: false };

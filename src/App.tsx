@@ -16,7 +16,6 @@ import { ProjectSidebar } from "./components/ProjectSidebar";
 const MissionControl = lazy(() => import("./components/MissionControl").then(m => ({ default: m.MissionControl })));
 const ChatHub = lazy(() => import("./components/ChatHub").then(m => ({ default: m.ChatHub })));
 const CreativeStudio = lazy(() => import("./components/CreativeStudio").then(m => ({ default: m.CreativeStudio })));
-const EveHub = lazy(() => import("./components/EveHub").then(m => ({ default: m.EveHub })));
 const OrchestrationPanel = lazy(() => import("./components/OrchestrationPanel").then(m => ({ default: m.OrchestrationPanel })));
 const ProviderHub = lazy(() => import("./components/ProviderHub").then(m => ({ default: m.ProviderHub })));
 const EcosystemHub = lazy(() => import("./components/EcosystemHub").then(m => ({ default: m.EcosystemHub })));
@@ -497,10 +496,6 @@ function App() {
                 ) : view === "plugins" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <PluginsHub />
-                  </motion.div>
-                ) : view === "eve" ? (
-                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
-                  {workspacePath ? <EveHub workspace={workspacePath} onOpenFile={(path) => { setView("build"); void chooseFile(path); }} /> : workspaceGate("Eve Agents needs a workspace")}
                   </motion.div>
                 ) : view === "sites" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>

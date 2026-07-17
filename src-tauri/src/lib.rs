@@ -43,9 +43,7 @@ pub fn run() {
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,
-            backend::external_harness::discover_external_harnesses,
-            backend::eve::inspect_eve_workspace,
-            backend::eve::validate_eve_workspace,
+
             backend::media::media_runtime_status,
             backend::media::generate_media,
             backend::media::read_media_artifact,

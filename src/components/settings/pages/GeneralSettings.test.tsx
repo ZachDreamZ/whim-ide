@@ -4,13 +4,6 @@ import { defaultAppSettings } from "../../../lib/bridge";
 import { ConfigurationSettings } from "./ConfigurationSettings";
 
 describe("ConfigurationSettings", () => {
-  it("emits a persisted runtime change", () => {
-    const onChange = vi.fn();
-    render(<ConfigurationSettings settings={structuredClone(defaultAppSettings)} onChange={onChange} saving={false} />);
-    fireEvent.change(screen.getAllByDisplayValue("native")[0], { target: { value: "pi" } });
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ agent: expect.objectContaining({ runtime: "pi" }) }));
-  });
-
   it("removes disabled capabilities from the runtime spec", () => {
     const onChange = vi.fn();
     render(<ConfigurationSettings settings={structuredClone(defaultAppSettings)} onChange={onChange} saving={false} />);
