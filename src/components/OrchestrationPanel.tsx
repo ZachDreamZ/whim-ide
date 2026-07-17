@@ -167,6 +167,20 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
     }
   };
 
+  const [providers, setProviders] = useState<{ provider: string; label: string; kind: string; available: boolean; hasKey: boolean }[]>([]);
+  useEffect(() => {
+    if (!native) return;
+    const discover = async () => {
+      try {
+        const all = await bridge.discoverProviders();
+        setProviders(all.map((p) => ({ provider: p.provider, label: p.label, kind: p.kind, available: p.available, hasKey: p.hasKey })));
+      } catch { /* ignore */ }
+    };
+    void discover();
+    const timer = window.setInterval(discover, 10_000);
+    return () => window.clearInterval(timer);
+  }, [native]);
+
   const dispatchMultiAgent = async () => {
     if (!native || !intent.trim() || dispatching) return;
     setDispatching(true);
@@ -414,6 +428,45 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
               })}
             </ul>
           )}
+        </section>
+
+        <section className="provider-pool-section">
+          <div className="section-heading-row">
+            <div>
+              <span className="section-kicker">
+                <Cpu size={12} /> Provider pool
+              </span>
+              <h2>Available providers</h2>
+            </div>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={async () => {
+                try {
+                  const all = await bridge.discoverProviders();
+                  setProviders(all.map((p) => ({ provider: p.provider, label: p.label, kind: p.kind, available: p.available, hasKey: p.hasKey })));
+                } catch { /* ignore */ }
+              }}
+              disabled={!native}
+            >
+              <RefreshCw size={13} />
+            </button>
+          </div>
+          <div className="provider-pool-grid">
+            {providers.map((p) => (
+              <div
+                key={p.provider}
+                className={`provider-pool-card ${p.available ? "available" : "unavailable"} ${p.kind}`}
+              >
+                <span className={`pool-dot ${p.hasKey ? "key-set" : "no-key"}`} />
+                <span className="pool-label">{p.label}</span>
+                <span className="pool-status">
+                  {p.available ? (p.hasKey ? "Ready" : "No key") : "Offline"}
+                </span>
+                <span className="pool-kind">{p.kind}</span>
+              </div>
+            ))}
+          </div>
         </section>
       </div>
 

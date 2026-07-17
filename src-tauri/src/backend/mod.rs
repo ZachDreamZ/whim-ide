@@ -27,6 +27,7 @@ pub mod voice;
 pub mod decomposer;
 pub mod oauth;
 pub mod scheduler;
+pub mod synthesizer;
 pub mod whim_route;
 pub mod workflows;
 pub mod workspace;

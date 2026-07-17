@@ -693,6 +693,45 @@ a:focus-visible {
 .statusbar > div { display: flex; align-items: center; gap: 13px; }
 .statusbar span { display: flex; align-items: center; gap: 4px; }
 .statusbar .native-status { color: #719988; }
+.provider-pool-section {
+  border-top: 1px solid var(--line-subtle);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+
+.provider-pool-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.provider-pool-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  border: 1px solid var(--line-subtle);
+  background: var(--surface-raised);
+  min-height: 30px;
+}
+.provider-pool-card.available { opacity: 1; }
+.provider-pool-card.unavailable { opacity: 0.5; }
+.pool-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.pool-dot.key-set { background: #4ade80; }
+.pool-dot.no-key { background: #facc15; }
+.pool-label { font-weight: 500; color: var(--text-strong); }
+.pool-status { color: var(--text-muted); margin-left: auto; }
+.pool-kind {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted); background: var(--surface-low);
+  padding: 1px 5px; border-radius: 4px;
+}
+
 .toast { position: fixed; left: 50%; bottom: 35px; translate: -50% 0; min-height: 33px; padding: 0 12px 0 7px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 9px; color: #dfe3e9; background: rgba(30,37,48,.96); box-shadow: 0 12px 32px rgba(0,0,0,.36); backdrop-filter: blur(18px); font-size: 13.5px; z-index: 120; animation: toast-in 180ms ease both; }
 .toast > span { width: 21px; height: 21px; display: grid; place-items: center; color: #102119; border-radius: 6px; background: var(--mint); }
 .dirty-indicator { position: fixed; right: 3px; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--coral); z-index: 100; }

@@ -1530,6 +1530,7 @@ pub enum SubTaskStatus {
     Completed,
     Failed,
     Cancelled,
+    Skipped,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
