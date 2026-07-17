@@ -167,6 +167,10 @@ export type NativeBrowserState = {
   url?: string | null;
 };
 
+// App version synced with Cargo.toml
+// Keep in sync when bumping.
+export const APP_VERSION = "0.4.0";
+
 export type AppSettings = {
   version: number;
   general: {

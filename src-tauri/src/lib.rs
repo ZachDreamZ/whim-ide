@@ -19,6 +19,7 @@ pub fn run() {
         .manage(BackendState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             backend::workspace::select_workspace,
             backend::workspace::ensure_project_context,
