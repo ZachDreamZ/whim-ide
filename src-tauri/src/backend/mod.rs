@@ -24,6 +24,7 @@ pub mod provider;
 pub mod reflector;
 pub mod settings;
 pub mod voice;
+pub mod oauth;
 pub mod whim_route;
 pub mod workflows;
 pub mod workspace;

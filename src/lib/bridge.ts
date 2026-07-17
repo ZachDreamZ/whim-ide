@@ -416,6 +416,41 @@ export type DiscoveredProvider = {
   capabilities: { chat: boolean; speechToText: boolean; textToSpeech: boolean };
 };
 
+// ─── OAuth types ──────────────────────────────────────────────────────────
+/** Built-in OAuth provider status visible from the UI. */
+export type OAuthProviderStatus = {
+  id: string;
+  name: string;
+  hasToken: boolean;
+  tokenPreview: string | null;
+};
+
+/** Request to start an OAuth authorization flow. */
+export type OAuthAuthUrlRequest = {
+  providerId: string;
+  clientId?: string | null;
+  redirectUri?: string | null;
+};
+
+/** Response with the authorization URL and PKCE data. */
+export type OAuthAuthUrlResponse = {
+  url: string;
+  state: string;
+  codeVerifier: string | null;
+  redirectPort: number;
+  redirectUri: string;
+};
+
+/** Full OAuth token stored in the keyring. */
+export type OAuthToken = {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  tokenType: string;
+  scope: string | null;
+  providerId: string;
+};
+
 export type ProviderInventory = {
   available: boolean;
   version?: string | null;
@@ -1076,6 +1111,57 @@ export const bridge = {
   // show what is available and let the user pick a manual override.
   async discoverProviders(): Promise<DiscoveredProvider[]> {
     return call<DiscoveredProvider[]>("discover_providers");
+  },
+
+  // ─── OAuth ───────────────────────────────────────────────────────────────
+
+  /** List built-in OAuth providers and their stored-token status. */
+  async oauthListProviders(): Promise<OAuthProviderStatus[]> {
+    return call<OAuthProviderStatus[]>("oauth_list_providers");
+  },
+
+  /** Build the authorization URL (opens browser on the Rust side). */
+  async oauthBuildAuthUrl(req: OAuthAuthUrlRequest): Promise<OAuthAuthUrlResponse> {
+    return call<OAuthAuthUrlResponse>("oauth_build_auth_url", {
+      req: { providerId: req.providerId, clientId: req.clientId ?? null, redirectUri: req.redirectUri ?? null },
+    });
+  },
+
+  /** Full OAuth flow: open browser → listen for callback → exchange → store in keyring. */
+  async oauthAuthorize(req: OAuthAuthUrlRequest): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_authorize", {
+      req: { providerId: req.providerId, clientId: req.clientId ?? null, redirectUri: req.redirectUri ?? null },
+    });
+  },
+
+  /** Exchange an authorization code for tokens (manual flow). */
+  async oauthExchange(
+    providerId: string,
+    code: string,
+    codeVerifier: string | null,
+    redirectUri: string,
+    clientId: string | null
+  ): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_exchange", {
+      req: { providerId, code, codeVerifier, redirectUri, clientId },
+    });
+  },
+
+  /** Refresh a stored token. */
+  async oauthRefresh(providerId: string, refreshToken: string, clientId: string | null): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_refresh", {
+      req: { providerId, refreshToken, clientId },
+    });
+  },
+
+  /** Get the stored token for a provider. */
+  async oauthGetToken(providerId: string): Promise<OAuthToken | null> {
+    return call<OAuthToken | null>("oauth_get_token", { providerId });
+  },
+
+  /** Clear the stored token for a provider. */
+  async oauthClearToken(providerId: string): Promise<void> {
+    return call<void>("oauth_clear_token", { providerId });
   },
 
 };
