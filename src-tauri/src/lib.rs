@@ -40,6 +40,8 @@ pub fn run() {
             capabilities::list_agent_capabilities,
             backend::voice::transcribe_voice,
             backend::voice::synthesize_voice,
+            backend::codebase_index::index_codebase,
+            backend::codebase_index::get_codebase_index_structured,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,

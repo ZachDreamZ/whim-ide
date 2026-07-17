@@ -1047,6 +1047,17 @@ export const bridge = {
     });
   },
 
+  // ─── Codebase Index ───────────────────────────────────────────────────────
+  async indexCodebase(path: string): Promise<string> {
+    if (!inTauri()) return "";
+    return call<string>("index_codebase", { path });
+  },
+
+  async getCodebaseIndex(path: string): Promise<unknown> {
+    if (!inTauri()) return null;
+    return call<unknown>("get_codebase_index_structured", { path });
+  },
+
   async deployPreflight(workspace: string, target: string): Promise<NativeResult> {
     const mode = target === "docker" ? "local" : target === "render" || target === "fly" ? "production" : "preview";
     const result = await call<{

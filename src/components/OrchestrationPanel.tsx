@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleDashed,
   Cpu,
+  FileCode2,
   ListChecks,
   LoaderCircle,
   PauseCircle,
@@ -86,6 +87,9 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
   const [creating, setCreating] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [indexManifest, setIndexManifest] = useState<string | null>(null);
+  const [indexFileCount, setIndexFileCount] = useState(0);
+  const [indexing, setIndexing] = useState(false);
   const pollTimer = useRef<number | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -180,6 +184,22 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
     const timer = window.setInterval(discover, 10_000);
     return () => window.clearInterval(timer);
   }, [native]);
+
+  const generateIndex = useCallback(async () => {
+    if (!native || indexing) return;
+    setIndexing(true);
+    try {
+      const manifest = await bridge.indexCodebase(workspace);
+      setIndexManifest(manifest);
+      const match = manifest.match(/(\d+) files/);
+      if (match) setIndexFileCount(Number(match[1]));
+      showToast("Codebase index generated.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not index codebase.");
+    } finally {
+      setIndexing(false);
+    }
+  }, [native, indexing, workspace, showToast]);
 
   const dispatchMultiAgent = async () => {
     if (!native || !intent.trim() || dispatching) return;
@@ -468,6 +488,49 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
             ))}
           </div>
         </section>
+
+        <details className="codebase-index-section">
+          <summary className="section-heading-row" style={{ cursor: "pointer" }}>
+            <div>
+              <span className="section-kicker">
+                <FileCode2 size={12} /> Codebase index
+              </span>
+              <h2>
+                {indexManifest
+                  ? `${indexFileCount} files indexed`
+                  : "Index workspace for agent context"}
+              </h2>
+            </div>
+          </summary>
+          {indexManifest && (
+            <pre className="codebase-manifest">{indexManifest}</pre>
+          )}
+          <div className="action-row" style={{ marginTop: "8px" }}>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => void generateIndex()}
+              disabled={indexing || !native}
+            >
+              {indexing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              {indexManifest ? "Re-index" : "Generate index"}
+            </button>
+            {indexManifest && (
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(indexManifest);
+                    showToast("Manifest copied to clipboard.");
+                  } catch { /* ignore */ }
+                }}
+              >
+                <Rocket size={14} /> Copy manifest
+              </button>
+            )}
+          </div>
+        </details>
       </div>
 
       {toast && (

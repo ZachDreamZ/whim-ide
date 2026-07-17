@@ -24,6 +24,7 @@ pub mod provider;
 pub mod reflector;
 pub mod settings;
 pub mod voice;
+pub mod codebase_index;
 pub mod decomposer;
 pub mod oauth;
 pub mod scheduler;
