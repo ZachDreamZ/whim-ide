@@ -506,6 +506,18 @@ export function MissionControl({
     return () => window.removeEventListener("whim:citation", activate);
   }, []);
 
+  // Listen for codebase index refresh events from the Rust file watcher
+  useEffect(() => {
+    if (!bridge.isNative()) return;
+    let unlisten: (() => void) | null = null;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<string>("codebase-index-refreshed", (event) => {
+        codebaseIndexRef.current = event.payload;
+      }).then((fn) => { unlisten = fn; });
+    }).catch(() => { /* Tauri event API unavailable */ });
+    return () => { unlisten?.(); };
+  }, []);
+
   useEffect(() => {
     setExecutionWorkspace(workspace);
   }, [workspace]);
@@ -548,17 +560,25 @@ export function MissionControl({
     lastLiveLedgerRefresh.current = 0;
     void refreshTaskLedger();
     void loadIntentBrief();
-    // Generate codebase index on workspace change
+    // Generate codebase index and start file watcher on workspace change
     const target = executionTarget ?? workspace;
     if (target && bridge.isNative() && !indexGenerating.current) {
       indexGenerating.current = true;
       bridge.indexCodebase(target).then((manifest) => {
         codebaseIndexRef.current = manifest;
         indexGenerating.current = false;
+        // Start file watcher for auto-reindex
+        void bridge.startCodebaseWatcher(target);
       }).catch(() => {
         indexGenerating.current = false;
       });
     }
+    return () => {
+      // Stop watcher when target changes
+      if (bridge.isNative()) {
+        void bridge.stopCodebaseWatcher();
+      }
+    };
   }, [executionTarget, loadIntentBrief, refreshTaskLedger, workspace]);
 
   // Restore last agent session on mount — survives hub switch and app quit

@@ -1058,6 +1058,16 @@ export const bridge = {
     return call<unknown>("get_codebase_index_structured", { path });
   },
 
+  async startCodebaseWatcher(path: string): Promise<void> {
+    if (!inTauri()) return;
+    return call<void>("start_codebase_watcher", { path });
+  },
+
+  async stopCodebaseWatcher(): Promise<void> {
+    if (!inTauri()) return;
+    return call<void>("stop_codebase_watcher", {});
+  },
+
   async deployPreflight(workspace: string, target: string): Promise<NativeResult> {
     const mode = target === "docker" ? "local" : target === "render" || target === "fly" ? "production" : "preview";
     const result = await call<{

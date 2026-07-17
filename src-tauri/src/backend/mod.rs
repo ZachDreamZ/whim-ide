@@ -32,6 +32,7 @@ pub mod synthesizer;
 pub mod whim_route;
 pub mod workflows;
 pub mod workspace;
+pub mod fs_watcher;
 
 #[cfg(test)]
 mod tests;
@@ -77,6 +78,7 @@ pub struct BackendState {
     pub(crate) orchestration: Mutex<DurableJobStore>,
     pub(crate) settings: Mutex<settings::AppSettings>,
     pub(crate) janitor_workspaces: Mutex<HashSet<PathBuf>>,
+    pub(crate) codebase_watcher: Mutex<Option<crate::backend::fs_watcher::FileWatcher>>,
 }
 
 impl Default for BackendState {
@@ -87,6 +89,7 @@ impl Default for BackendState {
             orchestration: Mutex::new(DurableJobStore::default()),
             settings: Mutex::new(settings::load_settings_from_disk()),
             janitor_workspaces: Mutex::new(HashSet::new()),
+            codebase_watcher: Mutex::new(None),
         }
     }
 }

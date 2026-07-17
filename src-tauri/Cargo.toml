@@ -49,3 +49,4 @@ sha2 = "0.10"
 rand = "0.8"
 open = "5"
 url = "2"
+notify = { version = "8", features = ["macos_fsevent"] }

@@ -357,7 +357,7 @@ fn resolve_import(parent: &Path, import: &str) -> String {
         let candidate = if ext.is_empty() {
             full.clone()
         } else {
-            let mut p = full.clone();
+            let p = full.clone();
             // Use set_extension which replaces the extension
             if let Some(s) = p.to_string_lossy().as_ref().strip_suffix('/') {
                 PathBuf::from(format!("{}{}", s, ext))
@@ -609,7 +609,12 @@ pub fn render_manifest(index: &CodebaseIndex) -> String {
 /// Tauri command: build or refresh the codebase index and return the manifest text.
 #[tauri::command]
 pub fn index_codebase(path: String) -> Result<String, String> {
-    let index = build_index(&path)?;
+    index_codebase_impl(&path)
+}
+
+/// Non-Tauri version for internal use (e.g. file watcher).
+pub(crate) fn index_codebase_impl(path: &str) -> Result<String, String> {
+    let index = build_index(path)?;
     Ok(render_manifest(&index))
 }
 

@@ -42,6 +42,8 @@ pub fn run() {
             backend::voice::synthesize_voice,
             backend::codebase_index::index_codebase,
             backend::codebase_index::get_codebase_index_structured,
+            backend::fs_watcher::start_codebase_watcher,
+            backend::fs_watcher::stop_codebase_watcher,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,
