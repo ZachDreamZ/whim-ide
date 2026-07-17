@@ -80,6 +80,30 @@ function parseAgentEvent(event: NativeEvent): UIMessage["parts"][0] | null {
     } as UIMessage["parts"][0];
   }
 
+  // Delegation / child-agent events (multi-agent presentation, spec §13).
+  const delegationTypes = new Set([
+    "agent", "child_agent", "sub_agent", "delegation", "delegate", "spawn_agent",
+  ]);
+  const eventType = String(event.type ?? "");
+  const looksLikeDelegation =
+    delegationTypes.has(eventType) ||
+    eventType.includes("delegat") ||
+    eventType.includes("child") ||
+    eventType.includes("sub_agent") ||
+    Boolean(event.delegatedTo || event.childAgent || event.agent);
+  if (looksLikeDelegation) {
+    const agentName = String(
+      event.delegatedTo ?? event.childAgent ?? event.agent ?? event.name ?? "agent"
+    );
+    const task = String(event.task ?? event.summary ?? event.detail ?? event.content ?? "");
+    return {
+      type: "delegation",
+      id: event.id ?? crypto.randomUUID(),
+      name: agentName,
+      task,
+    } as unknown as UIMessage["parts"][0];
+  }
+
   return null;
 }
 
@@ -110,6 +134,8 @@ export function AgentChatView({
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationTitle, setConversationTitle] = useState("New chat");
+  const [lastRunFailed, setLastRunFailed] = useState(false);
+  const lastPromptRef = useRef<string>("");
   const sessionIdRef = useRef<string | undefined>(undefined);
   const threadIdRef = useRef<string | undefined>(undefined);
   const messageHistoryRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
@@ -222,6 +248,8 @@ export function AgentChatView({
   const handleSend = useCallback(
     async (content: string) => {
       if (!content.trim() || isRunning) return;
+      lastPromptRef.current = content;
+      setLastRunFailed(false);
       setIsRunning(true);
       onActivityChange?.(true);
 
@@ -284,6 +312,7 @@ export function AgentChatView({
         onRunComplete?.();
       } catch (error) {
         const errorText = error instanceof Error ? error.message : "Request failed";
+        setLastRunFailed(true);
         setMessages((prev) => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
@@ -335,6 +364,11 @@ export function AgentChatView({
     [handleSend]
   );
 
+  const handleRetry = useCallback(() => {
+    const prompt = lastPromptRef.current;
+    if (prompt) void handleSend(prompt);
+  }, [handleSend]);
+
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -349,6 +383,8 @@ export function AgentChatView({
       isRunning={isRunning}
       onSend={wrappedSend}
       onStop={handleStop}
+      showRetry={lastRunFailed}
+      onRetry={handleRetry}
       emptyState={<EmptyChatState onSend={wrappedSend} />}
       onOpenFile={onOpenFile}
       projectName={projectName}

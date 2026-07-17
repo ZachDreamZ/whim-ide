@@ -23,6 +23,8 @@ type AgentConversationProps = {
   apiKey?: string;
   baseUrl?: string;
   onOpenProviders?: () => void;
+  showRetry?: boolean;
+  onRetry?: () => void;
 };
 
 function isErrorPart(part: Record<string, unknown>): boolean {
@@ -46,6 +48,10 @@ function isFileEditTool(toolName: string): boolean {
   return FILE_EDIT_TOOLS.has(toolName) || toolName.includes("file");
 }
 
+function isDelegationPart(part: Record<string, unknown>): boolean {
+  return part.type === "delegation";
+}
+
 export function AgentConversation({
   messages,
   isRunning = false,
@@ -60,6 +66,8 @@ export function AgentConversation({
   apiKey,
   baseUrl,
   onOpenProviders,
+  showRetry = false,
+  onRetry,
 }: AgentConversationProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { showJumpButton, scrollToBottom } = useSmartAutoScroll(scrollContainerRef);
@@ -109,6 +117,20 @@ export function AgentConversation({
                           status: "failed",
                           label: String(p.title ?? "Error"),
                           detail: String(p.message ?? ""),
+                        }}
+                      />
+                    );
+                  }
+                  if (isDelegationPart(p)) {
+                    return (
+                      <TimelineEvent
+                        key={String(p.id ?? i)}
+                        event={{
+                          id: String(p.id ?? i),
+                          type: "delegation",
+                          status: isRunning ? "running" : "succeeded",
+                          label: `Delegated to ${String(p.name ?? "agent")} agent`,
+                          detail: String(p.task ?? ""),
                         }}
                       />
                     );
@@ -165,6 +187,8 @@ export function AgentConversation({
         apiKey={apiKey}
         baseUrl={baseUrl}
         onOpenProviders={onOpenProviders}
+        showRetry={showRetry}
+        onRetry={onRetry}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, Paperclip, Square, Mic, Cpu } from "lucide-react";
+import { ArrowUp, Paperclip, Square, Mic, Cpu, RotateCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { bridge } from "../lib/bridge";
 
@@ -15,6 +15,8 @@ type MessageComposerProps = {
   apiKey?: string;
   baseUrl?: string;
   onOpenProviders?: () => void;
+  showRetry?: boolean;
+  onRetry?: () => void;
 };
 
 export function MessageComposer({
@@ -28,6 +30,8 @@ export function MessageComposer({
   apiKey,
   baseUrl,
   onOpenProviders,
+  showRetry = false,
+  onRetry,
 }: MessageComposerProps) {
   const [value, setValue] = useState("");
   const [recording, setRecording] = useState(false);
@@ -156,6 +160,17 @@ export function MessageComposer({
             disabled={transcribing}
           >
             <Mic size={16} />
+          </Button>
+        )}
+        {showRetry && !isRunning && (
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={onRetry}
+            aria-label="Retry last request"
+            className="composer-retry-button"
+          >
+            <RotateCw size={16} />
           </Button>
         )}
         {isRunning ? (

@@ -6,6 +6,7 @@ import {
   XCircle,
   ChevronDown,
   Square,
+  Users,
 } from "lucide-react";
 
 export type TimelineEventStatus =
@@ -23,6 +24,7 @@ export type TimelineEventType =
   | "tool_result"
   | "file_change"
   | "test_result"
+  | "delegation"
   | "warning"
   | "error"
   | "run_completion";
@@ -44,6 +46,7 @@ const StatusIcon = {
   warning: AlertTriangle,
   failed: XCircle,
   cancelled: Square,
+  delegation: Users,
 } as const;
 
 
