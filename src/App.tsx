@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Check,
@@ -13,20 +13,20 @@ import "./App.css";
 import { Titlebar } from "./components/Titlebar";
 import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-import { MissionControl } from "./components/MissionControl";
-import { ChatHub } from "./components/ChatHub";
-import { CreativeStudio } from "./components/CreativeStudio";
-import { EveHub } from "./components/EveHub";
-import { OrchestrationPanel } from "./components/OrchestrationPanel";
-import { ProviderHub } from "./components/ProviderHub";
-import { EcosystemHub } from "./components/EcosystemHub";
-import { ScheduledTasksHub } from "./components/ScheduledTasksHub";
-import { PluginsHub } from "./components/PluginsHub";
-import { SitesHub } from "./components/SitesHub";
-import { PullRequestsHub } from "./components/PullRequestsHub";
-import { NativeBrowserHub } from "./components/NativeBrowserHub";
-import { ShipHub } from "./components/ShipHub";
-import { AutopilotHub } from "./components/AutopilotHub";
+const MissionControl = lazy(() => import("./components/MissionControl").then(m => ({ default: m.MissionControl })));
+const ChatHub = lazy(() => import("./components/ChatHub").then(m => ({ default: m.ChatHub })));
+const CreativeStudio = lazy(() => import("./components/CreativeStudio").then(m => ({ default: m.CreativeStudio })));
+const EveHub = lazy(() => import("./components/EveHub").then(m => ({ default: m.EveHub })));
+const OrchestrationPanel = lazy(() => import("./components/OrchestrationPanel").then(m => ({ default: m.OrchestrationPanel })));
+const ProviderHub = lazy(() => import("./components/ProviderHub").then(m => ({ default: m.ProviderHub })));
+const EcosystemHub = lazy(() => import("./components/EcosystemHub").then(m => ({ default: m.EcosystemHub })));
+const ScheduledTasksHub = lazy(() => import("./components/ScheduledTasksHub").then(m => ({ default: m.ScheduledTasksHub })));
+const PluginsHub = lazy(() => import("./components/PluginsHub").then(m => ({ default: m.PluginsHub })));
+const SitesHub = lazy(() => import("./components/SitesHub").then(m => ({ default: m.SitesHub })));
+const PullRequestsHub = lazy(() => import("./components/PullRequestsHub").then(m => ({ default: m.PullRequestsHub })));
+const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then(m => ({ default: m.NativeBrowserHub })));
+const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
+const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
@@ -425,6 +425,7 @@ function App() {
             <div className="workbench">
               <div className="workbench-main agent-first">
                 <AnimatePresence mode="wait">
+                <Suspense fallback={<LoadingFallback />}>
                 {view === "build" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   <MissionControl
@@ -522,6 +523,7 @@ function App() {
                   {workspacePath ? <ShipHub workspace={workspacePath} /> : workspaceGate("Ship needs a workspace")}
                   </motion.div>
                 ) : null}
+                </Suspense>
                 </AnimatePresence>
                 {view === "build" && readOnlyFile && (
                   <section className="read-only-file" aria-label="File viewer">
@@ -542,7 +544,9 @@ function App() {
             </div>
           </div>
         ) : (
-          workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")
+          <Suspense fallback={<LoadingFallback />}>
+          {workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")}
+          </Suspense>
         )}
       </div>
       {appSettings.general.showBottomPanel && <footer className="statusbar">
@@ -559,6 +563,14 @@ function App() {
       </footer>}
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}
+    </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-[#0b0d0d]">
+      <div className="text-sm text-[#666]">Loading…</div>
     </div>
   );
 }
