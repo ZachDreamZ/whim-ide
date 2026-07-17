@@ -432,6 +432,8 @@ function App() {
               onTaskSelect: (job) => void openSidebarTask(job),
               onChatSelect: openSidebarChat,
             }}
+            branch={branch}
+            changesCount={changes.length}
           >
             <Suspense fallback={<LoadingFallback />}>
               <MissionControl

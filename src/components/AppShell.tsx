@@ -7,9 +7,11 @@ type AppShellProps = {
   children: ReactNode;
   title?: string;
   sidebarProps: ProjectSidebarProps;
+  branch?: string | null;
+  changesCount?: number;
 };
 
-export function AppShell({ children, title, sidebarProps }: AppShellProps) {
+export function AppShell({ children, title, sidebarProps, branch, changesCount }: AppShellProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
   return (
@@ -28,7 +30,7 @@ export function AppShell({ children, title, sidebarProps }: AppShellProps) {
         {children}
       </main>
 
-      {inspectorOpen && <ContextInspector />}
+      {inspectorOpen && <ContextInspector branch={branch} changesCount={changesCount} />}
     </div>
   );
 }
