@@ -1518,3 +1518,73 @@ mod tests {
         let _ = fs::remove_dir_all(directory);
     }
 }
+
+// ─── Multi-agent orchestration types ─────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SubTaskStatus {
+    Pending,
+    Ready,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubTask {
+    pub id: String,
+    pub parent_job_id: String,
+    pub description: String,
+    #[serde(default)]
+    pub deps: Vec<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub status: SubTaskStatus,
+    pub attempt: u32,
+    pub max_attempts: u32,
+    pub summary: Option<String>,
+    pub error: Option<String>,
+    pub started_at_ms: Option<u64>,
+    pub finished_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubTaskEvent {
+    pub sub_task_id: String,
+    pub kind: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPoolEntry {
+    pub provider: String,
+    pub model: String,
+    pub label: String,
+    pub status: String, // "available" | "busy" | "rate_limited" | "degraded"
+    pub busy_since_ms: Option<u64>,
+    pub consecutive_failures: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestrationPoolStatus {
+    pub entries: Vec<ProviderPoolEntry>,
+    pub active_sub_tasks: u32,
+    pub queued_sub_tasks: u32,
+    pub total_providers: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiAgentJobRequest {
+    pub workspace: String,
+    pub intent: String,
+    pub title: Option<String>,
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+}

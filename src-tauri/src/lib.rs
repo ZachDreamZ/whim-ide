@@ -83,6 +83,7 @@ pub fn run() {
             backend::orchestration::finish_orchestration_job,
             backend::orchestration::retry_orchestration_job,
             backend::orchestration::dispatch_orchestration_job,
+            backend::orchestration::dispatch_multi_agent_job,
             backend::orchestration::record_verification_result,
             backend::plugins::list_codex_plugins,
             backend::plugins::list_codex_plugin_catalog,

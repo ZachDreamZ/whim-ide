@@ -4,6 +4,7 @@ import {
   BarChart3,
   CheckCircle2,
   CircleDashed,
+  Cpu,
   ListChecks,
   LoaderCircle,
   PauseCircle,
@@ -166,6 +167,27 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
     }
   };
 
+  const dispatchMultiAgent = async () => {
+    if (!native || !intent.trim() || dispatching) return;
+    setDispatching(true);
+    try {
+      const job = await bridge.dispatchMultiAgentJob({
+        workspace,
+        intent: intent.trim(),
+        title: intent.trim().slice(0, 60),
+        apiKey: apiKey.trim() || undefined,
+        baseUrl: baseUrl.trim() || undefined,
+      });
+      setSelectedJobId(job.id);
+      showToast("Multi-agent task dispatched across available providers.");
+      await refreshJobs();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not dispatch multi-agent task.");
+    } finally {
+      setDispatching(false);
+    }
+  };
+
   const retryJob = async (jobId: string) => {
     if (!native) return;
     try {
@@ -271,14 +293,25 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
             </label>
           </details>
 
-          <button
-            className="primary-action"
-            type="button"
-            onClick={() => void createJob()}
-            disabled={creating || !intent.trim() || !native}
-          >
-            {creating ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} Create task
-          </button>
+          <div className="action-row">
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void createJob()}
+              disabled={creating || !intent.trim() || !native}
+            >
+              {creating ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} Create task
+            </button>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => void dispatchMultiAgent()}
+              disabled={dispatching || !intent.trim() || !native}
+              title="Decompose and run across all available providers in parallel"
+            >
+              {dispatching ? <LoaderCircle className="spin" size={15} /> : <Cpu size={15} />} Multi-agent run
+            </button>
+          </div>
         </section>
 
         <section className="orchestrate-board">

@@ -55,7 +55,7 @@ const MAX_OPENCODE_AUTH_BYTES: u64 = 128 * 1024;
 const MAX_STORED_API_KEY_BYTES: usize = 4 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Provider {
+pub(crate) enum Provider {
     OpenAi,
     Anthropic,
     Google,
@@ -70,7 +70,7 @@ enum Provider {
     XAi,
 }
 
-fn parse_provider(value: &str) -> Result<Provider, String> {
+pub(crate) fn parse_provider(value: &str) -> Result<Provider, String> {
     match value.to_ascii_lowercase().as_str() {
         "openai" => Ok(Provider::OpenAi),
         "anthropic" => Ok(Provider::Anthropic),
@@ -112,7 +112,7 @@ fn provider_name(provider: Provider) -> &'static str {
 /// Whim's fixed, project-discovered verification commands. Build, vibe, and
 /// ship retain the broader native tool set subject to the harness profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AgentRole {
+pub(crate) enum AgentRole {
     Chat,
     Auto,
     Planner,
@@ -376,7 +376,7 @@ pub(crate) fn provider_key_available(provider: &str) -> bool {
 
 /// Sensible default model per provider so vibecoding needs no configuration
 /// when the user has not named a specific model.
-fn default_model(provider: Provider, role: AgentRole) -> &'static str {
+pub(crate) fn default_model(provider: Provider, role: AgentRole) -> &'static str {
     match provider {
         Provider::OpenAi => "gpt-4o-mini",
         Provider::Anthropic => "claude-3-5-sonnet-latest",
@@ -4580,6 +4580,34 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
         );
     }
     Ok(result)
+}
+
+/// Internal model chat call for sub-systems like the decomposer.
+/// Returns the text response content, or an error.
+pub(crate) async fn run_model_chat(
+    provider: &str,
+    model: &str,
+    api_key: &str,
+    base_url: &str,
+    system: &str,
+    messages: &[Value],
+) -> Result<String, String> {
+    let parsed = parse_provider(provider).map_err(|e| format!("Invalid provider '{provider}': {e}"))?;
+    let base = if base_url.trim().is_empty() {
+        default_base(parsed).to_string()
+    } else {
+        base_url.to_string()
+    };
+    let key = Some(api_key.to_string());
+    let resolved_key = resolve_key(parsed, &key);
+    if provider_requires_key(parsed) && resolved_key.is_none() {
+        return Err(format!(
+            "Provider '{provider}' requires an API key. Set the {}_API_KEY env var.",
+            provider.to_uppercase()
+        ));
+    }
+    let response = chat(parsed, &base, &resolved_key, model, system, messages, &[]).await?;
+    response.text.ok_or_else(|| "Model returned no text response".to_string())
 }
 
 #[cfg(test)]

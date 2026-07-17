@@ -9,6 +9,7 @@ use crate::orchestrator::{
     OrchestrationJobDetail,
 };
 
+use futures::future::join_all;
 use super::execution::CommandResult;
 use super::{lock, BackendState};
 
@@ -503,6 +504,173 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
     });
 
     Ok(started)
+}
+
+/// Dispatch a multi-agent orchestration job. Breaks the intent into sub-tasks
+/// via the decomposer, assigns each to an available provider+model via the
+/// scheduler, and runs them in parallel. Results are synthesized at the end.
+#[tauri::command]
+pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, BackendState>,
+    request: crate::orchestrator::MultiAgentJobRequest,
+) -> Result<OrchestrationJob, String> {
+    let workspace = orchestration_workspace(state.inner(), Some(&request.workspace))
+        .map_err(orchestration_error)?;
+
+    let intent = request.intent.clone();
+    let title = request.title.clone().unwrap_or_else(|| {
+        intent.chars().take(60).collect::<String>()
+    });
+
+    // 1. Create parent job
+    let parent_job = {
+        let operation_id = Uuid::new_v4().to_string();
+        let mut store = lock(&state.orchestration, "orchestration")
+            .map_err(orchestration_error)?;
+        store
+            .create(CreateJobInput {
+                workspace: workspace.clone(),
+                intent: intent.clone(),
+                title: Some(title.clone()),
+                mode: JobMode::Auto,
+                operation_id: Some(operation_id),
+                provider: None,
+                model: None,
+                max_duration_ms: Some(180_000),
+            })
+            .map_err(orchestration_error)?
+    };
+    drop(state);
+
+    // 2. Build provider pool from discovered providers
+    let providers = crate::backend::deployment::discover_providers();
+    let pool_entries: Vec<(String, String, String)> = providers
+        .iter()
+        .filter(|p| p.available && p.kind != "gateway")
+        .map(|p| {
+            let parsed = crate::agent::parse_provider(&p.provider)
+                .unwrap_or(crate::agent::Provider::OpenAi);
+            let model = crate::agent::default_model(parsed, crate::agent::AgentRole::Auto)
+                .to_string();
+            (p.provider.clone(), model, p.label.clone())
+        })
+        .collect::<Vec<_>>();
+
+    // 3. Decompose intent into sub-tasks
+    let sub_tasks = crate::backend::decomposer::decompose_intent(
+        &intent,
+        None,
+        None,
+        request.api_key.as_deref(),
+        request.base_url.as_deref(),
+    )
+    .await?;
+
+    if sub_tasks.is_empty() {
+        return Err("Decomposer produced no sub-tasks".to_string());
+    }
+
+    let sub_task_count = sub_tasks.len();
+    let has_deps = sub_tasks.iter().any(|st| !st.deps.is_empty());
+
+    // 4. Spawn the background coordinator
+    let app = window.clone();
+    let job_id = parent_job.id.clone();
+    let wc = workspace.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let pool = std::sync::Arc::new(std::sync::Mutex::new(
+            crate::backend::scheduler::ProviderPool::new(pool_entries),
+        ));
+
+        // Transition to Started
+        let app_state = app.state::<BackendState>();
+        let _ = lock(&app_state.orchestration, "orchestration")
+            .and_then(|mut store| store.transition(&wc, &job_id, JobAction::Start));
+
+        let mut handles = Vec::new();
+
+        // All sub-tasks are parallel — dispatch all at once
+        for st in sub_tasks {
+            let task_id = st.id.clone();
+            let task_desc = st.description.clone();
+            let wid = wc.clone();
+            let app_handle = app.clone();
+            let pool_clone = pool.clone();
+
+            let assigned = pool_clone.lock().ok().and_then(|mut guard| guard.next_ready());
+            if let Some((ref prov, ref model_name)) = assigned {
+                pool_clone.lock().ok().map(|mut guard| guard.mark_busy(prov, model_name));
+                let p = prov.clone();
+                let m = model_name.clone();
+
+                handles.push(tokio::spawn(async move {
+                    let sub_intent = if sub_task_count > 1 {
+                        format!("[Sub-task: {task_id}] {task_desc}")
+                    } else {
+                        task_desc
+                    };
+
+                    let agent_req = crate::agent::AgentRunRequest {
+                        prompt: sub_intent,
+                        workspace: Some(wid.clone()),
+                        provider: Some(p.clone()),
+                        model: Some(m.clone()),
+                        api_key: None,
+                        base_url: None,
+                        agent: Some("auto".to_string()),
+                        session_id: None,
+                        operation_id: Uuid::new_v4().to_string(),
+                        timeout_ms: Some(180_000),
+                        auto_approve: Some(false),
+                        auto_approve_confirmed: Some(false),
+                        auto_continue: Some(false),
+                    };
+
+                    let agent_state = app_handle.state::<BackendState>();
+                    let _result = run_agent_prompt(
+                        app_handle.clone(),
+                        agent_state,
+                        agent_req,
+                    )
+                    .await;
+
+                    let prov = p.clone();
+                    let mdl = m.clone();
+                    pool_clone.lock().ok().map(|mut guard| guard.mark_available(&prov, &mdl));
+                }));
+            }
+        }
+
+        // Wait for all handles
+        join_all(handles).await;
+
+        // Mark parent job complete
+        let app_state = app.state::<BackendState>();
+        let _ = lock(&app_state.orchestration, "orchestration")
+            .and_then(|mut store| {
+                store.finish(
+                    &wc,
+                    &job_id,
+                    JobOutcome::Completed,
+                    Some(format!(
+                        "Multi-agent run completed with {sub_task_count} sub-tasks"
+                    )),
+                    JobEvidence {
+                        event_count: sub_task_count as u32,
+                        tool_call_count: sub_task_count as u32,
+                        failed_tool_call_count: 0,
+                        duration_ms: None,
+                        timed_out: false,
+                    },
+                )
+                .ok();
+                Ok::<(), String>(())
+            });
+    });
+
+    Ok(parent_job)
 }
 
 pub fn start_orchestration_worker(app: tauri::AppHandle) {

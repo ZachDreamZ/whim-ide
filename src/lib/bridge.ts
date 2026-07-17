@@ -395,6 +395,48 @@ export type OrchestrationJobDetail = {
   events: OrchestrationJobEvent[];
 };
 
+export type SubTaskStatus = "pending" | "ready" | "running" | "completed" | "failed" | "cancelled";
+
+export type SubTaskSummary = {
+  id: string;
+  parentJobId: string;
+  description: string;
+  deps: string[];
+  provider: string | null;
+  model: string | null;
+  status: SubTaskStatus;
+  attempt: number;
+  maxAttempts: number;
+  summary: string | null;
+  error: string | null;
+  startedAtMs: number | null;
+  finishedAtMs: number | null;
+};
+
+export type PoolEntry = {
+  provider: string;
+  model: string;
+  label: string;
+  status: "available" | "busy" | "rate_limited" | "degraded";
+  busySinceMs: number | null;
+  consecutiveFailures: number;
+};
+
+export type PoolStatus = {
+  entries: PoolEntry[];
+  activeSubTasks: number;
+  queuedSubTasks: number;
+  totalProviders: number;
+};
+
+export type MultiAgentJobRequest = {
+  workspace: string;
+  intent: string;
+  title?: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
+
 export type ProviderStatus = {
   id: string;
   authenticated: boolean;
@@ -995,6 +1037,12 @@ export const bridge = {
     baseUrl?: string;
   }): Promise<OrchestrationJob> {
     return call<OrchestrationJob>("dispatch_orchestration_job", {
+      request: input,
+    });
+  },
+
+  async dispatchMultiAgentJob(input: MultiAgentJobRequest): Promise<OrchestrationJob> {
+    return call<OrchestrationJob>("dispatch_multi_agent_job", {
       request: input,
     });
   },
