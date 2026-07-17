@@ -9,9 +9,11 @@ type AppShellProps = {
   sidebarProps: ProjectSidebarProps;
   branch?: string | null;
   changesCount?: number;
+  projectName?: string;
+  onNewChat?: () => void;
 };
 
-export function AppShell({ children, title, sidebarProps, branch, changesCount }: AppShellProps) {
+export function AppShell({ children, title, sidebarProps, branch, changesCount, projectName, onNewChat }: AppShellProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
   return (
@@ -24,6 +26,8 @@ export function AppShell({ children, title, sidebarProps, branch, changesCount }
       <main className="chat-column">
         <ConversationHeader
           title={title}
+          projectName={projectName}
+          onNewChat={onNewChat}
           inspectorOpen={inspectorOpen}
           onToggleInspector={() => setInspectorOpen((v) => !v)}
         />

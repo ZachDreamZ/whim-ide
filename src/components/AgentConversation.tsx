@@ -15,6 +15,14 @@ type AgentConversationProps = {
   onSend: (content: string) => void;
   onStop?: () => void;
   emptyState?: ReactNode;
+  onOpenFile?: (path: string) => void;
+  projectName?: string;
+  modelLabel?: string;
+  micSupported?: boolean;
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  onOpenProviders?: () => void;
 };
 
 function isErrorPart(part: Record<string, unknown>): boolean {
@@ -44,6 +52,14 @@ export function AgentConversation({
   onSend,
   onStop,
   emptyState,
+  onOpenFile,
+  projectName,
+  modelLabel,
+  micSupported = false,
+  provider,
+  apiKey,
+  baseUrl,
+  onOpenProviders,
 }: AgentConversationProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { showJumpButton, scrollToBottom } = useSmartAutoScroll(scrollContainerRef);
@@ -118,6 +134,7 @@ export function AgentConversation({
                       files={files}
                       totalAdditions={files.reduce((s, f) => s + f.additions, 0)}
                       totalDeletions={files.reduce((s, f) => s + f.deletions, 0)}
+                      onOpenFile={onOpenFile}
                     />
                   );
                 })()}
@@ -141,6 +158,13 @@ export function AgentConversation({
         onSend={onSend}
         onStop={onStop}
         isRunning={isRunning}
+        projectName={projectName}
+        modelLabel={modelLabel}
+        micSupported={micSupported}
+        provider={provider}
+        apiKey={apiKey}
+        baseUrl={baseUrl}
+        onOpenProviders={onOpenProviders}
       />
     </div>
   );

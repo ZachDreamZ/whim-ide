@@ -15,6 +15,10 @@ type AgentChatViewProps = {
   onActivityChange?: (running: boolean) => void;
   resetKey?: number;
   initialThreadId?: string | null;
+  onOpenFile?: (path: string) => void;
+  projectName?: string;
+  micSupported?: boolean;
+  onOpenProviders?: () => void;
 };
 
 interface NativeEvent {
@@ -95,6 +99,10 @@ export function AgentChatView({
   onActivityChange,
   resetKey,
   initialThreadId,
+  onOpenFile,
+  projectName,
+  micSupported = false,
+  onOpenProviders,
 }: AgentChatViewProps) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -337,6 +345,14 @@ export function AgentChatView({
       onSend={wrappedSend}
       onStop={handleStop}
       emptyState={<EmptyChatState onSend={wrappedSend} />}
+      onOpenFile={onOpenFile}
+      projectName={projectName}
+      modelLabel={model}
+      micSupported={micSupported}
+      provider={provider}
+      apiKey={apiKey}
+      baseUrl={baseUrl}
+      onOpenProviders={onOpenProviders}
     />
   );
 }

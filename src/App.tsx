@@ -451,6 +451,8 @@ function App() {
             }}
             branch={branch}
             changesCount={changes.length}
+            projectName={workspacePath ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? undefined : undefined}
+            onNewChat={handleNewChat}
           >
               <AgentChatView
                 key={chatResetKey}
@@ -462,6 +464,9 @@ function App() {
                 model={runModel}
                 onRunComplete={() => { void refreshWorkspace(); window.dispatchEvent(new Event("whim:history-changed")); }}
                 onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
+                onOpenFile={(path) => void loadReadOnlyFile(workspacePath ?? "", path)}
+                micSupported={typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia}
+                onOpenProviders={() => setView("providers")}
               />
             {readOnlyFile && (
               <section className="read-only-file" aria-label="File viewer">
