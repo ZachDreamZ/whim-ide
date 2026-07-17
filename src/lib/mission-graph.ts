@@ -1,5 +1,6 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import type {
+  MultiAgentJobRequest,
   NativeResult,
   OrchestrationJob,
   OrchestrationJobMode,
@@ -164,4 +165,32 @@ export async function runMissionGraph(
     summary: "",
     finalizationError: null,
   });
+}
+
+/**
+ * Multi-agent mission graph — fan-out sub-tasks across available providers.
+ * Uses the Rust `dispatch_multi_agent_job` command which handles the
+ * parallel execution, retry, and synthesis internally.
+ */
+export type MultiAgentPhase = "decompose" | "dispatch" | "gather";
+
+export type MultiAgentAdapters = {
+  onPhase?: (phase: MultiAgentPhase) => void | Promise<void>;
+  dispatch: (input: MultiAgentJobRequest) => Promise<OrchestrationJob>;
+  onResult: (job: OrchestrationJob) => void | Promise<void>;
+};
+
+export async function runMultiAgentGraph(
+  input: MultiAgentJobRequest,
+  adapters: MultiAgentAdapters,
+) {
+  await adapters.onPhase?.("decompose");
+  
+  await adapters.onPhase?.("dispatch");
+  const job = await adapters.dispatch(input);
+  
+  await adapters.onPhase?.("gather");
+  await adapters.onResult(job);
+  
+  return job;
 }

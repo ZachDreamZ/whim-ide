@@ -6,9 +6,10 @@ use uuid::Uuid;
 use crate::agent::run_agent_prompt;
 use crate::orchestrator::{
     CreateJobInput, JobAction, JobEvidence, JobMode, JobOutcome, JobStatus, OrchestrationJob,
-    OrchestrationJobDetail,
+    OrchestrationJobDetail, SubTask as SubTaskType, SubTaskStatus,
 };
 
+use futures::future::join_all;
 use super::execution::CommandResult;
 use super::{lock, BackendState};
 
@@ -503,6 +504,316 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
     });
 
     Ok(started)
+}
+
+/// Dispatch a multi-agent orchestration job. Breaks the intent into sub-tasks
+/// via the decomposer, assigns each to an available provider+model via the
+/// scheduler, and runs them in parallel. Results are synthesized at the end.
+#[tauri::command]
+pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, BackendState>,
+    request: crate::orchestrator::MultiAgentJobRequest,
+) -> Result<OrchestrationJob, String> {
+    let workspace = orchestration_workspace(state.inner(), Some(&request.workspace))
+        .map_err(orchestration_error)?;
+
+    let intent = request.intent.clone();
+    let title = request.title.clone().unwrap_or_else(|| {
+        intent.chars().take(60).collect::<String>()
+    });
+
+    // 1. Create parent job
+    let parent_job = {
+        let operation_id = Uuid::new_v4().to_string();
+        let mut store = lock(&state.orchestration, "orchestration")
+            .map_err(orchestration_error)?;
+        store
+            .create(CreateJobInput {
+                workspace: workspace.clone(),
+                intent: intent.clone(),
+                title: Some(title.clone()),
+                mode: JobMode::Auto,
+                operation_id: Some(operation_id),
+                provider: None,
+                model: None,
+                max_duration_ms: Some(180_000),
+            })
+            .map_err(orchestration_error)?
+    };
+    drop(state);
+
+    // 2. Build provider pool from discovered providers
+    let providers = crate::backend::deployment::discover_providers();
+    let pool_entries: Vec<(String, String, String)> = providers
+        .iter()
+        .filter(|p| p.available && p.kind != "gateway")
+        .map(|p| {
+            let parsed = crate::agent::parse_provider(&p.provider)
+                .unwrap_or(crate::agent::Provider::OpenAi);
+            let model = crate::agent::default_model(parsed, crate::agent::AgentRole::Auto)
+                .to_string();
+            (p.provider.clone(), model, p.label.clone())
+        })
+        .collect::<Vec<_>>();
+
+    // 3. Decompose intent into sub-tasks
+    let sub_tasks = crate::backend::decomposer::decompose_intent(
+        &intent,
+        None,
+        None,
+        request.api_key.as_deref(),
+        request.base_url.as_deref(),
+    )
+    .await?;
+
+    if sub_tasks.is_empty() {
+        return Err("Decomposer produced no sub-tasks".to_string());
+    }
+
+    let _sub_task_count = sub_tasks.len();
+
+    // 4. Spawn the background coordinator
+    let app = window.clone();
+    let job_id = parent_job.id.clone();
+    let wc = workspace.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let pool = std::sync::Arc::new(std::sync::Mutex::new(
+            crate::backend::scheduler::ProviderPool::new(pool_entries),
+        ));
+
+        let app_state = app.state::<BackendState>();
+        // Transition to Started
+        let _ = lock(&app_state.orchestration, "orchestration")
+            .and_then(|mut store| store.transition(&wc, &job_id, JobAction::Start));
+
+        // Shared sub-task results (accessible across retry waves)
+        let mut sub_task_results: Vec<SubTaskType> = sub_tasks
+            .into_iter()
+            .map(|mut st| {
+                st.status = SubTaskStatus::Ready;
+                st
+            })
+            .collect();
+        let total = sub_task_results.len();
+        let mut completed_count = 0usize;
+        let mut failed_count = 0usize;
+
+        // Wave loop: tasks whose deps are satisfied run, then we gather results
+        loop {
+            let ready_ids: Vec<String> = sub_task_results
+                .iter()
+                .filter(|st| st.status == SubTaskStatus::Ready)
+                .filter(|st| {
+                    st.deps.is_empty()
+                        || st.deps.iter().all(|dep_id| {
+                            sub_task_results.iter().any(|r| {
+                                r.id == *dep_id && r.status == SubTaskStatus::Completed
+                            })
+                        })
+                })
+                .map(|st| st.id.clone())
+                .collect();
+
+            if ready_ids.is_empty() {
+                // No ready tasks — either all done/stuck or waiting on a failed dep
+                break;
+            }
+
+            // Dispatch ready sub-tasks
+            let mut wave_handles = Vec::new();
+            // Collect task info first to avoid mutable borrow conflicts
+            let ready_tasks: Vec<(String, String, u32, u32)> = sub_task_results
+                .iter()
+                .filter(|st| ready_ids.contains(&st.id))
+                .map(|st| (st.id.clone(), st.description.clone(), st.attempt, st.max_attempts))
+                .collect();
+
+            // Mark as Running
+            for st in sub_task_results.iter_mut() {
+                if ready_ids.contains(&st.id) {
+                    st.status = SubTaskStatus::Running;
+                    st.attempt += 1;
+                }
+            }
+
+            for (task_id, task_desc, attempt, max_attempts) in ready_tasks {
+                let wid = wc.clone();
+                let app_handle = app.clone();
+                let pool_clone = pool.clone();
+
+                let assigned = pool_clone.lock().ok().and_then(|mut guard| guard.next_ready());
+                let p: String;
+                let m: String;
+                if let Some((ref prov, ref model_name)) = assigned {
+                    p = prov.clone();
+                    m = model_name.clone();
+                    pool_clone.lock().ok().map(|mut guard| guard.mark_busy(&p, &m));
+                } else {
+                    if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
+                        entry.status = SubTaskStatus::Failed;
+                        entry.error = Some("No provider available to run sub-task".into());
+                    }
+                    continue;
+                }
+
+                wave_handles.push(tokio::spawn(async move {
+                    let sub_intent = if total > 1 {
+                        format!("[Attempt {attempt}/{max_attempts} – {task_id}] {task_desc}")
+                    } else {
+                        task_desc
+                    };
+
+                    let agent_req = crate::agent::AgentRunRequest {
+                        prompt: sub_intent,
+                        workspace: Some(wid.clone()),
+                        provider: Some(p.clone()),
+                        model: Some(m.clone()),
+                        api_key: None,
+                        base_url: None,
+                        agent: Some("auto".to_string()),
+                        session_id: None,
+                        operation_id: Uuid::new_v4().to_string(),
+                        timeout_ms: Some(180_000),
+                        auto_approve: Some(false),
+                        auto_approve_confirmed: Some(false),
+                        auto_continue: Some(false),
+                    };
+
+                    let agent_state = app_handle.state::<BackendState>();
+                    let result = run_agent_prompt(
+                        app_handle.clone(),
+                        agent_state,
+                        agent_req,
+                    )
+                    .await;
+
+                    (task_id, p.clone(), m.clone(), result)
+                }));
+            }
+
+            // Collect wave results
+            let wave_results: Vec<(String, String, String, Result<AgentRunResult, String>)> =
+                join_all(wave_handles)
+                    .await
+                    .into_iter()
+                    .filter_map(|h| h.ok())
+                    .collect();
+
+            for (task_id, prov, mdl, result) in wave_results {
+                let succeeded = result.is_ok();
+                let summary = result.as_ref().ok().map(|r| {
+                    // Extract from last event text or command stdout
+                    r.events
+                        .iter()
+                        .filter_map(|ev| ev["text"].as_str())
+                        .last()
+                        .map(|s| s.chars().take(500).collect::<String>())
+                        .unwrap_or_else(|| r.command.stdout.chars().take(500).collect::<String>())
+                });
+                let error = result.as_ref().err().cloned();
+
+                if succeeded {
+                    if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
+                        entry.status = SubTaskStatus::Completed;
+                        entry.summary = summary;
+                        entry.provider = Some(prov.clone());
+                        entry.model = Some(mdl.clone());
+                        completed_count += 1;
+                    }
+                    pool.lock().ok().map(|mut guard| guard.record_success(&prov, &mdl));
+                } else {
+                    // Error recovery: retry if attempts remain
+                    let should_retry = sub_task_results
+                        .iter()
+                        .find(|r| r.id == task_id)
+                        .map(|r| r.attempt < r.max_attempts)
+                        .unwrap_or(false);
+
+                    if should_retry {
+                        // Reset to Ready for next wave
+                        if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
+                            entry.status = SubTaskStatus::Ready;
+                            entry.error = Some(
+                                error.clone()
+                                    .unwrap_or_else(|| "Unknown error".into()),
+                            );
+                        }
+                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                    } else {
+                        if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
+                            entry.status = SubTaskStatus::Failed;
+                            entry.error = error.clone();
+                            entry.provider = Some(prov.clone());
+                            entry.model = Some(mdl.clone());
+                            failed_count += 1;
+                        }
+                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                    }
+                }
+            }
+
+            // After a wave, check if any completed tasks unlock deferred (dependent) tasks
+            // If there are ready tasks that now have deps satisfied, the next loop will pick them up
+        }
+
+        // Synthesize results
+        let synthesis_summary = crate::backend::synthesizer::synthesize(
+            &intent,
+            &sub_task_results,
+        )
+        .await
+        .unwrap_or_else(|_| {
+            let done = sub_task_results
+                .iter()
+                .filter(|s| s.status == SubTaskStatus::Completed)
+                .count();
+            let total = sub_task_results.len();
+            format!("{done}/{total} sub-tasks completed")
+        });
+
+        // Determine overall outcome
+        let (outcome, outcome_summary) = if failed_count == 0 && completed_count > 0 {
+            (JobOutcome::Completed, synthesis_summary)
+        } else if completed_count == 0 && failed_count > 0 {
+            (JobOutcome::Failed, format!("All {failed_count} sub-tasks failed. {synthesis_summary}"))
+        } else if failed_count > 0 {
+            (
+                JobOutcome::Completed,
+                format!(
+                    "{completed_count}/{total} sub-tasks completed, {failed_count} failed. {synthesis_summary}"
+                ),
+            )
+        } else if total == 0 {
+            (JobOutcome::Failed, "No sub-tasks were produced.".into())
+        } else {
+            (JobOutcome::Completed, synthesis_summary)
+        };
+
+        // Mark parent job complete
+        let app_state = app.state::<BackendState>();
+        let _ = lock(&app_state.orchestration, "orchestration")
+            .and_then(|mut store| {
+                store.finish(
+                    &wc,
+                    &job_id,
+                    outcome,
+                    Some(outcome_summary.clone()),
+                    JobEvidence {
+                        event_count: total as u32,
+                        tool_call_count: completed_count as u32,
+                        failed_tool_call_count: failed_count as u32,
+                        duration_ms: None,
+                        timed_out: false,
+                    },
+                )
+                .ok();
+                Ok::<(), String>(())
+            });
+    });
+
+    Ok(parent_job)
 }
 
 pub fn start_orchestration_worker(app: tauri::AppHandle) {

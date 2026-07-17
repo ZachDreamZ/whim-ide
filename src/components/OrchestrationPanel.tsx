@@ -4,6 +4,8 @@ import {
   BarChart3,
   CheckCircle2,
   CircleDashed,
+  Cpu,
+  FileCode2,
   ListChecks,
   LoaderCircle,
   PauseCircle,
@@ -85,6 +87,9 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
   const [creating, setCreating] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [indexManifest, setIndexManifest] = useState<string | null>(null);
+  const [indexFileCount, setIndexFileCount] = useState(0);
+  const [indexing, setIndexing] = useState(false);
   const pollTimer = useRef<number | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -163,6 +168,57 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
       await refreshJobs();
     } catch (error) {
       showToast(error instanceof Error ? error.message : `Could not ${action} the task.`);
+    }
+  };
+
+  const [providers, setProviders] = useState<{ provider: string; label: string; kind: string; available: boolean; hasKey: boolean }[]>([]);
+  useEffect(() => {
+    if (!native) return;
+    const discover = async () => {
+      try {
+        const all = await bridge.discoverProviders();
+        setProviders(all.map((p) => ({ provider: p.provider, label: p.label, kind: p.kind, available: p.available, hasKey: p.hasKey })));
+      } catch { /* ignore */ }
+    };
+    void discover();
+    const timer = window.setInterval(discover, 10_000);
+    return () => window.clearInterval(timer);
+  }, [native]);
+
+  const generateIndex = useCallback(async () => {
+    if (!native || indexing) return;
+    setIndexing(true);
+    try {
+      const manifest = await bridge.indexCodebase(workspace);
+      setIndexManifest(manifest);
+      const match = manifest.match(/(\d+) files/);
+      if (match) setIndexFileCount(Number(match[1]));
+      showToast("Codebase index generated.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not index codebase.");
+    } finally {
+      setIndexing(false);
+    }
+  }, [native, indexing, workspace, showToast]);
+
+  const dispatchMultiAgent = async () => {
+    if (!native || !intent.trim() || dispatching) return;
+    setDispatching(true);
+    try {
+      const job = await bridge.dispatchMultiAgentJob({
+        workspace,
+        intent: intent.trim(),
+        title: intent.trim().slice(0, 60),
+        apiKey: apiKey.trim() || undefined,
+        baseUrl: baseUrl.trim() || undefined,
+      });
+      setSelectedJobId(job.id);
+      showToast("Multi-agent task dispatched across available providers.");
+      await refreshJobs();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not dispatch multi-agent task.");
+    } finally {
+      setDispatching(false);
     }
   };
 
@@ -271,14 +327,25 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
             </label>
           </details>
 
-          <button
-            className="primary-action"
-            type="button"
-            onClick={() => void createJob()}
-            disabled={creating || !intent.trim() || !native}
-          >
-            {creating ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} Create task
-          </button>
+          <div className="action-row">
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void createJob()}
+              disabled={creating || !intent.trim() || !native}
+            >
+              {creating ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} Create task
+            </button>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => void dispatchMultiAgent()}
+              disabled={dispatching || !intent.trim() || !native}
+              title="Decompose and run across all available providers in parallel"
+            >
+              {dispatching ? <LoaderCircle className="spin" size={15} /> : <Cpu size={15} />} Multi-agent run
+            </button>
+          </div>
         </section>
 
         <section className="orchestrate-board">
@@ -382,6 +449,88 @@ export function OrchestrationPanel({ workspace, initialJobId }: OrchestrationPan
             </ul>
           )}
         </section>
+
+        <section className="provider-pool-section">
+          <div className="section-heading-row">
+            <div>
+              <span className="section-kicker">
+                <Cpu size={12} /> Provider pool
+              </span>
+              <h2>Available providers</h2>
+            </div>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={async () => {
+                try {
+                  const all = await bridge.discoverProviders();
+                  setProviders(all.map((p) => ({ provider: p.provider, label: p.label, kind: p.kind, available: p.available, hasKey: p.hasKey })));
+                } catch { /* ignore */ }
+              }}
+              disabled={!native}
+            >
+              <RefreshCw size={13} />
+            </button>
+          </div>
+          <div className="provider-pool-grid">
+            {providers.map((p) => (
+              <div
+                key={p.provider}
+                className={`provider-pool-card ${p.available ? "available" : "unavailable"} ${p.kind}`}
+              >
+                <span className={`pool-dot ${p.hasKey ? "key-set" : "no-key"}`} />
+                <span className="pool-label">{p.label}</span>
+                <span className="pool-status">
+                  {p.available ? (p.hasKey ? "Ready" : "No key") : "Offline"}
+                </span>
+                <span className="pool-kind">{p.kind}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <details className="codebase-index-section">
+          <summary className="section-heading-row" style={{ cursor: "pointer" }}>
+            <div>
+              <span className="section-kicker">
+                <FileCode2 size={12} /> Codebase index
+              </span>
+              <h2>
+                {indexManifest
+                  ? `${indexFileCount} files indexed`
+                  : "Index workspace for agent context"}
+              </h2>
+            </div>
+          </summary>
+          {indexManifest && (
+            <pre className="codebase-manifest">{indexManifest}</pre>
+          )}
+          <div className="action-row" style={{ marginTop: "8px" }}>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => void generateIndex()}
+              disabled={indexing || !native}
+            >
+              {indexing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              {indexManifest ? "Re-index" : "Generate index"}
+            </button>
+            {indexManifest && (
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(indexManifest);
+                    showToast("Manifest copied to clipboard.");
+                  } catch { /* ignore */ }
+                }}
+              >
+                <Rocket size={14} /> Copy manifest
+              </button>
+            )}
+          </div>
+        </details>
       </div>
 
       {toast && (

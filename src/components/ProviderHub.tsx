@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { bridge, type DiscoveredProvider } from "../lib/bridge";
+import { bridge, type DiscoveredProvider, type OAuthProviderStatus } from "../lib/bridge";
 
 const OMNIROUTE_ROUTES = ["auto", "auto/coding", "auto/fast", "auto/cheap", "auto/offline", "auto/smart"];
 const MODEL_DISCOVERY_DELAY_MS = 350;
@@ -192,6 +192,50 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
     setModelOptions([]);
   };
 
+  const [oauthStatus, setOauthStatus] = useState<OAuthProviderStatus[]>([]);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [oauthNotice, setOauthNotice] = useState<string | null>(null);
+
+  // Load OAuth provider status
+  useEffect(() => {
+    if (!bridge.isNative()) return;
+    bridge.oauthListProviders()
+      .then(setOauthStatus)
+      .catch(() => { /* keyring may not be available */ });
+  }, []);
+
+  const oauthConnect = async (providerId: string) => {
+    setConnecting(providerId);
+    setOauthNotice(null);
+    try {
+      await bridge.oauthAuthorize({ providerId });
+      setOauthNotice(`✓ ${providerId.charAt(0).toUpperCase() + providerId.slice(1)} connected successfully!`);
+      // Refresh status
+      const status = await bridge.oauthListProviders();
+      setOauthStatus(status);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setOauthNotice(`Failed to connect ${providerId}: ${msg}`);
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  const oauthDisconnect = async (providerId: string) => {
+    setConnecting(providerId);
+    try {
+      await bridge.oauthClearToken(providerId);
+      const status = await bridge.oauthListProviders();
+      setOauthStatus(status);
+      setOauthNotice(`Disconnected ${providerId}.`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setOauthNotice(`Failed to disconnect: ${msg}`);
+    } finally {
+      setConnecting(null);
+    }
+  };
+
   const connectedCount = discovered.filter(isProviderReady).length;
 
   return (
@@ -269,6 +313,70 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
           })}
         </div>
       </section>
+
+      {oauthStatus.length > 0 && (
+        <section className="oauth-section">
+          <h3 className="oauth-heading">
+            <ShieldCheck size={15} />
+            Connected Accounts (OAuth)
+          </h3>
+          {oauthNotice && (
+            <div className="inline-notice">
+              <Sparkles size={14} />
+              <span>{oauthNotice}</span>
+              <button type="button" onClick={() => setOauthNotice(null)}>Dismiss</button>
+            </div>
+          )}
+          <div className="oauth-provider-grid">
+            {oauthStatus.map((provider) => (
+              <div key={provider.id} className={`oauth-provider-card${provider.hasToken ? " connected" : ""}`}>
+                <div className="oauth-provider-info">
+                  <span className="oauth-provider-name">{provider.name}</span>
+                  {provider.hasToken ? (
+                    <span className="oauth-token-status">
+                      <Check size={12} />
+                      Connected
+                      {provider.tokenPreview && <code className="oauth-token-preview">{provider.tokenPreview}</code>}
+                    </span>
+                  ) : (
+                    <span className="oauth-token-status disconnected">Not connected</span>
+                  )}
+                </div>
+                <div className="oauth-provider-actions">
+                  {provider.hasToken ? (
+                    <button
+                      type="button"
+                      className="oauth-disconnect-btn"
+                      disabled={connecting === provider.id}
+                      onClick={() => void oauthDisconnect(provider.id)}
+                    >
+                      {connecting === provider.id ? "Disconnecting…" : "Disconnect"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="oauth-connect-btn"
+                      disabled={connecting !== null}
+                      onClick={() => void oauthConnect(provider.id)}
+                    >
+                      {connecting === provider.id ? (
+                        <><LoaderCircle className="spin" size={12} /> Connecting…</>
+                      ) : (
+                        "Connect"
+                      )}
+                    </button>
+                  )}
+                </div>
+                <p className="oauth-provider-hint">
+                  {provider.id === "github" && "Sign in with GitHub for Copilot and API access."}
+                  {provider.id === "google" && "Sign in with Google for Gemini and Cloud AI."}
+                  {provider.id === "azure" && "Sign in with Microsoft for Azure OpenAI."}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="provider-footer">
         <article className="policy-card policy-card-wide"><span className="policy-icon violet"><ShieldCheck size={17} /></span><div><small>Credential policy</small><h3>Authentication stays on this PC.</h3><p>Cloud keys can come from your environment, supported local auth stores, or an in-session entry. Stored keys remain in the Rust process and are never copied into workspace files or renderer state.</p></div></article>

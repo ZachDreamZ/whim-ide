@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dunce = "1"
@@ -45,3 +46,8 @@ base64 = "0.22.1"
 ignore = "0.4.28"
 tree-sitter = "0.26.11"
 tree-sitter-typescript = "0.23.2"
+sha2 = "0.10"
+rand = "0.8"
+open = "5"
+url = "2"
+notify = { version = "8", features = ["macos_fsevent"] }

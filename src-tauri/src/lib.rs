@@ -19,6 +19,7 @@ pub fn run() {
         .manage(BackendState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             backend::workspace::select_workspace,
             backend::workspace::ensure_project_context,
@@ -40,6 +41,11 @@ pub fn run() {
             capabilities::list_agent_capabilities,
             backend::voice::transcribe_voice,
             backend::voice::synthesize_voice,
+            backend::codebase_index::index_codebase,
+            backend::codebase_index::get_codebase_index_structured,
+            backend::fs_watcher::start_codebase_watcher,
+            backend::fs_watcher::stop_codebase_watcher,
+            backend::search::search_workspace,
             backend::execution::run_powershell_command,
             backend::execution::cancel_operation,
             backend::execution::list_active_operations,
@@ -53,6 +59,13 @@ pub fn run() {
             backend::provider::discover_credential_names,
             backend::provider::discover_local_ai_providers,
             backend::deployment::list_git_worktrees,
+            backend::oauth::oauth_list_providers,
+            backend::oauth::oauth_build_auth_url,
+            backend::oauth::oauth_authorize,
+            backend::oauth::oauth_exchange,
+            backend::oauth::oauth_refresh,
+            backend::oauth::oauth_get_token,
+            backend::oauth::oauth_clear_token,
             backend::deployment::create_git_worktree,
             backend::deployment::inspect_worktree_candidate,
             backend::deployment::discover_verification_plan,
@@ -76,6 +89,7 @@ pub fn run() {
             backend::orchestration::finish_orchestration_job,
             backend::orchestration::retry_orchestration_job,
             backend::orchestration::dispatch_orchestration_job,
+            backend::orchestration::dispatch_multi_agent_job,
             backend::orchestration::record_verification_result,
             backend::plugins::list_codex_plugins,
             backend::plugins::list_codex_plugin_catalog,
@@ -89,6 +103,8 @@ pub fn run() {
             backend::productivity::mark_scheduled_task_run,
             backend::productivity::inspect_sites_workspace,
             backend::productivity::inspect_pull_requests,
+            backend::productivity::github_connect,
+            backend::productivity::github_disconnect,
             agent::run_agent_prompt,
             agent::list_provider_models,
             memory::get_observational_memory,

@@ -167,6 +167,10 @@ export type NativeBrowserState = {
   url?: string | null;
 };
 
+// App version synced with Cargo.toml
+// Keep in sync when bumping.
+export const APP_VERSION = "0.4.0";
+
 export type AppSettings = {
   version: number;
   general: {
@@ -395,6 +399,48 @@ export type OrchestrationJobDetail = {
   events: OrchestrationJobEvent[];
 };
 
+export type SubTaskStatus = "pending" | "ready" | "running" | "completed" | "failed" | "cancelled";
+
+export type SubTaskSummary = {
+  id: string;
+  parentJobId: string;
+  description: string;
+  deps: string[];
+  provider: string | null;
+  model: string | null;
+  status: SubTaskStatus;
+  attempt: number;
+  maxAttempts: number;
+  summary: string | null;
+  error: string | null;
+  startedAtMs: number | null;
+  finishedAtMs: number | null;
+};
+
+export type PoolEntry = {
+  provider: string;
+  model: string;
+  label: string;
+  status: "available" | "busy" | "rate_limited" | "degraded";
+  busySinceMs: number | null;
+  consecutiveFailures: number;
+};
+
+export type PoolStatus = {
+  entries: PoolEntry[];
+  activeSubTasks: number;
+  queuedSubTasks: number;
+  totalProviders: number;
+};
+
+export type MultiAgentJobRequest = {
+  workspace: string;
+  intent: string;
+  title?: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
+
 export type ProviderStatus = {
   id: string;
   authenticated: boolean;
@@ -403,6 +449,15 @@ export type ProviderStatus = {
   credentialNames: string[];
   modelCount: number;
   catalogAvailable: boolean;
+};
+
+export type SearchResult = {
+  path: string;
+  line: number;
+  column: number;
+  lineText: string;
+  contextBefore: string[];
+  contextAfter: string[];
 };
 
 export type DiscoveredProvider = {
@@ -414,6 +469,41 @@ export type DiscoveredProvider = {
   baseUrl: string | null;
   note: string | null;
   capabilities: { chat: boolean; speechToText: boolean; textToSpeech: boolean };
+};
+
+// ─── OAuth types ──────────────────────────────────────────────────────────
+/** Built-in OAuth provider status visible from the UI. */
+export type OAuthProviderStatus = {
+  id: string;
+  name: string;
+  hasToken: boolean;
+  tokenPreview: string | null;
+};
+
+/** Request to start an OAuth authorization flow. */
+export type OAuthAuthUrlRequest = {
+  providerId: string;
+  clientId?: string | null;
+  redirectUri?: string | null;
+};
+
+/** Response with the authorization URL and PKCE data. */
+export type OAuthAuthUrlResponse = {
+  url: string;
+  state: string;
+  codeVerifier: string | null;
+  redirectPort: number;
+  redirectUri: string;
+};
+
+/** Full OAuth token stored in the keyring. */
+export type OAuthToken = {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  tokenType: string;
+  scope: string | null;
+  providerId: string;
 };
 
 export type ProviderInventory = {
@@ -908,6 +998,14 @@ export const bridge = {
     return call<PullRequestStatus>("inspect_pull_requests", { workspace });
   },
 
+  async githubConnect(): Promise<string> {
+    return call<string>("github_connect");
+  },
+
+  async githubDisconnect(): Promise<void> {
+    return call<void>("github_disconnect");
+  },
+
   async getOrchestrationJob(workspace: string, jobId: string): Promise<OrchestrationJobDetail> {
     return call<OrchestrationJobDetail>("get_orchestration_job", {
       request: { workspace, jobId },
@@ -962,6 +1060,42 @@ export const bridge = {
     return call<OrchestrationJob>("dispatch_orchestration_job", {
       request: input,
     });
+  },
+
+  async dispatchMultiAgentJob(input: MultiAgentJobRequest): Promise<OrchestrationJob> {
+    return call<OrchestrationJob>("dispatch_multi_agent_job", {
+      request: input,
+    });
+  },
+
+  // ─── Codebase Index ───────────────────────────────────────────────────────
+  async indexCodebase(path: string): Promise<string> {
+    if (!inTauri()) return "";
+    return call<string>("index_codebase", { path });
+  },
+
+  async getCodebaseIndex(path: string): Promise<unknown> {
+    if (!inTauri()) return null;
+    return call<unknown>("get_codebase_index_structured", { path });
+  },
+
+  async startCodebaseWatcher(path: string): Promise<void> {
+    if (!inTauri()) return;
+    return call<void>("start_codebase_watcher", { path });
+  },
+
+  async stopCodebaseWatcher(): Promise<void> {
+    if (!inTauri()) return;
+    return call<void>("stop_codebase_watcher", {});
+  },
+
+  async searchWorkspace(
+    path: string,
+    query: string,
+    options?: { useRegex?: boolean; caseSensitive?: boolean; contextLines?: number; maxResults?: number; includeGlob?: string; excludeGlob?: string }
+  ): Promise<SearchResult[]> {
+    if (!inTauri()) return [];
+    return call<SearchResult[]>("search_workspace", { path, query, options: options ?? {} });
   },
 
   async deployPreflight(workspace: string, target: string): Promise<NativeResult> {
@@ -1076,6 +1210,57 @@ export const bridge = {
   // show what is available and let the user pick a manual override.
   async discoverProviders(): Promise<DiscoveredProvider[]> {
     return call<DiscoveredProvider[]>("discover_providers");
+  },
+
+  // ─── OAuth ───────────────────────────────────────────────────────────────
+
+  /** List built-in OAuth providers and their stored-token status. */
+  async oauthListProviders(): Promise<OAuthProviderStatus[]> {
+    return call<OAuthProviderStatus[]>("oauth_list_providers");
+  },
+
+  /** Build the authorization URL (opens browser on the Rust side). */
+  async oauthBuildAuthUrl(req: OAuthAuthUrlRequest): Promise<OAuthAuthUrlResponse> {
+    return call<OAuthAuthUrlResponse>("oauth_build_auth_url", {
+      req: { providerId: req.providerId, clientId: req.clientId ?? null, redirectUri: req.redirectUri ?? null },
+    });
+  },
+
+  /** Full OAuth flow: open browser → listen for callback → exchange → store in keyring. */
+  async oauthAuthorize(req: OAuthAuthUrlRequest): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_authorize", {
+      req: { providerId: req.providerId, clientId: req.clientId ?? null, redirectUri: req.redirectUri ?? null },
+    });
+  },
+
+  /** Exchange an authorization code for tokens (manual flow). */
+  async oauthExchange(
+    providerId: string,
+    code: string,
+    codeVerifier: string | null,
+    redirectUri: string,
+    clientId: string | null
+  ): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_exchange", {
+      req: { providerId, code, codeVerifier, redirectUri, clientId },
+    });
+  },
+
+  /** Refresh a stored token. */
+  async oauthRefresh(providerId: string, refreshToken: string, clientId: string | null): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_refresh", {
+      req: { providerId, refreshToken, clientId },
+    });
+  },
+
+  /** Get the stored token for a provider. */
+  async oauthGetToken(providerId: string): Promise<OAuthToken | null> {
+    return call<OAuthToken | null>("oauth_get_token", { providerId });
+  },
+
+  /** Clear the stored token for a provider. */
+  async oauthClearToken(providerId: string): Promise<void> {
+    return call<void>("oauth_clear_token", { providerId });
   },
 
 };
