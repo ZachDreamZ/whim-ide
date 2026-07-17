@@ -66,6 +66,7 @@ enum Provider {
     Qwen,
     OmniRoute,
     Compatible,
+    ZenMux,
 }
 
 fn parse_provider(value: &str) -> Result<Provider, String> {
@@ -80,8 +81,9 @@ fn parse_provider(value: &str) -> Result<Provider, String> {
         "qwen" => Ok(Provider::Qwen),
         "omniroute" | "omni-route" | "omni" => Ok(Provider::OmniRoute),
         "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
+        "zenmux" => Ok(Provider::ZenMux),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux"
         )),
     }
 }
@@ -98,6 +100,7 @@ fn provider_name(provider: Provider) -> &'static str {
         Provider::Qwen => "qwen",
         Provider::OmniRoute => "omniroute",
         Provider::Compatible => "compatible",
+        Provider::ZenMux => "zenmux",
     }
 }
 
@@ -237,6 +240,7 @@ fn default_base(provider: Provider) -> &'static str {
         Provider::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
         Provider::OmniRoute => "http://127.0.0.1:20128/v1",
         Provider::Compatible => "",
+        Provider::ZenMux => "https://zenmux.ai/api/v1",
     }
 }
 
@@ -253,6 +257,7 @@ fn provider_label(provider: Provider) -> &'static str {
         Provider::OmniRoute => "OmniRoute",
         Provider::Local => "Local (Ollama / LM Studio)",
         Provider::Compatible => "OpenAI-Compatible",
+        Provider::ZenMux => "ZenMux",
     }
 }
 
@@ -277,6 +282,7 @@ pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'stat
         "qwen" => &["DASHSCOPE_API_KEY"],
         "xiaomi" => &["XIAOMI_API_KEY"],
         "omniroute" => &["OMNIROUTE_API_KEY"],
+        "zenmux" => &["ZENMUX_API_KEY"],
         _ => &[],
     }
 }
@@ -385,6 +391,7 @@ fn default_model(provider: Provider, role: AgentRole) -> &'static str {
             _ => "auto/coding",
         },
         Provider::Compatible => "local-model",
+        Provider::ZenMux => "claude-3-5-sonnet-latest",
     }
 }
 
@@ -1164,7 +1171,8 @@ async fn chat(
         | Provider::Xiaomi
         | Provider::Qwen
         | Provider::OmniRoute
-        | Provider::Compatible => {
+        | Provider::Compatible
+        | Provider::ZenMux => {
             chat_openai_style(base, &resolved_key, model, system, messages, tools).await
         }
         Provider::Anthropic => {
@@ -4348,7 +4356,8 @@ pub async fn fetch_provider_models(
         | Provider::Xiaomi
         | Provider::Qwen
         | Provider::OmniRoute
-        | Provider::Compatible => {
+        | Provider::Compatible
+        | Provider::ZenMux => {
             if api_key.is_empty() && provider_requires_key(provider_enum) {
                 return Err("An API key is required to list these models.".into());
             }
