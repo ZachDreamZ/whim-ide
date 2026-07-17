@@ -87,6 +87,11 @@ export function TimelineEvent({ event }: TimelineEventProps) {
           <span className="timeline-event-duration">{event.duration}</span>
         )}
         {hasDetail && (
+          <span className="timeline-event-view-details">
+            {expanded ? "Hide details" : "View details"}
+          </span>
+        )}
+        {hasDetail && (
           <ChevronDown
             size={12}
             className={`timeline-event-chevron ${expanded ? "rotate-180" : ""}`}
