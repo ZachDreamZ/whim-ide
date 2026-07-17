@@ -39,7 +39,7 @@ An active profile is announced in the native agent event stream and included in 
 | `allowedTools` | Allow-list of built-in agent tools. Omit to keep the normal native tool set. | 16 entries |
 | `allowedWritePaths` | Workspace-relative prefixes allowed for `write_file` and `edit_file`. | 64 entries |
 | `verificationCommands` | Suggested checks shown to the agent; these are never auto-run only because they are listed here. | 16 entries |
-| `maxToolIterations` | Lower cap on the native agent loop. | 1–18 |
+| `maxToolIterations` | Optional **advisory** ceiling only. `0`, omitted, or `null` means unlimited (parent-controlled completion). A positive value never automatically stops a healthy run; it only produces a warning signal. | `0` (unlimited) or `1`–`10,000` |
 | `maxDurationMs` | Lower cap on a task's time budget. | 15,000–1,800,000 ms |
 
 Supported `allowedTools` values are `read_file`, `write_file`, `edit_file`, `list_directory`, `grep_files`, `run_command`, `verify`, `plan`, `research`, `checkpoint`, `rollback`, `preview`, and `tunnel`.

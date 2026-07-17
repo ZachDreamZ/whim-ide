@@ -115,6 +115,8 @@ fn background_evidence_keeps_counts_not_agent_payloads() {
             cancelled: false,
             duration_ms: 420,
         },
+        iteration_count: 0,
+        loop_warnings: 0,
     };
 
     let evidence = background_agent_evidence(&result);

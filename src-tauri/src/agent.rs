@@ -39,12 +39,66 @@ use crate::backend::{
 use crate::capabilities::{capability_allows_tool, capability_prompt, resolved_capabilities};
 use crate::harness::{HarnessProfile, HARNESS_PROFILE_PATH, MAX_PROFILE_BYTES};
 
-const MAX_TOOL_ITERS: usize = 30;
 const MAX_TOOL_OUTPUT_CHARS: usize = 8_000;
 const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 120_000;
 const VERIFY_TIMEOUT_MS: u64 = 30_000;
 const MIN_AGENT_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_AGENT_TIMEOUT_MS: u64 = 10 * 60 * 1000;
+
+/// After this many consecutive identical tool calls (same tool, same
+/// arguments, same result) the run flags a *possible non-progress loop* and
+/// reports it as evidence. This is a detection signal only: it must never
+/// terminate a run. The parent/main agent decides whether to revise.
+const LOOP_DETECT_MIN_REPEATS: usize = 3;
+
+/// Detects genuine non-progress loops without any fixed iteration cap.
+///
+/// A loop is suspected when the same tool is invoked repeatedly with the same
+/// arguments and produces the same result. The detector only records evidence;
+/// the agent run loop is responsible for continuing (and for surfacing the
+/// evidence to the parent). Resetting happens as soon as a different call or
+/// result appears, so legitimate repeated-but-changing work is never flagged.
+struct LoopDetector {
+    last: Option<(String, String, String)>,
+    repeat_count: usize,
+}
+
+impl LoopDetector {
+    fn new() -> Self {
+        Self {
+            last: None,
+            repeat_count: 0,
+        }
+    }
+
+    /// Record one completed tool call. `args` and `result` are serialized to
+    /// stable strings so structural equality (not pointer identity) is compared.
+    /// `repeat_count` is the number of consecutive identical calls (1-based),
+    /// so three identical calls in a row crosses `LOOP_DETECT_MIN_REPEATS`.
+    fn observe(&mut self, tool: &str, args: &Value, result: &str) {
+        let signature = (tool.to_string(), args.to_string(), result.to_string());
+        if let Some(last) = &self.last {
+            if *last == signature {
+                self.repeat_count += 1;
+            } else {
+                self.repeat_count = 1;
+            }
+        } else {
+            self.repeat_count = 1;
+        }
+        self.last = Some(signature);
+    }
+
+    /// Returns `Some(repeats)` once the same (tool, args, result) has repeated
+    /// at least `LOOP_DETECT_MIN_REPEATS` times consecutively. `None` otherwise.
+    fn detected_repeats(&self) -> Option<usize> {
+        if self.repeat_count >= LOOP_DETECT_MIN_REPEATS {
+            Some(self.repeat_count)
+        } else {
+            None
+        }
+    }
+}
 const MAX_AGENT_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 const RESEARCH_MAX_ITERS: usize = 6;
 const MAX_CONTEXT_CHARS: usize = 80_000;
@@ -1006,6 +1060,15 @@ pub enum AgentEvent {
     Progress {
         message: String,
     },
+    /// A non-fatal signal surfaced to the parent/main agent. Unlike `Error`,
+    /// a warning never marks the run failed and never stops execution; it is
+    /// advisory evidence (for example, a detected non-progress loop or an
+    /// advisory iteration budget). The parent decides whether to continue.
+    #[serde(rename = "warning")]
+    Warning {
+        code: String,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1153,7 +1216,6 @@ fn durable_audit_label(event: &Value) -> Option<&'static str> {
             })
         }
         Some("error") => match event.pointer("/error/code").and_then(Value::as_str) {
-            Some("ITERATION_LIMIT") => Some("Stopped at the configured tool-iteration budget."),
             Some("CANCELLED") => Some("Native agent acknowledged cancellation."),
             Some("TIMEOUT") => Some("Stopped at the configured task time budget."),
             Some("PROVIDER") => {
@@ -3355,18 +3417,13 @@ fn tool_may_change_workspace(name: &str) -> bool {
     )
 }
 
-fn tool_iteration_budget(mode: AgentRole, speed: &str) -> usize {
-    match (mode, speed) {
-        (AgentRole::Janitor, _) => 6,
-        // Vibe owns a complete outcome, so its normal budget must cover
-        // exploration, implementation, dependency recovery, and verification
-        // without requiring the user to manually resume a healthy run.
-        (AgentRole::Auto, "fast") => 18,
-        (AgentRole::Auto, _) => MAX_TOOL_ITERS,
-        (_, "fast") => 10,
-        (_, "thorough") => MAX_TOOL_ITERS,
-        _ => 18,
-    }
+fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
+    // No fixed iteration cap. The native agent continues until the model
+    // returns no tool calls (normal completion), the user cancels, a fatal
+    // error occurs, or behavioral loop detection asks the parent to revise.
+    // A harness profile or request may still set an *advisory* budget that only
+    // produces a warning, never an automatic stop.
+    None
 }
 
 fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Duration> {
@@ -3417,7 +3474,25 @@ async fn run_native_agent<R: tauri::Runtime>(
     let mut provider_retry: usize = 0;
     let total_timeout = timeout_ms;
     let speed_iteration_cap = tool_iteration_budget(mode, settings.agent.speed.as_str());
-    let tool_iteration_cap = profile.tool_iteration_cap(speed_iteration_cap);
+    let tool_iteration_cap: Option<usize> = profile.tool_iteration_cap(speed_iteration_cap);
+    // The iteration count is recorded for telemetry only. It must never stop
+    // a healthy run — see LoopDetector for behavioral loop detection.
+    if let Some(advisory_cap) = tool_iteration_cap {
+        // Distinguishable from the normal agent lifecycle: this is an optional
+        // administrator/request budget that only warns. A healthy run keeps
+        // going past this count under parent-controlled completion.
+        record_agent_event(
+            app,
+            operation_id,
+            &mut events,
+            AgentEvent::Warning {
+                code: "ADVISORY_ITERATION_BUDGET".into(),
+                message: format!(
+                    "Advisory tool-iteration budget of {advisory_cap} configured. This is a warning signal only; the run continues under parent-controlled completion and is never stopped merely for reaching this count."
+                ),
+            },
+        );
+    }
 
     // Register in the backend operation registry so cancel_operation can find
     // this agent run and set the cancelled flag. Registration also takes an
@@ -3457,22 +3532,27 @@ async fn run_native_agent<R: tauri::Runtime>(
 
     let mut iter: usize = 0;
     let mut pending_tools = false;
+    let mut loop_detector = LoopDetector::new();
+    let mut reported_loop_repeats: usize = 0;
     'agent_loop: loop {
-        if iter >= tool_iteration_cap {
-            if pending_tools {
+        // Behavioral loop detection: identical repeated tool calls with
+        // identical results are reported as evidence to the parent, never used
+        // to stop the run. The parent/main agent decides whether to revise.
+        if let Some(repeats) = loop_detector.detected_repeats() {
+            if repeats > reported_loop_repeats {
+                reported_loop_repeats = repeats;
                 record_agent_event(
                     app,
                     operation_id,
                     &mut events,
-                    AgentEvent::Error {
-                        error: AgentErrorDetail {
-                            code: Some("ITERATION_LIMIT".into()),
-                            message: format!("Stopped after {tool_iteration_cap} tool iterations (possible runaway loop). Review the plan and run again."),
-                        }
+                    AgentEvent::Warning {
+                        code: "POSSIBLE_LOOP".into(),
+                        message: format!(
+                            "Possible non-progress loop: the same tool call repeated {repeats} times with identical arguments and result. Continue only if new state is being produced; otherwise revise the approach or cancel."
+                        ),
                     },
                 );
             }
-            break;
         }
         iter += 1;
         // Check whether the user cancelled this run before making another
@@ -3897,6 +3977,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                         },
                     },
                 );
+                loop_detector.observe("delegate_task", &call.arguments, &outcome);
 
                 messages.push(json!({
                     "role": "tool",
@@ -3943,6 +4024,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                         },
                     },
                 );
+                loop_detector.observe("plan", &call.arguments, &rendered);
                 messages.push(json!({
                     "role": "tool",
                     "tool_call_id": call.id,
@@ -4106,6 +4188,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                         },
                     },
                 );
+                loop_detector.observe("research", &call.arguments, &output);
                 messages.push(json!({
                     "role": "tool",
                     "tool_call_id": call.id,
@@ -4162,6 +4245,8 @@ async fn run_native_agent<R: tauri::Runtime>(
                     break 'agent_loop;
                 }
             };
+            // Behavioral loop detection observes every completed tool call.
+            loop_detector.observe(&call.name, &call.arguments, &output);
             record_agent_event(
                 app,
                 operation_id,
@@ -4276,6 +4361,8 @@ async fn run_native_agent<R: tauri::Runtime>(
             cancelled: was_cancelled,
             duration_ms: start.elapsed().as_millis(),
         },
+        iteration_count: iter,
+        loop_warnings: reported_loop_repeats,
     })
 }
 
@@ -4840,14 +4927,75 @@ mod tests {
             );
         }
         assert!(!vibe_tools.contains(&"tunnel"));
-        assert_eq!(tool_iteration_budget(AgentRole::Auto, "balanced"), 30);
-        assert_eq!(tool_iteration_budget(AgentRole::Auto, "fast"), 18);
+        assert_eq!(tool_iteration_budget(AgentRole::Auto, "balanced"), None);
+        assert_eq!(tool_iteration_budget(AgentRole::Auto, "fast"), None);
         assert_eq!(
             tool_iteration_budget(AgentRole::Implementer, "balanced"),
-            18
+            None
         );
+        assert_eq!(tool_iteration_budget(AgentRole::Janitor, "balanced"), None);
         assert!(remaining_agent_budget(Instant::now(), 100).is_some());
         assert!(remaining_agent_budget(Instant::now(), 0).is_none());
+    }
+
+    #[test]
+    fn native_agent_has_no_fixed_iteration_cap() {
+        // Regression guard for the "Stopped after 30 tool iterations" failure.
+        // Every role/speed combination must resolve to an unlimited budget, so
+        // no fixed cap can ever terminate a healthy run.
+        let roles = [
+            AgentRole::Auto,
+            AgentRole::Implementer,
+            AgentRole::Planner,
+            AgentRole::Tester,
+            AgentRole::Janitor,
+            AgentRole::Reviewer,
+            AgentRole::Debugger,
+        ];
+        let speeds = ["balanced", "fast", "thorough"];
+        for role in roles {
+            for speed in speeds {
+                assert_eq!(
+                    tool_iteration_budget(role, speed),
+                    None,
+                    "role {role:?} / speed {speed} must be unlimited"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn loop_detector_flags_repeated_identical_calls() {
+        let mut detector = LoopDetector::new();
+        let args = serde_json::json!({ "path": "src/main.rs" });
+        // Distinct results do not accumulate repeats.
+        detector.observe("read_file", &args, "v1");
+        detector.observe("read_file", &args, "v2");
+        assert_eq!(detector.detected_repeats(), None);
+        // Two identical calls are below the threshold (min 3).
+        detector.observe("read_file", &args, "v1");
+        detector.observe("read_file", &args, "v1");
+        assert_eq!(detector.detected_repeats(), None);
+        // A third identical call crosses the threshold and is reported.
+        detector.observe("read_file", &args, "v1");
+        assert!(detector.detected_repeats().is_some());
+        assert!(detector.detected_repeats().unwrap() >= LOOP_DETECT_MIN_REPEATS);
+        // A different result resets the counter.
+        detector.observe("read_file", &args, "v2");
+        assert_eq!(detector.detected_repeats(), None);
+    }
+
+    #[test]
+    fn loop_detector_distinguishes_different_tools_and_args() {
+        let mut detector = LoopDetector::new();
+        let a = serde_json::json!({ "path": "a" });
+        let b = serde_json::json!({ "path": "b" });
+        for _ in 0..5 {
+            detector.observe("run_command", &a, "same");
+            detector.observe("run_command", &b, "same");
+        }
+        // Different arguments break the consecutive-identical chain.
+        assert_eq!(detector.detected_repeats(), None);
     }
 
     #[test]
@@ -5627,17 +5775,15 @@ mod tests {
         assert_eq!(tool_json["part"]["state"]["input"]["command"], "ls");
         assert_eq!(tool_json["part"]["state"]["output"], "ok");
 
-        // 4. Error
-        let err_evt = AgentEvent::Error {
-            error: AgentErrorDetail {
-                code: Some("ITERATION_LIMIT".into()),
-                message: "runaway".into(),
-            },
+        // 4. Warning (advisory, never a hard stop)
+        let warn_evt = AgentEvent::Warning {
+            code: "POSSIBLE_LOOP".into(),
+            message: "Possible non-progress loop detected.".into(),
         };
-        let err_json = serde_json::to_value(&err_evt).unwrap();
-        assert_eq!(err_json["type"], "error");
-        assert_eq!(err_json["error"]["code"], "ITERATION_LIMIT");
-        assert_eq!(err_json["error"]["message"], "runaway");
+        let warn_json = serde_json::to_value(&warn_evt).unwrap();
+        assert_eq!(warn_json["type"], "warning");
+        assert_eq!(warn_json["code"], "POSSIBLE_LOOP");
+        assert_eq!(warn_json["message"], "Possible non-progress loop detected.");
 
         // 5. Progress
         let prog_evt = AgentEvent::Progress {

@@ -19,7 +19,12 @@ const MAX_VERIFICATION_COMMANDS: usize = 16;
 const MAX_VERIFICATION_COMMAND_CHARS: usize = 512;
 const MIN_DURATION_MS: u64 = 15_000;
 const MAX_DURATION_MS: u64 = 30 * 60 * 1000;
-const MAX_TOOL_ITERATIONS: usize = 18;
+// A harness profile may only narrow a run. `maxToolIterations: 0` or omitted
+// means "unlimited" (parent-controlled completion); any positive value is an
+// optional, advisory ceiling that only produces a warning, never an automatic
+// stop. This ceiling is a sanity bound on what a profile author may request,
+// not a termination threshold for normal runs.
+const MAX_TOOL_ITERATIONS: usize = 10_000;
 
 const KNOWN_TOOLS: &[&str] = &[
     "read_file",
@@ -200,9 +205,12 @@ impl HarnessProfile {
         }
         self.verification_commands.dedup();
         if let Some(iterations) = self.max_tool_iterations {
-            if !(1..=MAX_TOOL_ITERATIONS).contains(&iterations) {
+            // 0 (or omitted) means unlimited; a positive value is an advisory
+            // ceiling only, so reject impossible/garbage numbers but never
+            // treat a valid number as a hard stop.
+            if iterations != 0 && iterations > MAX_TOOL_ITERATIONS {
                 return Err(format!(
-                    "maxToolIterations must be between 1 and {MAX_TOOL_ITERATIONS}"
+                    "maxToolIterations must be 0 (unlimited) or between 1 and {MAX_TOOL_ITERATIONS}"
                 ));
             }
         }
@@ -246,10 +254,22 @@ impl HarnessProfile {
         })
     }
 
-    pub fn tool_iteration_cap(&self, requested: usize) -> usize {
-        self.max_tool_iterations
-            .map(|limit| requested.min(limit))
-            .unwrap_or(requested)
+    /// Resolve the effective tool-iteration ceiling.
+    ///
+    /// Returns `None` for an unlimited run (the default). A profile value of
+    /// `0` means unlimited and wins over any requested ceiling. A positive
+    /// profile value narrows a requested ceiling. All returned values are
+    /// advisory: the caller must never terminate a healthy run solely
+    /// because of this number.
+    pub fn tool_iteration_cap(&self, requested: Option<usize>) -> Option<usize> {
+        match self.max_tool_iterations {
+            None => requested,
+            Some(0) => None,
+            Some(profile_cap) => match requested {
+                Some(requested_cap) => Some(profile_cap.min(requested_cap)),
+                None => Some(profile_cap),
+            },
+        }
     }
 
     pub fn duration_cap(&self, requested: u64) -> u64 {
@@ -276,7 +296,15 @@ impl HarnessProfile {
             ));
         }
         if let Some(limit) = self.max_tool_iterations {
-            lines.push(format!("Enforced tool-iteration cap: {limit}"));
+            if limit == 0 {
+                lines.push(
+                    "Tool-iteration budget: unlimited (parent-controlled completion).".to_string(),
+                );
+            } else {
+                lines.push(format!(
+                    "Tool-iteration budget: {limit} (advisory warning only, not a hard stop)"
+                ));
+            }
         }
         if let Some(limit) = self.max_duration_ms {
             lines.push(format!("Enforced duration cap: {limit} ms"));
@@ -360,8 +388,35 @@ mod tests {
         assert!(!profile.permits_tool("write_file"));
         assert!(profile.permits_direct_write("src/components/App.tsx"));
         assert!(!profile.permits_direct_write("src-tauri/src/lib.rs"));
-        assert_eq!(profile.tool_iteration_cap(18), 4);
+        assert_eq!(profile.tool_iteration_cap(Some(18)), Some(4));
         assert_eq!(profile.duration_cap(600_000), 60_000);
+    }
+
+    #[test]
+    fn profile_iteration_cap_is_advisory_and_supports_unlimited() {
+        // Omitted or zero means unlimited (parent-controlled completion).
+        let unlimited = HarnessProfile::default();
+        assert_eq!(unlimited.tool_iteration_cap(None), None);
+        assert_eq!(unlimited.tool_iteration_cap(Some(18)), Some(18));
+
+        // Zero is explicit unlimited even when a requested ceiling exists.
+        let zero = HarnessProfile::parse(r#"{ "maxToolIterations": 0 }"#).expect("parse");
+        assert_eq!(zero.tool_iteration_cap(Some(18)), None);
+
+        // A positive profile value narrows a requested ceiling (min), and is
+        // never treated as a hard termination by callers.
+        let narrowing = HarnessProfile::parse(r#"{ "maxToolIterations": 4 }"#).expect("parse");
+        assert_eq!(narrowing.tool_iteration_cap(Some(18)), Some(4));
+        assert_eq!(narrowing.tool_iteration_cap(None), Some(4));
+    }
+
+    #[test]
+    fn profile_accepts_unlimited_iteration_values() {
+        // 0 is unlimited, not out of range.
+        assert!(HarnessProfile::parse(r#"{ "maxToolIterations": 0 }"#).is_ok());
+        // Large advisory ceilings are accepted (sanity bound only).
+        assert!(HarnessProfile::parse(r#"{ "maxToolIterations": 5000 }"#).is_ok());
+        // Negative is impossible in JSON (usize), so no extra handling needed.
     }
 
     #[test]

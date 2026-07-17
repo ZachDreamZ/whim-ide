@@ -315,6 +315,10 @@ export type NativeResult = {
   cancelled?: boolean;
   timedOut?: boolean;
   events?: unknown[];
+  /** Total tool-iteration count for the run. Telemetry only — never a stop trigger. */
+  iterationCount?: number;
+  /** How many times a possible non-progress loop was reported to the parent. */
+  loopWarnings?: number;
 };
 
 export type OrchestrationJobMode =
@@ -1294,7 +1298,7 @@ function displayToolName(name: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-const KNOWN_EVENT_TYPES = ["text", "reasoning", "tool_use", "error"] as const;
+const KNOWN_EVENT_TYPES = ["text", "reasoning", "tool_use", "error", "warning"] as const;
 
 /**
  * Agent/stdout output is untrusted data. Strip control characters and
@@ -1345,6 +1349,13 @@ export function agentEventToPart(eventValue: unknown): Record<string, unknown> |
     const message = typeof data?.message === "string" ? data.message : typeof error?.message === "string" ? error.message : "The agent reported an error.";
     return { type: "error", title: "Agent error", message };
   }
+  if (type === "warning") {
+    // A warning is advisory evidence (e.g. a detected non-progress loop or an
+    // advisory iteration budget). It must never render as a hard failure.
+    const code = typeof event.code === "string" ? event.code : undefined;
+    const message = typeof event.message === "string" ? event.message : "The agent reported a warning.";
+    return { type: "warning", code, title: "Agent warning", message };
+  }
   return null;
 }
 
@@ -1356,6 +1367,7 @@ export function agentEventsToParts(events: unknown[]): Record<string, unknown>[]
 export function partsToText(parts: Record<string, unknown>[], fallback: string): string {
   const text = parts.flatMap((part) => {
     if (part.type === "text" && typeof part.text === "string") return [part.text];
+    if (part.type === "warning" && typeof part.message === "string") return [`Warning: ${part.message}`];
     if (part.type === "error") return [`${part.title}: ${part.message}`];
     return [];
   }).join("\n\n").trim();
@@ -1386,6 +1398,10 @@ export function agentLiveSummary(eventValue: unknown): string | null {
     const error = record(event.error);
     const message = sanitizeText(typeof error?.message === "string" ? error.message : "");
     return message ? `Agent error: ${message.slice(0, 220)}` : "The agent reported an error.";
+  }
+  if (type === "warning") {
+    const message = sanitizeText(typeof event.message === "string" ? event.message : "");
+    return message ? `Agent warning: ${message.slice(0, 220)}` : "The agent reported a warning.";
   }
   if (type === "text") {
     const text = sanitizeText(typeof event.text === "string" ? event.text : "");

@@ -14,6 +14,19 @@ describe("bridge event boundary", () => {
     });
   });
 
+  it("renders warning events as advisory, never as a hard failure", () => {
+    const parts = agentEventsToParts([
+      { type: "warning", code: "POSSIBLE_LOOP", message: "Repeated identical tool calls detected." },
+    ]);
+    expect(parts).toEqual([
+      { type: "warning", code: "POSSIBLE_LOOP", title: "Agent warning", message: "Repeated identical tool calls detected." },
+    ]);
+
+    expect(agentLiveSummary({ type: "warning", message: "Advisory iteration budget reached.\u0000" })).toBe(
+      "Agent warning: Advisory iteration budget reached.",
+    );
+  });
+
   it("renders only recognized, sanitized event shapes", () => {
     const parts = agentEventsToParts([
       { type: "text", text: "hello\u0000\n\n\nworld" },

@@ -98,6 +98,11 @@ pub struct AgentRunResult {
     pub session_id: Option<String>,
     pub model_id: Option<String>,
     pub command: CommandResult,
+    /// Total tool-iteration count for this run. Telemetry only — never a
+    /// termination trigger.
+    pub iteration_count: usize,
+    /// How many times a possible non-progress loop was reported to the parent.
+    pub loop_warnings: usize,
 }
 
 fn orchestration_error(error: String) -> String {
