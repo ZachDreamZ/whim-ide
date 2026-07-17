@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Blocks,
   CalendarClock,
   ChevronDown,
   Clapperboard,
@@ -11,8 +10,8 @@ import {
   LoaderCircle,
   MessageSquareText,
   MoreHorizontal,
-  Orbit,
   Plus,
+  Pin,
   Search,
   Settings2,
   Sparkles,
@@ -51,17 +50,15 @@ export type ProjectSidebarProps = {
 };
 
 const primaryItems = [
-  { id: "build", label: "New task", icon: Sparkles },
+  { id: "build", label: "New chat", icon: Sparkles },
   { id: "scheduled", label: "Scheduled", icon: CalendarClock },
-  { id: "plugins", label: "Plugins", icon: Blocks },
+] satisfies { id: ViewId; label: string; icon: typeof Sparkles }[];
+
+const moreItems = [
   { id: "sites", label: "Sites", icon: Globe2 },
   { id: "pullRequests", label: "Pull requests", icon: GitPullRequest },
   { id: "chat", label: "Chat", icon: MessageSquareText },
   { id: "browser", label: "Browser", icon: Globe2 },
-] satisfies { id: ViewId; label: string; icon: typeof Sparkles }[];
-
-const moreItems = [
-  { id: "eve", label: "Eve agents", icon: Orbit },
   { id: "creative", label: "Creative studio", icon: Clapperboard },
   { id: "providers", label: "Models & providers", icon: Settings2 },
 ] satisfies { id: ViewId; label: string; icon: typeof Sparkles }[];
@@ -90,6 +87,20 @@ function taskTone(status: OrchestrationJob["status"]) {
   return "bg-muted-foreground";
 }
 
+const PINNED_KEY = "whim:pinned";
+
+function loadPinned(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(PINNED_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function savePinned(items: string[]) {
+  localStorage.setItem(PINNED_KEY, JSON.stringify(items));
+}
+
 export function ProjectSidebar({
   activeView,
   onViewChange,
@@ -106,6 +117,23 @@ export function ProjectSidebar({
   const [chats, setChats] = useState<ChatThreadSummary[]>([]);
   const [query, setQuery] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(loadPinned);
+
+  const persistPinned = useCallback((ids: string[]) => {
+    setPinnedIds(ids);
+    savePinned(ids);
+  }, []);
+
+  const togglePin = useCallback(
+    (id: string) => {
+      if (pinnedIds.includes(id)) {
+        persistPinned(pinnedIds.filter((x) => x !== id));
+      } else {
+        persistPinned([id, ...pinnedIds]);
+      }
+    },
+    [pinnedIds, persistPinned]
+  );
 
   const refreshHistory = useCallback(async () => {
     if (!native) return;
@@ -138,6 +166,19 @@ export function ProjectSidebar({
       .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
   }, [jobs, query]);
 
+  const filteredChats = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return chats.filter((chat) => !needle || `${chat.title} ${chat.preview}`.toLowerCase().includes(needle));
+  }, [chats, query]);
+
+  const pinnedItems = useMemo(() => {
+    const all = [
+      ...filteredJobs.map((j) => ({ id: j.id, title: j.title, kind: "job" as const, updatedAtMs: j.updatedAtMs })),
+      ...filteredChats.map((c) => ({ id: c.id, title: c.title, kind: "chat" as const, updatedAtMs: c.updatedAtMs })),
+    ];
+    return all.filter((item) => pinnedIds.includes(item.id));
+  }, [filteredJobs, filteredChats, pinnedIds]);
+
   const projects = useMemo(() => {
     const grouped = new Map<string, { path: string; jobs: OrchestrationJob[] }>();
     const activeKey = normalized(workspace);
@@ -150,57 +191,57 @@ export function ProjectSidebar({
       group.jobs.push(job);
       grouped.set(key, group);
     }
-    return [...grouped.values()].sort((left, right) => {
-      if (normalized(left.path) === activeKey) return -1;
-      if (normalized(right.path) === activeKey) return 1;
-      return (right.jobs[0]?.updatedAtMs ?? 0) - (left.jobs[0]?.updatedAtMs ?? 0);
-    });
+    return [...grouped.values()]
+      .filter((g) => g.path)
+      .sort((left, right) => {
+        if (normalized(left.path) === activeKey) return -1;
+        if (normalized(right.path) === activeKey) return 1;
+        return (right.jobs[0]?.updatedAtMs ?? 0) - (left.jobs[0]?.updatedAtMs ?? 0);
+      });
   }, [filteredJobs, workspace]);
 
-  const filteredChats = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return chats.filter((chat) => !needle || `${chat.title} ${chat.preview}`.toLowerCase().includes(needle));
-  }, [chats, query]);
+  const unattachedChats = filteredChats;
 
   return (
-    <aside className="flex h-full w-[268px] shrink-0 select-none flex-col overflow-hidden border-r border-border bg-background" aria-label="Whim home navigation">
+    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col overflow-hidden border-r border-border bg-background" aria-label="Whim sidebar">
       <div className="flex h-12 items-center justify-between px-3">
         <strong className="font-heading text-[15px] font-semibold tracking-[-0.02em]">Whim</strong>
-        <Button variant="ghost" size="icon-sm" aria-label="Search projects and tasks" onClick={() => document.getElementById("whim-home-search")?.focus()}>
-          <Search />
+        <Button variant="ghost" size="icon-sm" aria-label="Search" onClick={() => document.getElementById("whim-sidebar-search")?.focus()}>
+          <Search size={16} />
         </Button>
       </div>
 
-      <nav className="space-y-0.5 px-2" aria-label="Home">
+      <nav className="space-y-0.5 px-2" aria-label="Primary">
         {primaryItems.map(({ id, label, icon: Icon }) => (
           <Button
             key={id}
             variant="ghost"
-            className={`h-8 w-full justify-start px-2 text-[13px] ${activeView === id ? "bg-muted text-foreground" : "text-foreground/90"}`}
+            className={`h-8 w-full justify-start gap-2 px-2 text-[13px] ${activeView === id ? "bg-muted text-foreground" : "text-foreground/90"}`}
             onClick={() => onViewChange?.(id)}
           >
-            <Icon /> {label}
+            <Icon size={16} /> {label}
           </Button>
         ))}
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" className="h-8 w-full justify-start px-2 text-[13px] text-foreground/90" />}>
-            <MoreHorizontal /> More
+          <DropdownMenuTrigger render={<Button variant="ghost" className="h-8 w-full justify-start gap-2 px-2 text-[13px] text-foreground/90" />}>
+            <MoreHorizontal size={16} /> More
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" className="w-52">
             {moreItems.map(({ id, label, icon: Icon }) => (
               <DropdownMenuItem key={id} onClick={() => onViewChange?.(id)}>
-                <Icon /> {label}
+                <Icon size={16} /> {label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </nav>
 
-      <div className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-2 text-muted-foreground focus-within:ring-1 focus-within:ring-ring">
-        <Search className="size-3.5" />
+      {/* Search */}
+      <div className="mx-3 mt-2 flex h-7 items-center gap-2 rounded-lg border border-border bg-card px-2 text-muted-foreground focus-within:ring-1 focus-within:ring-ring">
+        <Search className="size-3" />
         <Input
-          id="whim-home-search"
-          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+          id="whim-sidebar-search"
+          className="h-6 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
           placeholder="Search history"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
@@ -208,32 +249,73 @@ export function ProjectSidebar({
         {(historyLoading || loading) && <LoaderCircle className="size-3 animate-spin" />}
       </div>
 
-      <ScrollArea className="mt-3 min-h-0 flex-1">
-        <section className="px-2 pb-3" aria-labelledby="projects-heading">
-          <div className="flex h-7 items-center justify-between px-2 text-xs text-muted-foreground">
+      <ScrollArea className="mt-2 min-h-0 flex-1">
+        {/* Pinned */}
+        {pinnedItems.length > 0 && (
+          <section className="px-2 pb-2" aria-labelledby="pinned-heading">
+            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="pinned-heading">
+              <Pin size={12} className="mr-1.5" /> Pinned
+            </div>
+            {pinnedItems.map((item) => (
+              <Button
+                key={item.id}
+                variant="ghost"
+                className="h-7 w-full justify-start gap-2 px-2 text-xs font-normal"
+                title={item.title}
+                onClick={() => {
+                  if (item.kind === "job") {
+                    const job = filteredJobs.find((j) => j.id === item.id);
+                    if (job) onTaskSelect?.(job);
+                  } else {
+                    const chat = filteredChats.find((c) => c.id === item.id);
+                    if (chat) onChatSelect?.(chat);
+                  }
+                }}
+              >
+                <Sparkles size={12} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{item.title}</span>
+              </Button>
+            ))}
+          </section>
+        )}
+
+        {/* Projects */}
+        <section className="px-2 pb-2" aria-labelledby="projects-heading">
+          <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
             <span id="projects-heading">Projects</span>
-            <Button variant="ghost" size="icon-xs" aria-label="Add project" onClick={onOpenWorkspace}><Plus /></Button>
+            <Button variant="ghost" size="icon-xs" aria-label="Add project" onClick={onOpenWorkspace}><Plus size={14} /></Button>
           </div>
           <div className="space-y-0.5">
             {projects.map((project) => {
               const active = normalized(project.path) === normalized(workspace);
+              const projectJobs = project.jobs.slice(0, 8);
+              const isEmpty = projectJobs.length === 0;
               return (
                 <Collapsible key={normalized(project.path)} defaultOpen={active || query.length > 0}>
-                  <CollapsibleTrigger className="group flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-foreground/90 hover:bg-muted">
-                    {active ? <FolderOpen className="size-4 text-primary" /> : <Folder className="size-4 text-muted-foreground" />}
+                  <CollapsibleTrigger className="group flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-foreground/90 hover:bg-muted">
+                    {active ? <FolderOpen className="size-3.5 text-primary" /> : <Folder className="size-3.5 text-muted-foreground" />}
                     <span className="min-w-0 flex-1 truncate">{projectName(project.path)}</span>
-                    <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[panel-open]:rotate-180" />
+                    <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[panel-open]:rotate-180" />
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="ml-4 border-l border-border pl-1">
-                    {project.jobs.length === 0 ? (
-                      <p className="px-2 py-1.5 text-[11px] text-muted-foreground">No tasks yet</p>
-                    ) : project.jobs.slice(0, 8).map((job) => (
-                      <Button key={job.id} variant="ghost" className="h-auto min-h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal" title={job.title} onClick={() => onTaskSelect?.(job)}>
-                        <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
-                        <span className="min-w-0 flex-1 truncate">{job.title}</span>
-                        <time className="text-[10px] text-muted-foreground">{recentLabel(job.updatedAtMs)}</time>
-                      </Button>
-                    ))}
+                  <CollapsibleContent className="ml-3 border-l border-border pl-1">
+                    {isEmpty ? (
+                      <p className="px-2 py-1 text-[11px] text-muted-foreground">No conversations yet</p>
+                    ) : (
+                      projectJobs.map((job) => (
+                        <Button
+                          key={job.id}
+                          variant="ghost"
+                          className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
+                          title={job.title}
+                          onClick={() => onTaskSelect?.(job)}
+                          onContextMenu={(e) => { e.preventDefault(); togglePin(job.id); }}
+                        >
+                          <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
+                          <span className="min-w-0 flex-1 truncate">{job.title}</span>
+                          <time className="text-[10px] text-muted-foreground">{recentLabel(job.updatedAtMs)}</time>
+                        </Button>
+                      ))
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               );
@@ -241,24 +323,20 @@ export function ProjectSidebar({
           </div>
         </section>
 
-        <section className="px-2 pb-3" aria-labelledby="tasks-heading">
-          <div className="flex h-7 items-center px-2 text-xs text-muted-foreground" id="tasks-heading">Recent tasks</div>
-          {filteredJobs.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-muted-foreground">Completed and active Vibe runs appear here.</p>
-          ) : filteredJobs.slice(0, 10).map((job) => (
-            <Button key={job.id} variant="ghost" className="h-8 w-full justify-start gap-2 px-2 text-xs font-normal" title={`${projectName(job.workspace)} · ${job.title}`} onClick={() => onTaskSelect?.(job)}>
-              <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
-              <span className="min-w-0 flex-1 truncate">{job.title}</span>
-            </Button>
-          ))}
-        </section>
-
-        {filteredChats.length > 0 && (
-          <section className="px-2 pb-4" aria-labelledby="chats-heading">
-            <div className="flex h-7 items-center px-2 text-xs text-muted-foreground" id="chats-heading">Chats</div>
-            {filteredChats.slice(0, 8).map((chat) => (
-              <Button key={chat.id} variant="ghost" className="h-8 w-full justify-start gap-2 px-2 text-xs font-normal" title={chat.title} onClick={() => onChatSelect?.(chat)}>
-                <MessageSquareText className="text-muted-foreground" />
+        {/* Unattached Chats */}
+        {unattachedChats.length > 0 && (
+          <section className="px-2 pb-3" aria-labelledby="chats-heading">
+            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="chats-heading">Chats</div>
+            {unattachedChats.slice(0, 8).map((chat) => (
+              <Button
+                key={chat.id}
+                variant="ghost"
+                className="h-7 w-full justify-start gap-2 px-2 text-xs font-normal"
+                title={chat.title}
+                onClick={() => onChatSelect?.(chat)}
+                onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
+              >
+                <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate">{chat.title}</span>
               </Button>
             ))}
@@ -266,17 +344,18 @@ export function ProjectSidebar({
         )}
       </ScrollArea>
 
-      <div className="border-t border-border p-2">
+      {/* Bottom */}
+      <div className="border-t border-border px-2 py-2">
         <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[11px] text-muted-foreground">
-          <span className={`size-1.5 rounded-full ${workspace !== "No workspace open" ? "bg-emerald-400" : "bg-muted-foreground"}`} />
+          <span className={`size-1.5 shrink-0 rounded-full ${workspace !== "No workspace open" ? "bg-emerald-400" : "bg-muted-foreground"}`} />
           <span className="min-w-0 flex-1 truncate">{workspace !== "No workspace open" ? projectName(workspace) : "No project open"}</span>
           {branch && <span className="truncate font-mono text-[9px]">{branch}</span>}
         </div>
-        <Button variant="ghost" className="h-8 w-full justify-start px-2 text-[13px]" onClick={() => onViewChange?.("settings")}>
-          <Settings2 /> Settings
+        <Button variant="ghost" className="h-7 w-full justify-start gap-2 px-2 text-xs" onClick={() => onViewChange?.("settings")}>
+          <Settings2 size={14} /> Settings
         </Button>
-        <Button variant="ghost" className="h-8 w-full justify-start px-2 text-[13px]" onClick={() => { onRefresh?.(); void refreshHistory(); }}>
-          <span className="grid size-5 place-items-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">W</span>
+        <Button variant="ghost" className="h-7 w-full justify-start gap-2 px-2 text-xs" onClick={() => { onRefresh?.(); void refreshHistory(); }}>
+          <span className="grid size-4 shrink-0 place-items-center rounded-full bg-primary text-[8px] font-semibold text-primary-foreground">W</span>
           Whim workspace
         </Button>
       </div>
