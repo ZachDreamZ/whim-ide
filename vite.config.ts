@@ -49,7 +49,6 @@ export default defineConfig(async () => ({
         manualChunks(id) {
           if (id.includes("node_modules/motion")) return "vendor-motion";
           if (id.includes("node_modules/@tabler/icons-react")) return "vendor-icons";
-          if (id.includes("node_modules")) return "vendor";
         },
       },
     },
