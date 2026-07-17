@@ -55,6 +55,7 @@ export type MessageListProps = {
 };
 
 const SCROLL_THRESHOLD = 80;
+const JUMP_BUTTON_HIDE_DELAY = 4000;
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
   minute: "2-digit",
@@ -294,6 +295,9 @@ export const MessageList = memo(function MessageList({
   const assistantSpaceActiveRef = useRef(false);
   const [activeCopyId, setActiveCopyId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [newContentSincePause, setNewContentSincePause] = useState(false);
+  const lastContentHeightRef = useRef(0);
+  const newContentTimerRef = useRef<number | null>(null);
 
   const CustomUserMessage = slots?.UserMessage || UserMessage;
   const CustomToolRenderer = slots?.ToolRenderer || DefaultToolRenderer;
@@ -389,6 +393,14 @@ export const MessageList = memo(function MessageList({
     shouldAutoScrollRef.current = isAtBottom();
   }, [isAtBottom]);
 
+  const jumpToLatest = useCallback(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+    shouldAutoScrollRef.current = true;
+    setNewContentSincePause(false);
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, []);
+
   useLayoutEffect(() => {
     const container = chatContainerRef.current;
     const contentWrapper = contentWrapperRef.current;
@@ -402,15 +414,23 @@ export const MessageList = memo(function MessageList({
       shouldAutoScrollRef.current = true;
     }
 
-    let lastContentHeight = contentWrapper.getBoundingClientRect().height;
     let prevScrollHeight = container.scrollHeight;
 
     const resizeObserver = new ResizeObserver(() => {
       const newContentHeight = contentWrapper.getBoundingClientRect().height;
-      if (newContentHeight === lastContentHeight) return;
-      lastContentHeight = newContentHeight;
+      if (newContentHeight === lastContentHeightRef.current) return;
+      lastContentHeightRef.current = newContentHeight;
 
       if (!shouldAutoScrollRef.current) {
+        setNewContentSincePause(true);
+        if (newContentTimerRef.current) {
+          window.clearTimeout(newContentTimerRef.current);
+        }
+        newContentTimerRef.current = window.setTimeout(() => {
+          setNewContentSincePause(false);
+          newContentTimerRef.current = null;
+        }, JUMP_BUTTON_HIDE_DELAY);
+
         const newScrollHeight = container.scrollHeight;
         if (newScrollHeight !== prevScrollHeight && prevScrollHeight > 0) {
           const delta = newScrollHeight - prevScrollHeight;
@@ -421,7 +441,12 @@ export const MessageList = memo(function MessageList({
     });
 
     resizeObserver.observe(contentWrapper);
-    return () => resizeObserver.disconnect();
+    return () => {
+      resizeObserver.disconnect();
+      if (newContentTimerRef.current) {
+        window.clearTimeout(newContentTimerRef.current);
+      }
+    };
   }, []);
 
   const normalizedMessages = useMemo(
@@ -491,12 +516,36 @@ export const MessageList = memo(function MessageList({
     return cancel;
   }, [lastUserMessageId, showPlanning, scrollToBottomSettled]);
 
+  const handleScrollWithPauseReset = useCallback(
+    (_e: React.UIEvent<HTMLDivElement>) => {
+      handleScroll();
+
+      const container = chatContainerRef.current;
+      if (!container) return;
+      const atBottom =
+        container.scrollHeight -
+          container.scrollTop -
+          container.clientHeight <
+        SCROLL_THRESHOLD;
+      if (atBottom) {
+        if (shouldAutoScrollRef.current) {
+          setNewContentSincePause(false);
+          if (newContentTimerRef.current) {
+            window.clearTimeout(newContentTimerRef.current);
+            newContentTimerRef.current = null;
+          }
+        }
+      }
+    },
+    [handleScroll],
+  );
+
   return (
     <div
       ref={containerRefCallback}
-      onScroll={handleScroll}
+      onScroll={handleScrollWithPauseReset}
       className={cn(
-        "an-message-list flex-1 min-h-0 overflow-y-auto",
+        "an-message-list flex-1 min-h-0 overflow-y-auto relative",
         className,
       )}
     >
@@ -634,6 +683,34 @@ export const MessageList = memo(function MessageList({
           />
         )}
       </div>
+      {newContentSincePause && (
+        <div className="sticky bottom-0 w-full flex justify-center pb-3 pointer-events-none z-10">
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            className="jump-to-latest-btn pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg"
+            style={{
+              background: "#2a2a2a",
+              color: "#d4d4d4",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            New updates
+          </button>
+        </div>
+      )}
     </div>
   );
 });

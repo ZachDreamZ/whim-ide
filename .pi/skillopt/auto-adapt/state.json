@@ -3,9 +3,9 @@
     {
       "signature": "fatal:",
       "toolName": "bash",
-      "count": 1,
+      "count": 2,
       "firstSeen": 1784274727343,
-      "lastSeen": 1784274727343,
+      "lastSeen": 1784288634447,
       "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk git add src/App.css src/components/OrchestrationPanel.tsx src/components/MissionControl.tsx src/lib/bridge.ts && rtk git commit ",
       "exampleOutput": "ok 4 files changed, 171 insertions(+), 205 deletions(-)\nok 0240096\nfatal: unable to access 'https://github.com/ZachDreamZ/whim-ide.git/': Recv failure: Connection was reset\n\n\nCommand exited with code 128",
       "evalCreated": false,
@@ -21,8 +21,30 @@
       "exampleOutput": "7:C:\\Users\\Vendex\\Documents\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src\\components\\ErrorBoundary.tsx\n84: ❯ src/components/ChatHub.test.tsx (1 test | 1 failed) 1413ms\n86: Test Files  1 failed | 33 passed (34)\n87:      Tests  1 failed | 85 passed (86)\n93: FAIL  src/components/ChatHub.test.tsx > ChatHub > ru",
       "evalCreated": false,
       "category": "test-failure"
+    },
+    {
+      "signature": "ENOENT:",
+      "toolName": "read",
+      "count": 1,
+      "firstSeen": 1784282065717,
+      "lastSeen": 1784282065717,
+      "exampleInput": "",
+      "exampleOutput": "ENOENT: no such file or directory, access 'C:\\Users\\Vendex\\Document\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src\\components\\MissionControl.tsx'",
+      "evalCreated": false,
+      "category": "functionality"
+    },
+    {
+      "signature": "error:",
+      "toolName": "bash",
+      "count": 1,
+      "firstSeen": 1784284995082,
+      "lastSeen": 1784284995082,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk git checkout main && rtk git pull origin main 2>&1",
+      "exampleOutput": "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc-tauri/Cargo.lock\nPlease commit your changes or stash them before you switch branches.\nAborting\n\n\nCommand exited with code 1",
+      "evalCreated": false,
+      "category": "functionality"
     }
   ],
   "totalAdaptations": 0,
-  "lastCheck": 1784275469870
+  "lastCheck": 1784287918457
 }

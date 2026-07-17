@@ -642,6 +642,8 @@ a:focus-visible {
 }
 .whim-agent-chat .an-message-list { mask-image: linear-gradient(to bottom, transparent 0, black 14px, black 100%); }
 .whim-agent-chat .an-message-list > div { padding: 15px 12px !important; }
+.whim-agent-chat .an-message-list .jump-to-latest-btn { transition: opacity 0.15s, transform 0.15s; }
+.whim-agent-chat .an-message-list .jump-to-latest-btn:hover { opacity: 1; transform: scale(1.03); }
 .whim-agent-chat .an-markdown { color: #bfc5ce; font-size: 14px; line-height: 1.55; }
 .whim-agent-chat .an-markdown strong { color: #e5e7eb; font-weight: 560; }
 .whim-agent-chat .an-markdown p { margin: 0 0 7px; }

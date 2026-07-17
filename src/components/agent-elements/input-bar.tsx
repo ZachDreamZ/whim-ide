@@ -274,6 +274,8 @@ export const InputBar = memo(function InputBar({
     if (!trimmed || isStreaming || disabled) return;
     onSend({ role: "user", content: trimmed });
     setInput("");
+    // Return focus to the composer after sending
+    textareaRef.current?.focus();
   }, [input, isStreaming, disabled, onSend, setInput]);
 
   const handleInfoBarClose = useCallback(() => {

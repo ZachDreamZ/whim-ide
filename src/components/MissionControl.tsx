@@ -936,9 +936,12 @@ ${messageContent}`;
     return () => window.removeEventListener("whim:stop-agent", stopAgent);
   });
 
+  const [sessionKey, setSessionKey] = useState(0);
+
   const newSession = () => {
     sessionId.current = undefined;
     setMessages(initialMessages);
+    setSessionKey((k) => k + 1);
   };
 
   return (
@@ -997,6 +1000,7 @@ ${messageContent}`;
 
       <div className="agent-chat-wrap">
         <AgentChat
+          key={sessionKey}
           messages={messages}
           status={status}
           onSend={send}

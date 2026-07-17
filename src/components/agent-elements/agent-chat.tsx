@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { MessageList } from "./message-list";
 import { InputBar } from "./input-bar";
 import { Suggestions, type SuggestionItem } from "./input/suggestions";
@@ -51,6 +51,13 @@ export function AgentChat({
       emptySuggestionsPlacement === "both") &&
     suggestionConfig.items.length > 0;
 
+  const handleSend = useCallback(
+    (msg: { role: "user"; content: string }) => {
+      onSend(msg);
+    },
+    [onSend],
+  );
+
   const handleEmptySuggestionSelect = (item: SuggestionItem) => {
     setDraft(item.value ?? item.label);
   };
@@ -71,7 +78,7 @@ export function AgentChat({
 
   const inputBarNode = (
     <ResolvedInputBar
-      onSend={onSend}
+      onSend={handleSend}
       status={status}
       onStop={onStop}
       value={draft}
@@ -87,6 +94,7 @@ export function AgentChat({
       isDragOver={attachments?.isDragOver}
       suggestions={showInputSuggestions ? suggestions : []}
       enterToSend={enterToSend}
+      autoFocus
       leftActions={leftActions}
       rightActions={rightActions}
       mentionContextPaths={mentionContextPaths}
