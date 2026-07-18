@@ -4,6 +4,8 @@
 //! never receives provider credentials or raw command output, which keeps the
 //! audit trail useful without turning it into another secret store.
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::{
     env,

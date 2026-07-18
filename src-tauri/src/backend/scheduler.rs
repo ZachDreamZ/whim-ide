@@ -2,6 +2,8 @@
 //! available provider+model combinations. Tracks concurrency, rate limits,
 //! and consecutive failures per provider.
 
+#![allow(dead_code)]
+
 use crate::orchestrator::{OrchestrationPoolStatus, ProviderPoolEntry};
 use std::time::{SystemTime, UNIX_EPOCH};
 

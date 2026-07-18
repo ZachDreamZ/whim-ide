@@ -75,13 +75,13 @@ pub fn search_workspace(
         return Err(format!("Not a directory: {path}"));
     }
 
-    let query_len = query.len();
+    let _query_len = query.len();
     if query.is_empty() {
         return Err("Query cannot be empty".into());
     }
 
     // Compile the regex
-    let pattern: Regex = if opts.use_regex {
+    let _pattern: Regex = if opts.use_regex {
         Regex::new(&query).map_err(|e| format!("Invalid regex: {e}"))?
     } else {
         let escaped = regex::escape(&query);

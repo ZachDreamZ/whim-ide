@@ -15,6 +15,8 @@
 //!   Zen, Qwen, DeepSeek, Xiaomi, Local (Ollama/LM Studio), and any
 //!   OpenAI-compatible custom endpoint.
 
+#![allow(dead_code)]
+
 use std::time::{Duration, Instant};
 use std::{
     collections::HashSet,
@@ -3531,7 +3533,7 @@ async fn run_native_agent<R: tauri::Runtime>(
     }
 
     let mut iter: usize = 0;
-    let mut pending_tools = false;
+    let mut _pending_tools = false;
     let mut loop_detector = LoopDetector::new();
     let mut reported_loop_repeats: usize = 0;
     'agent_loop: loop {
@@ -3750,7 +3752,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                 .collect::<Vec<_>>());
         }
         messages.push(assistant);
-        pending_tools = !response.tool_calls.is_empty();
+        _pending_tools = !response.tool_calls.is_empty();
         if response.tool_calls.is_empty() {
             if let Some(verifier) = background_verifier.as_mut() {
                 if verifier.needs_fresh_report(last_background_generation) {

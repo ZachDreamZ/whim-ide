@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{Manager, State};
+use tauri::State;
 use tokio::{
     process::Command,
     time::{timeout, Duration},
