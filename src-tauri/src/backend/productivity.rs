@@ -684,10 +684,7 @@ pub async fn inspect_pull_requests(
         (true, account, a, r, rev)
     };
 
-    let mut pull_requests = match authored {
-        Ok(prs) => prs,
-        Err(_) => vec![],
-    };
+    let mut pull_requests = authored.unwrap_or_default();
     if let Ok(prs) = reviewing {
         pull_requests.extend(prs);
     }

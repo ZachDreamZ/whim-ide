@@ -81,7 +81,9 @@ fn classify_file(path: &Path) -> &'static str {
 
 /// Lightweight regex-free line scanner for a source file.
 /// Returns (exports, imports, routes, db_ops, local_deps).
-fn scan_source_file(path: &Path, content: &str) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+type ScanResult = (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<String>);
+
+fn scan_source_file(path: &Path, content: &str) -> ScanResult {
     let language = classify_file(path);
     let mut exports: Vec<String> = Vec::new();
     let mut imports: Vec<String> = Vec::new();

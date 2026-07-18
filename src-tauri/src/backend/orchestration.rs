@@ -574,7 +574,6 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
             })
             .map_err(orchestration_error)?
     };
-    drop(state);
 
     // 2. Build provider pool from discovered providers
     let providers = crate::backend::deployment::discover_providers();
@@ -677,13 +676,15 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                 let app_handle = app.clone();
                 let pool_clone = pool.clone();
 
-                let assigned = pool_clone.lock().ok().and_then(|mut guard| guard.next_ready());
+                let assigned = pool_clone.lock().ok().map(|mut guard| guard.next_ready());
                 let p: String;
                 let m: String;
                 if let Some((ref prov, ref model_name)) = assigned {
                     p = prov.clone();
                     m = model_name.clone();
-                    pool_clone.lock().ok().map(|mut guard| guard.mark_busy(&p, &m));
+                    if let Ok(mut guard) = pool_clone.lock() {
+                        guard.mark_busy(&p, &m);
+                    }
                 } else {
                     if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
                         entry.status = SubTaskStatus::Failed;
@@ -742,7 +743,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                     r.events
                         .iter()
                         .filter_map(|ev| ev["text"].as_str())
-                        .last()
+                        .next_back()
                         .map(|s| s.chars().take(500).collect::<String>())
                         .unwrap_or_else(|| r.command.stdout.chars().take(500).collect::<String>())
                 });
@@ -756,7 +757,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                         entry.model = Some(mdl.clone());
                         completed_count += 1;
                     }
-                    pool.lock().ok().map(|mut guard| guard.record_success(&prov, &mdl));
+                    if let Ok(mut guard) = pool.lock() {
+                        guard.record_success(&prov, &mdl);
+                    }
                 } else {
                     // Error recovery: retry if attempts remain
                     let should_retry = sub_task_results
@@ -774,7 +777,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                                     .unwrap_or_else(|| "Unknown error".into()),
                             );
                         }
-                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                        if let Ok(mut guard) = pool.lock() {
+                            guard.record_failure(&prov, &mdl);
+                        }
                     } else {
                         if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
                             entry.status = SubTaskStatus::Failed;
@@ -783,7 +788,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                             entry.model = Some(mdl.clone());
                             failed_count += 1;
                         }
-                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                        if let Ok(mut guard) = pool.lock() {
+                            guard.record_failure(&prov, &mdl);
+                        }
                     }
                 }
             }
@@ -829,7 +836,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
         let app_state = app.state::<BackendState>();
         let _ = lock(&app_state.orchestration, "orchestration")
             .await
-            .and_then(|mut store| {
+            .map(|mut store| {
                 store.finish(
                     &wc,
                     &job_id,

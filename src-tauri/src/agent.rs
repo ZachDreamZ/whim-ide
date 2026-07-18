@@ -1911,7 +1911,7 @@ async fn run_tool(
             {
                 Ok(result) => Ok(format!(
                     "Tracked Git checkpoint saved at commit {} (the current branch was not moved).",
-                    &result.commit.chars().take(12).collect::<String>()
+                    result.commit.chars().take(12).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -1930,7 +1930,7 @@ async fn run_tool(
             {
                 Ok(result) => Ok(format!(
                     "Tracked files restored to {} ({}; untracked files were left untouched).",
-                    &result.restored_commit.chars().take(12).collect::<String>(),
+                    result.restored_commit.chars().take(12).collect::<String>(),
                     if result.stash_created {
                         "previous tracked state kept in a local Git stash"
                     } else {
@@ -1955,7 +1955,7 @@ async fn run_tool(
                 Ok(result) => Ok(format!(
                     "Local preview ready at {} (operation {}).",
                     result.stdout,
-                    &operation.chars().take(8).collect::<String>()
+                    operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -1971,7 +1971,7 @@ async fn run_tool(
             {
                 Ok(_) => Ok(format!(
                     "Public tunnel starting (operation {}). Whim writes the URL to .whim/tunnel-url.txt; read that file to share it.",
-                    &operation.chars().take(8).collect::<String>()
+                    operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -2729,7 +2729,7 @@ fn eve_info_model(info: &Value) -> Option<String> {
         .and_then(Value::as_str)
         .or_else(|| info.get("model").and_then(Value::as_str))
         .or_else(|| info.pointer("/model/id").and_then(Value::as_str))
-        .and_then(|model| if model.is_empty() { None } else { Some(model) })
+        .filter(|model| !model.is_empty())
         .map(str::to_string)
 }
 
