@@ -72,124 +72,130 @@ export function AgentConversation({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { showJumpButton, scrollToBottom } = useSmartAutoScroll(scrollContainerRef);
 
+  const isEmpty = messages.length === 0;
+
   return (
     <div className="agent-conversation">
-      <div ref={scrollContainerRef} className="agent-conversation-scroll">
-        <div className="agent-conversation-content">
-          {messages.length === 0 && emptyState ? (
-            emptyState
-          ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`conversation-message conversation-message--${msg.role}`}
-              >
-                {msg.parts?.map((part, i) => {
-                  const p = part as Record<string, unknown>;
-                  if (isTextPart(p)) {
+      {isEmpty && emptyState ? (
+        <>
+          {emptyState}
+        </>
+      ) : (
+        <>
+          <div ref={scrollContainerRef} className="agent-conversation-scroll">
+            <div className="agent-conversation-content">
+                  {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`conversation-message conversation-message--${msg.role}`}
+                >
+                  {msg.parts?.map((part, i) => {
+                    const p = part as Record<string, unknown>;
+                    if (isTextPart(p)) {
+                      return (
+                        <div key={i} className="message-text">
+                          <Markdown content={String(p.text ?? "")} />
+                        </div>
+                      );
+                    }
+                    if (isToolPart(p)) {
+                      return (
+                        <TimelineEvent
+                          key={String(p.toolCallId ?? i)}
+                          event={{
+                            id: String(p.toolCallId ?? i),
+                            type: "tool_invocation",
+                            status: isRunning ? "running" : "succeeded",
+                            label: `Using ${String(p.toolName ?? "tool")}`,
+                            detail: JSON.stringify(p.args, null, 2),
+                          }}
+                        />
+                      );
+                    }
+                    if (isErrorPart(p)) {
+                      return (
+                        <TimelineEvent
+                          key={i}
+                          event={{
+                            id: String(i),
+                            type: "error",
+                            status: "failed",
+                            label: String(p.title ?? "Error"),
+                            detail: String(p.message ?? ""),
+                          }}
+                        />
+                      );
+                    }
+                    if (isDelegationPart(p)) {
+                      return (
+                        <TimelineEvent
+                          key={String(p.id ?? i)}
+                          event={{
+                            id: String(p.id ?? i),
+                            type: "delegation",
+                            status: isRunning ? "running" : "succeeded",
+                            label: `Delegated to ${String(p.name ?? "agent")} agent`,
+                            detail: String(p.task ?? ""),
+                          }}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                  {msg.role === "assistant" && msg.parts && (() => {
+                    const fileEdits = msg.parts
+                      .map((p) => p as Record<string, unknown>)
+                      .filter(
+                        (p) =>
+                          p.type === "tool-invocation" &&
+                          isFileEditTool(String(p.toolName ?? ""))
+                      );
+                    if (fileEdits.length === 0) return null;
+                    const files: FileChange[] = fileEdits.map((p) => ({
+                      path: String((p.args as Record<string, unknown>)?.path ?? p.toolName ?? "unknown"),
+                      additions: Number((p.args as Record<string, unknown>)?.additions ?? 0) || 1,
+                      deletions: Number((p.args as Record<string, unknown>)?.deletions ?? 0) || 0,
+                    }));
                     return (
-                      <div key={i} className="message-text">
-                        <Markdown content={String(p.text ?? "")} />
-                      </div>
-                    );
-                  }
-                  if (isToolPart(p)) {
-                    return (
-                      <TimelineEvent
-                        key={String(p.toolCallId ?? i)}
-                        event={{
-                          id: String(p.toolCallId ?? i),
-                          type: "tool_invocation",
-                          status: isRunning ? "running" : "succeeded",
-                          label: `Using ${String(p.toolName ?? "tool")}`,
-                          detail: JSON.stringify(p.args, null, 2),
-                        }}
+                      <FileChangeCard
+                        files={files}
+                        totalAdditions={files.reduce((s, f) => s + f.additions, 0)}
+                        totalDeletions={files.reduce((s, f) => s + f.deletions, 0)}
+                        onOpenFile={onOpenFile}
                       />
                     );
-                  }
-                  if (isErrorPart(p)) {
-                    return (
-                      <TimelineEvent
-                        key={i}
-                        event={{
-                          id: String(i),
-                          type: "error",
-                          status: "failed",
-                          label: String(p.title ?? "Error"),
-                          detail: String(p.message ?? ""),
-                        }}
-                      />
-                    );
-                  }
-                  if (isDelegationPart(p)) {
-                    return (
-                      <TimelineEvent
-                        key={String(p.id ?? i)}
-                        event={{
-                          id: String(p.id ?? i),
-                          type: "delegation",
-                          status: isRunning ? "running" : "succeeded",
-                          label: `Delegated to ${String(p.name ?? "agent")} agent`,
-                          detail: String(p.task ?? ""),
-                        }}
-                      />
-                    );
-                  }
-                  return null;
-                })}
-                {msg.role === "assistant" && msg.parts && (() => {
-                  const fileEdits = msg.parts
-                    .map((p) => p as Record<string, unknown>)
-                    .filter(
-                      (p) =>
-                        p.type === "tool-invocation" &&
-                        isFileEditTool(String(p.toolName ?? ""))
-                    );
-                  if (fileEdits.length === 0) return null;
-                  const files: FileChange[] = fileEdits.map((p) => ({
-                    path: String((p.args as Record<string, unknown>)?.path ?? p.toolName ?? "unknown"),
-                    additions: Number((p.args as Record<string, unknown>)?.additions ?? 0) || 1,
-                    deletions: Number((p.args as Record<string, unknown>)?.deletions ?? 0) || 0,
-                  }));
-                  return (
-                    <FileChangeCard
-                      files={files}
-                      totalAdditions={files.reduce((s, f) => s + f.additions, 0)}
-                      totalDeletions={files.reduce((s, f) => s + f.deletions, 0)}
-                      onOpenFile={onOpenFile}
-                    />
-                  );
-                })()}
-              </div>
-            ))
+                  })()}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {showJumpButton && (
+            <button
+              type="button"
+              className="jump-to-latest-button"
+              onClick={scrollToBottom}
+            >
+              Jump to latest ↓
+            </button>
           )}
-        </div>
-      </div>
 
-      {showJumpButton && (
-        <button
-          type="button"
-          className="jump-to-latest-button"
-          onClick={scrollToBottom}
-        >
-          Jump to latest ↓
-        </button>
+          <MessageComposer
+            onSend={onSend}
+            onStop={onStop}
+            isRunning={isRunning}
+            projectName={projectName}
+            modelLabel={modelLabel}
+            micSupported={micSupported}
+            provider={provider}
+            apiKey={apiKey}
+            baseUrl={baseUrl}
+            onOpenProviders={onOpenProviders}
+            showRetry={showRetry}
+            onRetry={onRetry}
+          />
+        </>
       )}
-
-      <MessageComposer
-        onSend={onSend}
-        onStop={onStop}
-        isRunning={isRunning}
-        projectName={projectName}
-        modelLabel={modelLabel}
-        micSupported={micSupported}
-        provider={provider}
-        apiKey={apiKey}
-        baseUrl={baseUrl}
-        onOpenProviders={onOpenProviders}
-        showRetry={showRetry}
-        onRetry={onRetry}
-      />
     </div>
   );
 }

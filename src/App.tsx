@@ -58,6 +58,36 @@ const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] }
 const defaultCredentials: CredentialReport = { environmentNames: [], envFiles: [] };
 const defaultProfile: ProjectProfile = { framework: null, packageManager: null, checkCommand: null, devCommand: null };
 
+/** Continuation-only words that should never stand alone as conversation titles. */
+const CONTINUATION_WORDS = new Set([
+  "continue", "go", "next", "ok", "yes", "no", "done",
+  "more", "again", "retry", "fix", "apply", "proceed",
+]);
+
+function isContinuationOnlyTitle(title: string): boolean {
+  const lower = title.toLowerCase().trim();
+  if (CONTINUATION_WORDS.has(lower)) return true;
+  const stripped = lower.replace(/^[a-z0-9]+[:\s-]+/i, "").trim();
+  return stripped.length > 0 && CONTINUATION_WORDS.has(stripped);
+}
+
+/** Remove stale chat threads from the old task system whose titles are
+ *  purely continuation stubs and whose message count is trivial (≤1).  
+ *  Threads with real conversation history are preserved. */
+async function cleanupStaleContinuationThreads(): Promise<void> {
+  if (!bridge.isNative()) return;
+  try {
+    const threads = await bridge.listChatThreads();
+    for (const thread of threads) {
+      if (isContinuationOnlyTitle(thread.title) && thread.messageCount <= 1) {
+        await bridge.deleteChatThread(thread.id).catch(() => {});
+      }
+    }
+  } catch {
+    // Best-effort cleanup; never block startup.
+  }
+}
+
 type ReadOnlyFile = { path: string; content: string; scrollToLine?: number | null };
 
 function App() {
@@ -76,6 +106,7 @@ function App() {
   const handleNewChat = useCallback(() => {
     setChatResetKey((k) => k + 1);
     setActiveThreadId(null);
+    setChatTitle("New chat");
     setView("build");
   }, []);
   const [activeSettingsCategory, setActiveSettingsCategory] = useState("general");
@@ -338,6 +369,11 @@ function App() {
     localStorage.removeItem("whim:agent:apiKey");
     void (async () => {
       setAppSettings(await bridge.appSettings().catch(() => defaultAppSettings));
+      // Clean up stale continuation-only duplicate threads from the old task system.
+      // Only removes entries whose title is purely a continuation word and whose
+      // message count is <= 1 (empty or trivial stubs). Preserves any thread with
+      // real conversation history.
+      void cleanupStaleContinuationThreads();
       // Provider detection (PowerShell probes for Ollama/LM Studio, environment
       // discovery) runs in parallel with workspace activation so slow or
       // unreachable provider endpoints never block file reads.
@@ -473,6 +509,8 @@ function App() {
               <AgentChatView
                 key={chatResetKey}
                 workspace={workspacePath}
+                workspaceInfo={workspace}
+                branch={branch}
                 initialThreadId={activeThreadId}
                 provider={agentProvider}
                 apiKey={agentApiKey}
@@ -484,6 +522,7 @@ function App() {
                 micSupported={typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia}
                 onOpenProviders={() => setView("providers")}
                 onTitleChange={setChatTitle}
+                onOpenWorkspace={openWorkspace}
               />
             {readOnlyFile && (
               <section className="read-only-file" aria-label="File viewer">
@@ -597,7 +636,7 @@ function App() {
       </div>
       {appSettings.general.showBottomPanel && <footer className="statusbar">
         <div>
-          <span><GitBranch size={11} /> {branch ?? (workspace?.gitRepository ? "Git" : "No repository")}</span>
+          <span><GitBranch size={11} /> {branch ?? (workspace?.gitRepository ? "Git connected" : "No repository")}</span>
           <span><Check size={11} /> {changes.length} change{changes.length === 1 ? "" : "s"}</span>
           <span><ShieldCheck size={11} /> {currentFileName}</span>
         </div>

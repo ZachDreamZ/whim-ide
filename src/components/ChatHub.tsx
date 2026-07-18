@@ -44,7 +44,14 @@ type AttachedTextFile = {
 
 function titleFromMessage(content: string) {
   const title = content.replace(/\s+/g, " ").trim();
-  return title.length > 64 ? `${title.slice(0, 61)}…` : title || "New chat";
+  if (!title) return "New chat";
+
+  // Never use single-word continuations as titles
+  const lower = title.toLowerCase();
+  const continuationWords = new Set(["continue", "go", "next", "ok", "yes", "no", "done", "more", "again", "retry", "fix", "apply"]);
+  if (continuationWords.has(lower)) return "New chat";
+
+  return title.length > 64 ? `${title.slice(0, 61)}…` : title;
 }
 
 function storedToUi(message: ChatThreadMessage): UIMessage {

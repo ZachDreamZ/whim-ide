@@ -98,6 +98,22 @@ function loadPinned(): string[] {
   }
 }
 
+/** Detect titles that are purely continuation stubs — exact words,
+ * prefixed patterns like "Agent: continue", or single meaningful words
+ * that are known continuation signals. */
+const CONTINUATION_WORDS = new Set([
+  "continue", "go", "next", "ok", "yes", "no", "done",
+  "more", "again", "retry", "fix", "apply", "proceed",
+]);
+
+function isContinuationTitle(title: string): boolean {
+  const lower = title.toLowerCase().trim();
+  if (CONTINUATION_WORDS.has(lower)) return true;
+  // Match patterns like "Agent: continue", "agent continue", "sub: next"
+  const stripped = lower.replace(/^[a-z0-9]+[:\s-]+/i, "").trim();
+  return stripped.length > 0 && CONTINUATION_WORDS.has(stripped);
+}
+
 function savePinned(items: string[]) {
   localStorage.setItem(PINNED_KEY, JSON.stringify(items));
 }
@@ -163,13 +179,19 @@ export function ProjectSidebar({
   const filteredJobs = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return jobs
-      .filter((job) => !needle || `${job.title} ${job.workspace}`.toLowerCase().includes(needle))
+      .filter((job) => {
+        if (isContinuationTitle(job.title)) return false;
+        return !needle || `${job.title} ${job.workspace}`.toLowerCase().includes(needle);
+      })
       .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
   }, [jobs, query]);
 
   const filteredChats = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return chats.filter((chat) => !needle || `${chat.title} ${chat.preview}`.toLowerCase().includes(needle));
+    return chats.filter((chat) => {
+      if (isContinuationTitle(chat.title)) return false;
+      return !needle || `${chat.title} ${chat.preview}`.toLowerCase().includes(needle);
+    });
   }, [chats, query]);
 
   const pinnedItems = useMemo(() => {
@@ -181,16 +203,26 @@ export function ProjectSidebar({
   }, [filteredJobs, filteredChats, pinnedIds]);
 
   const projects = useMemo(() => {
-    const grouped = new Map<string, { path: string; jobs: OrchestrationJob[] }>();
+    const grouped = new Map<string, { path: string; jobs: OrchestrationJob[]; chats: ChatThreadSummary[] }>();
     const activeKey = normalized(workspace);
     if (workspace && workspace !== "No workspace open") {
-      grouped.set(activeKey, { path: workspace, jobs: [] });
+      grouped.set(activeKey, { path: workspace, jobs: [], chats: [] });
     }
     for (const job of filteredJobs) {
       const key = normalized(job.workspace);
-      const group = grouped.get(key) ?? { path: job.workspace, jobs: [] };
+      const group = grouped.get(key) ?? { path: job.workspace, jobs: [], chats: [] };
       group.jobs.push(job);
       grouped.set(key, group);
+    }
+    // Group chat threads under their workspace project
+    for (const chat of filteredChats) {
+      const chatWs = chat.workspace;
+      if (chatWs) {
+        const key = normalized(chatWs);
+        const group = grouped.get(key) ?? { path: chatWs, jobs: [], chats: [] };
+        group.chats.push(chat);
+        grouped.set(key, group);
+      }
     }
     return [...grouped.values()]
       .filter((g) => g.path)
@@ -199,9 +231,16 @@ export function ProjectSidebar({
         if (normalized(right.path) === activeKey) return 1;
         return (right.jobs[0]?.updatedAtMs ?? 0) - (left.jobs[0]?.updatedAtMs ?? 0);
       });
-  }, [filteredJobs, workspace]);
+  }, [filteredJobs, filteredChats, workspace]);
 
-  const unattachedChats = filteredChats;
+  // Chats not attached to the current workspace (or with no workspace at all)
+  const unattachedChats = useMemo(() => {
+    const activeKey = normalized(workspace);
+    return filteredChats.filter((chat) => {
+      if (!chat.workspace) return true;
+      return normalized(chat.workspace) !== activeKey;
+    });
+  }, [filteredChats, workspace]);
 
   return (
     <aside className="flex h-full w-[230px] shrink-0 select-none flex-col overflow-hidden border-r border-border bg-background" aria-label="Whim sidebar">
@@ -290,7 +329,8 @@ export function ProjectSidebar({
             {projects.map((project) => {
               const active = normalized(project.path) === normalized(workspace);
               const projectJobs = project.jobs.slice(0, 8);
-              const isEmpty = projectJobs.length === 0;
+              const projectChats = project.chats.slice(0, 8);
+              const isEmpty = projectJobs.length === 0 && projectChats.length === 0;
               return (
                 <Collapsible key={normalized(project.path)} defaultOpen={active || query.length > 0}>
                   <CollapsibleTrigger className="group flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-foreground/90 hover:bg-muted">
@@ -302,20 +342,35 @@ export function ProjectSidebar({
                     {isEmpty ? (
                       <p className="px-2 py-1 text-[11px] text-muted-foreground">No conversations yet</p>
                     ) : (
-                      projectJobs.map((job) => (
-                        <Button
-                          key={job.id}
-                          variant="ghost"
-                          className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
-                          title={job.title}
-                          onClick={() => onTaskSelect?.(job)}
-                          onContextMenu={(e) => { e.preventDefault(); togglePin(job.id); }}
-                        >
-                          <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
-                          <span className="min-w-0 flex-1 truncate">{job.title}</span>
-                          <time className="text-[10px] text-muted-foreground">{recentLabel(job.updatedAtMs)}</time>
-                        </Button>
-                      ))
+                      <>
+                        {projectJobs.map((job) => (
+                          <Button
+                            key={job.id}
+                            variant="ghost"
+                            className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
+                            title={job.title}
+                            onClick={() => onTaskSelect?.(job)}
+                            onContextMenu={(e) => { e.preventDefault(); togglePin(job.id); }}
+                          >
+                            <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
+                            <span className="min-w-0 flex-1 truncate">{job.title}</span>
+                            <time className="text-[10px] text-muted-foreground">{recentLabel(job.updatedAtMs)}</time>
+                          </Button>
+                        ))}
+                        {projectChats.map((chat) => (
+                          <Button
+                            key={chat.id}
+                            variant="ghost"
+                            className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
+                            title={chat.title}
+                            onClick={() => onChatSelect?.(chat)}
+                            onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
+                          >
+                            <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                          </Button>
+                        ))}
+                      </>
                     )}
                   </CollapsibleContent>
                 </Collapsible>

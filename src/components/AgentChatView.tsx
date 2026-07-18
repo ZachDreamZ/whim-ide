@@ -7,6 +7,8 @@ import { EmptyChatState } from "./EmptyChatState";
 
 type AgentChatViewProps = {
   workspace: string | null;
+  workspaceInfo?: { path: string; name: string; gitRepository: boolean } | null;
+  branch?: string | null;
   provider: string;
   apiKey?: string;
   baseUrl?: string;
@@ -20,6 +22,7 @@ type AgentChatViewProps = {
   micSupported?: boolean;
   onOpenProviders?: () => void;
   onTitleChange?: (title: string) => void;
+  onOpenWorkspace?: () => void;
 };
 
 interface NativeEvent {
@@ -36,9 +39,22 @@ interface NativeEvent {
   [key: string]: unknown;
 }
 
+const CONTINUATION_WORDS = new Set([
+  "continue", "go", "next", "ok", "yes", "no", "done",
+  "more", "again", "retry", "fix", "apply", "proceed",
+]);
+
+function isContinuationMessage(content: string): boolean {
+  return CONTINUATION_WORDS.has(content.trim().toLowerCase());
+}
+
 function generateTitle(content: string): string {
   const cleaned = content.replace(/\s+/g, " ").trim();
   if (!cleaned) return "New chat";
+
+  // Never use single-word continuations as titles
+  if (isContinuationMessage(cleaned)) return "New chat";
+
   // Use the first meaningful sentence
   const sentence = cleaned.match(/^(.+?[.!?])\s/)?.[1] ?? cleaned;
   return sentence.length > 72 ? sentence.slice(0, 69) + "..." : sentence;
@@ -116,6 +132,8 @@ function collectText(parts: UIMessage["parts"][0][]): string {
 
 export function AgentChatView({
   workspace,
+  workspaceInfo,
+  branch,
   provider,
   apiKey,
   baseUrl,
@@ -129,6 +147,7 @@ export function AgentChatView({
   micSupported = false,
   onOpenProviders,
   onTitleChange,
+  onOpenWorkspace,
 }: AgentChatViewProps) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -190,10 +209,15 @@ export function AgentChatView({
         threadIdRef.current = threadId;
 
         const text = collectText(newParts);
-        const title =
-          messages.length === 0
+        const isContinuation = isContinuationMessage(userContent);
+        let title =
+          // Only generate a title from the first non-continuation message;
+          // continuation messages must never rename the conversation.
+          messages.length === 0 && !isContinuation
             ? generateTitle(userContent)
             : conversationTitle;
+        // Safety net: if the title is somehow a continuation word, force "New chat"
+        if (isContinuationMessage(title)) title = "New chat";
 
         // Accumulate all messages from history
         const allMessages: ChatThread["messages"] = [
@@ -224,6 +248,10 @@ export function AgentChatView({
           updatedAtMs: Date.now(),
           model: model ?? null,
           messages: allMessages,
+          // Carry workspace and branch so the status bar and sidebar
+          // always show the correct project context for this conversation.
+          workspace: workspace ?? null,
+          branch: branch ?? null,
         };
 
         await bridge.saveChatThread(thread);
@@ -242,7 +270,7 @@ export function AgentChatView({
         // Persistence is best-effort
       }
     },
-    [messages.length, conversationTitle, model]
+    [messages.length, conversationTitle, model, workspace, branch]
   );
 
   const handleSend = useCallback(
@@ -385,7 +413,24 @@ export function AgentChatView({
       onStop={handleStop}
       showRetry={lastRunFailed}
       onRetry={handleRetry}
-      emptyState={<EmptyChatState onSend={wrappedSend} />}
+      emptyState={
+        <EmptyChatState
+          onSend={wrappedSend}
+          onOpenWorkspace={onOpenWorkspace}
+          workspaceInfo={workspaceInfo}
+          branch={branch}
+          modelLabel={model}
+          micSupported={micSupported}
+          provider={provider}
+          apiKey={apiKey}
+          baseUrl={baseUrl}
+          onOpenProviders={onOpenProviders}
+          showRetry={lastRunFailed}
+          onRetry={handleRetry}
+          isRunning={isRunning}
+          onStop={handleStop}
+        />
+      }
       onOpenFile={onOpenFile}
       projectName={projectName}
       modelLabel={model}

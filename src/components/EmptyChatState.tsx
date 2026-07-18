@@ -1,7 +1,21 @@
-import { Sparkles, Code2, Blocks, Wand2 } from "lucide-react";
+import { Sparkles, Code2, Blocks, Wand2, FolderOpen, GitBranch } from "lucide-react";
+import { MessageComposer } from "./MessageComposer";
 
 type EmptyChatStateProps = {
   onSend: (content: string) => void;
+  onOpenWorkspace?: () => void;
+  workspaceInfo?: { path: string; name: string; gitRepository: boolean } | null;
+  branch?: string | null;
+  modelLabel?: string;
+  micSupported?: boolean;
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  onOpenProviders?: () => void;
+  showRetry?: boolean;
+  onRetry?: () => void;
+  isRunning?: boolean;
+  onStop?: () => void;
 };
 
 const suggestions = [
@@ -11,32 +25,90 @@ const suggestions = [
   { icon: Sparkles, text: "Write tests for the main components" },
 ];
 
-export function EmptyChatState({ onSend }: EmptyChatStateProps) {
+export function EmptyChatState({
+  onSend,
+  onOpenWorkspace,
+  workspaceInfo,
+  branch,
+  modelLabel,
+  micSupported = false,
+  provider,
+  apiKey,
+  baseUrl,
+  onOpenProviders,
+  showRetry = false,
+  onRetry,
+  isRunning = false,
+  onStop,
+}: EmptyChatStateProps) {
+  const projectName = workspaceInfo?.name ?? null;
+  const hasGitRepo = workspaceInfo?.gitRepository ?? false;
+
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-8">
-      <div className="text-center">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
-          What do you want to build?
-        </h2>
-        <p className="text-sm text-muted-foreground max-w-md">
-          Describe your task and the agent will analyze your codebase,
-          make changes, and verify the results.
+    <div className="empty-chat-state">
+      <div className="empty-chat-welcome">
+        <h2 className="empty-chat-title">What do you want to build?</h2>
+        <p className="empty-chat-subtitle">
+          Describe your task and Whim will inspect your project,
+          make changes, and verify the result.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+      <div className="empty-chat-suggestions">
         {suggestions.map(({ icon: Icon, text }) => (
           <button
             key={text}
             type="button"
-            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 text-left text-xs hover:bg-accent transition-colors cursor-pointer"
+            className="empty-chat-suggestion-card"
             onClick={() => onSend(text)}
           >
-            <Icon size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
-            <span className="text-foreground/90 leading-relaxed">{text}</span>
+            <Icon size={15} className="empty-chat-suggestion-icon" />
+            <span className="empty-chat-suggestion-text">{text}</span>
           </button>
         ))}
       </div>
+
+      <div className="empty-chat-composer-wrap">
+        <MessageComposer
+          onSend={onSend}
+          onStop={onStop}
+          isRunning={isRunning}
+          placeholder="What do you want to build?"
+          modelLabel={modelLabel}
+          micSupported={micSupported}
+          provider={provider}
+          apiKey={apiKey}
+          baseUrl={baseUrl}
+          onOpenProviders={onOpenProviders}
+          showRetry={showRetry}
+          onRetry={onRetry}
+        />
+      </div>
+
+      {projectName && (
+        <div className="empty-chat-project-context">
+          <FolderOpen size={13} />
+          <span className="empty-chat-project-name">{projectName}</span>
+          {hasGitRepo && branch && (
+            <>
+              <span className="empty-chat-project-separator">·</span>
+              <GitBranch size={12} />
+              <span className="empty-chat-project-branch">{branch}</span>
+            </>
+          )}
+          {hasGitRepo && !branch && (
+            <>
+              <span className="empty-chat-project-separator">·</span>
+              <span className="empty-chat-project-status">Git connected</span>
+            </>
+          )}
+          {!hasGitRepo && (
+            <button type="button" className="empty-chat-connect-repo" onClick={onOpenWorkspace}>
+              Connect repository
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

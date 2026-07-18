@@ -151,6 +151,10 @@ export type ChatThread = {
   updatedAtMs: number;
   model?: string | null;
   messages: ChatThreadMessage[];
+  /** Project workspace path — used for repository/branch context in status bar. */
+  workspace?: string | null;
+  /** Repository branch at conversation creation time. */
+  branch?: string | null;
 };
 
 export type ChatThreadSummary = {
@@ -160,6 +164,8 @@ export type ChatThreadSummary = {
   updatedAtMs: number;
   messageCount: number;
   preview: string;
+  /** Workspace path associated with this thread (null if unattached). */
+  workspace?: string | null;
 };
 
 export type NativeBrowserState = {
