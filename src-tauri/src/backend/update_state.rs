@@ -140,8 +140,10 @@ mod tests {
 
     #[test]
     fn unknown_channel_falls_back_to_stable() {
-        let mut state = UpdateState::default();
-        state.channel = "canary".into();
+        let mut state = UpdateState {
+            channel: "canary".into(),
+            ..Default::default()
+        };
         normalize(&mut state);
         assert_eq!(state.channel, "stable");
     }

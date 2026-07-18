@@ -153,7 +153,7 @@ pub fn generate_code_verifier() -> String {
 /// Compute the S256 code challenge for a given verifier.
 pub fn code_challenge_s256(verifier: &str) -> String {
     let hash = Sha256::digest(verifier.as_bytes());
-    URL_SAFE_NO_PAD.encode(&hash)
+    URL_SAFE_NO_PAD.encode(hash)
 }
 
 /// Create a PKCE pair.
@@ -572,10 +572,11 @@ pub fn oauth_build_auth_url(
 
     let client_id = resolve_client_id(&req.provider_id, req.client_id.as_deref(), config);
     if client_id.is_empty() {
+        let env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase());
         return Err(format!(
             "No OAuth client_id for {provider}. Set the {env_var} environment variable or pass client_id.",
             provider = config.name,
-            env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase())
+            env_var = env_var
         ));
     }
 
@@ -640,10 +641,11 @@ pub async fn oauth_authorize(
 
     let client_id = resolve_client_id(&req.provider_id, req.client_id.as_deref(), config);
     if client_id.is_empty() {
+        let env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase());
         return Err(format!(
             "No OAuth client_id for {provider}. Set the {env_var} environment variable or pass client_id.",
             provider = config.name,
-            env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase())
+            env_var = env_var
         ));
     }
 
