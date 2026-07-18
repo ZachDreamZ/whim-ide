@@ -81,11 +81,17 @@ jobs:
           fi
           echo "Installer: $EXE"
 
+          # Write key to temp file (process substitution <(...) doesn't work on Windows)
+          KEY_FILE=$(mktemp)
+          echo "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
+
           # Sign it (produces .sig next to the .exe)
           npx tauri signer sign \
-            -k <(echo "$TAURI_SIGNING_PRIVATE_KEY") \
+            -f "$KEY_FILE" \
             -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
             "$EXE"
+
+          rm -f "$KEY_FILE"
 
           SIG_FILE="${EXE}.sig"
           if [ ! -f "$SIG_FILE" ]; then
