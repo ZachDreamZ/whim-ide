@@ -86,6 +86,8 @@ jobs:
           echo "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
 
           # Sign it (produces .sig next to the .exe)
+          # Unset env var to avoid conflict with -f flag
+          unset TAURI_SIGNING_PRIVATE_KEY
           npx tauri signer sign \
             -f "$KEY_FILE" \
             -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
