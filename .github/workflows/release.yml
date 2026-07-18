@@ -20,6 +20,8 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,18 +43,91 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set. Refusing to publish an unsigned release (updates would fail signature verification)."
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set."
             exit 1
           fi
-          echo "Updater signing key is present; tauri-action will sign the installer and upload latest.json."
+          echo "Signing key present."
 
-      - uses: tauri-apps/tauri-action@v1
+      # ── Build ──────────────────────────────────────────────
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: "Whim ${{ inputs.tag || github.ref_name }}"
-          releaseBody: ${{ github.event.release.body || 'Build from workflow_dispatch' }}
+          tagName: ${{ env.TAG }}
+          releaseName: "Whim ${{ env.TAG }}"
+          releaseBody: ${{ github.event.release.body || 'Automated release build' }}
           releaseDraft: false
+          # Skip tauri-action's broken latest.json — we generate it below
+          updaterJsonPreferNsis: true
+
+      # ── Sign + upload missing artifacts ────────────────────
+      - name: Sign installer and upload updater artifacts
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Find the NSIS installer
+          EXE=$(find src-tauri/target/release/bundle/nsis -name '*-setup.exe' | head -1)
+          if [ -z "$EXE" ]; then
+            echo "::error::NSIS installer not found"
+            exit 1
+          fi
+          echo "Installer: $EXE"
+
+          # Sign it (produces .sig next to the .exe)
+          npx tauri signer sign \
+            -k <(echo "$TAURI_SIGNING_PRIVATE_KEY") \
+            -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
+            "$EXE"
+
+          SIG_FILE="${EXE}.sig"
+          if [ ! -f "$SIG_FILE" ]; then
+            echo "::error::Signature file not generated"
+            exit 1
+          fi
+          echo "Signature: $SIG_FILE"
+
+          # Read the signature
+          SIG_CONTENT=$(cat "$SIG_FILE")
+
+          # Determine download URL
+          EXE_NAME=$(basename "$EXE")
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${EXE_NAME}"
+
+          # Generate latest.json
+          cat > latest.json << EOF
+          {
+            "version": "${TAG#v}",
+            "notes": "Whim ${TAG}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "${SIG_CONTENT}",
+                "url": "${DOWNLOAD_URL}"
+              }
+            }
+          }
+          EOF
+
+          # Clean up extra whitespace from heredoc indentation
+          python3 -c "
+          import json
+          with open('latest.json') as f:
+              data = json.load(f)
+          with open('latest.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+          # Upload .sig and latest.json to the release
+          gh release upload "$TAG" "$SIG_FILE" latest.json --clobber
+          echo "All updater artifacts uploaded to release ${TAG}"
