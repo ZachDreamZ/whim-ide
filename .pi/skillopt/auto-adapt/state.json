@@ -25,26 +25,81 @@
     {
       "signature": "ENOENT:",
       "toolName": "read",
-      "count": 1,
+      "count": 11,
       "firstSeen": 1784282065717,
-      "lastSeen": 1784282065717,
+      "lastSeen": 1784349127970,
       "exampleInput": "",
       "exampleOutput": "ENOENT: no such file or directory, access 'C:\\Users\\Vendex\\Document\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src\\components\\MissionControl.tsx'",
-      "evalCreated": false,
+      "evalCreated": true,
       "category": "functionality"
     },
     {
       "signature": "error:",
       "toolName": "bash",
-      "count": 1,
+      "count": 16,
       "firstSeen": 1784284995082,
-      "lastSeen": 1784284995082,
+      "lastSeen": 1784325182317,
       "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk git checkout main && rtk git pull origin main 2>&1",
       "exampleOutput": "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc-tauri/Cargo.lock\nPlease commit your changes or stash them before you switch branches.\nAborting\n\n\nCommand exited with code 1",
+      "evalCreated": true,
+      "category": "functionality"
+    },
+    {
+      "signature": "TypeError:",
+      "toolName": "bash",
+      "count": 14,
+      "firstSeen": 1784306202205,
+      "lastSeen": 1784336656122,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && node -e '\nconst fs=require(\"fs\");const b64=(s)=>Buffer.from(s.trim(),\"base64\");\nconst dean=(f)=>b64(fs.readFileSync(f,\"utf8\")).toStr",
+      "exampleOutput": "[eval]:2\r\nconst fs=require(\"fs\");const b64=(s)=>Buffer.from(s.trim(),\"base64\");\r\n                                                    ^\r\n\r\nTypeError: Cannot read properties of undefined (reading 'trim')\r\n    at b64 ([eval]:2:53)\r\n    at [eval]:6:13\r\n    at runScriptInThisContext (node:internal/vm:219",
+      "evalCreated": true,
+      "category": "functionality"
+    },
+    {
+      "signature": "SyntaxError:",
+      "toolName": "bash",
+      "count": 3,
+      "firstSeen": 1784331827738,
+      "lastSeen": 1784336634847,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\"\necho \"=== verify config pubkey matches .pub ===\"\nnode -e 'const fs=require(\"fs\");const c=require(\"./src-tauri/tauri.conf.json\");const d",
+      "exampleOutput": "=== verify config pubkey matches .pub ===\nnode:internal/modules/cjs/loader:2089\r\n    throw err;\r\n    ^\r\n\r\nSyntaxError: C:\\Users\\Vendex\\Documents\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src-tauri\\tauri.conf.json: Expected ',' or '}' after property value in JSON at position 1773 (line 41 column 167)\r\n    at",
+      "evalCreated": true,
+      "category": "test-failure"
+    },
+    {
+      "signature": "syntax-error",
+      "toolName": "bash",
+      "count": 4,
+      "firstSeen": 1784331827739,
+      "lastSeen": 1784348037133,
+      "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\"\necho \"=== verify config pubkey matches .pub ===\"\nnode -e 'const fs=require(\"fs\");const c=require(\"./src-tauri/tauri.conf.json\");const d",
+      "exampleOutput": "=== verify config pubkey matches .pub ===\nnode:internal/modules/cjs/loader:2089\r\n    throw err;\r\n    ^\r\n\r\nSyntaxError: C:\\Users\\Vendex\\Documents\\Codex\\2026-07-10\\ca\\work\\whim-ide\\src-tauri\\tauri.conf.json: Expected ',' or '}' after property value in JSON at position 1773 (line 41 column 167)\r\n    at",
+      "evalCreated": true,
+      "category": "test-failure"
+    },
+    {
+      "signature": "exit:1",
+      "toolName": "bash",
+      "count": 1,
+      "firstSeen": 1784350670581,
+      "lastSeen": 1784350670581,
+      "exampleInput": "cd /c/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide && rtk gh run view 29630950702 --log 2>&1 | rtk grep -E \"Installer:|Signature:|error|Error|not found|failed|Failed|tauri signer|npx\" | rt",
+      "exampleOutput": "1102:build\tBuild Tauri app\t2026-07-18T04:43:38.2772132Z \u001b[1m\u001b[92m  Downloaded\u001b[0m quick-error v2.0.1\n1211:build\tBuild Tauri app\t2026-07-18T04:43:41.6398279Z \u001b[1m\u001b[92m  Downloaded\u001b[0m thiserror-impl v2.0.18\n1270:build\tBuild Tauri app\t2026-07-18T04:43:44.2031032Z \u001b[1m\u001b[92m  Downloaded\u001b[0m thiserror v2",
+      "evalCreated": false,
+      "category": "functionality"
+    },
+    {
+      "signature": "exit:2",
+      "toolName": "bash",
+      "count": 1,
+      "firstSeen": 1784351796447,
+      "lastSeen": 1784351796447,
+      "exampleInput": "cd /c/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide && rtk gh run view 29631481972 --log 2>&1 | sed -n '1978,2010p'",
+      "exampleOutput": "build\tSign installer and upload updater artifacts\t2026-07-18T05:11:43.0758502Z   CARGO_TERM_COLOR: always\nbuild\tSign installer and upload updater artifacts\t2026-07-18T05:11:43.0761551Z   TAURI_SIGNING_PRIVATE_KEY: ***\nbuild\tSign installer and upload updater artifacts\t2026-07-18T05:11:43.0761872Z   T",
       "evalCreated": false,
       "category": "functionality"
     }
   ],
-  "totalAdaptations": 0,
-  "lastCheck": 1784287918457
+  "totalAdaptations": 5,
+  "lastCheck": 1784350737483
 }

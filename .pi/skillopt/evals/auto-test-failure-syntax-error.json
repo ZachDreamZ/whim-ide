@@ -1,0 +1,22 @@
+{
+  "id": "auto-test-failure-syntax-error",
+  "category": "test-failure",
+  "prompt": "Auto-detected failure pattern: syntax-error. Fix the bash workflow so this no longer fails.",
+  "expected_behavior": "bash succeeds without \"syntax-error\" when handling similar input",
+  "scoring_rubric": {
+    "criteria": [
+      "bash does not produce \"syntax-error\" error",
+      "No regression on existing passing cases",
+      "Handles edge cases robustly"
+    ],
+    "max_score": 10
+  },
+  "pass_conditions": [
+    "No \"syntax-error\" in output",
+    "bash completes with exit code 0"
+  ],
+  "fail_conditions": [
+    "Output contains \"syntax-error\"",
+    "Crashes or silent failure"
+  ]
+}

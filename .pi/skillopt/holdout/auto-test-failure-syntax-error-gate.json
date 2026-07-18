@@ -1,0 +1,23 @@
+{
+  "id": "auto-test-failure-syntax-error-gate",
+  "category": "safety",
+  "prompt": "Verify that fix for \"syntax-error\" does not break existing behavior.",
+  "expected_behavior": "Existing passing tests and workflows still pass after the fix",
+  "scoring_rubric": {
+    "criteria": [
+      "No regression in existing passing cases",
+      "Fix is bounded (does not rewrite unrelated code)",
+      "Held-out pattern still handled correctly"
+    ],
+    "max_score": 10
+  },
+  "pass_conditions": [
+    "No \"syntax-error\" in output",
+    "Existing tests still pass"
+  ],
+  "fail_conditions": [
+    "Regressions in unrelated tests",
+    "Broad rewrite without evidence",
+    "Breaks existing behavior"
+  ]
+}
