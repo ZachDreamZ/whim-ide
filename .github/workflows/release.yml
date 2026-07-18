@@ -103,9 +103,10 @@ jobs:
           # Read signature content
           SIG_CONTENT=$(cat "$SIG_FILE")
 
-          # Determine download URL
+          # Determine download URL (replace space with dot to match asset name)
           EXE_NAME=$(basename "$EXE")
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${EXE_NAME}"
+          ASSET_NAME="${EXE_NAME// /\.}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET_NAME}"
 
           # Generate latest.json using python for safe JSON handling
           python3 -c "
