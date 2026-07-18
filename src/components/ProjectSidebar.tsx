@@ -82,10 +82,10 @@ function recentLabel(value: number) {
 }
 
 function taskTone(status: OrchestrationJob["status"]) {
-  if (status === "running") return "bg-primary";
-  if (status === "failed" || status === "interrupted") return "bg-amber-400";
-  if (status === "completed") return "bg-emerald-400";
-  return "bg-muted-foreground";
+  if (status === "running") return "bg-[#72c99f]";
+  if (status === "failed" || status === "interrupted") return "bg-[#f59e0b]";
+  if (status === "completed") return "bg-[#34d399]";
+  return "bg-[#a3a3a3]";
 }
 
 const PINNED_KEY = "whim:pinned";
@@ -243,8 +243,8 @@ export function ProjectSidebar({
   }, [filteredChats, workspace]);
 
   return (
-    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col overflow-hidden border-r border-border bg-background" aria-label="Whim sidebar">
-      <div className="flex h-12 items-center justify-between px-3">
+    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col overflow-hidden border-r border-white/5 bg-[#171717]" aria-label="Whim sidebar">
+      <div className="flex h-12 items-center justify-between border-b border-white/5 px-3">
         <strong className="font-heading text-[15px] font-semibold tracking-[-0.02em]">Whim</strong>
         <Button variant="ghost" size="icon-sm" aria-label="Search" onClick={() => document.getElementById("whim-sidebar-search")?.focus()}>
           <Search size={16} />
@@ -256,7 +256,7 @@ export function ProjectSidebar({
           <Button
             key={id}
             variant="ghost"
-            className={`h-8 w-full justify-start gap-2 px-2 text-[13px] ${activeView === id ? "bg-muted text-foreground" : "text-foreground/90"}`}
+            className={`h-8 w-full justify-start gap-2 px-2 text-[13px] ${activeView === id ? "bg-[#2f2f2f] text-white" : "text-[#ececf1] hover:bg-white/5"}`}
             onClick={() => onViewChange?.(id)}
           >
             <Icon size={16} /> {label}
@@ -277,23 +277,23 @@ export function ProjectSidebar({
       </nav>
 
       {/* Search */}
-      <div className="mx-3 mt-2 flex h-7 items-center gap-2 rounded-lg border border-border bg-card px-2 text-muted-foreground focus-within:ring-1 focus-within:ring-ring">
-        <Search className="size-3" />
+      <div className="mx-3 mt-2 flex h-7 items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2 text-[#a3a3a3] focus-within:ring-1 focus-within:ring-[#72c99f]">
+        <Search className="size-3 text-[#a3a3a3]" />
         <Input
           id="whim-sidebar-search"
-          className="h-6 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+          className="h-6 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs text-[#ececf1] shadow-none placeholder:text-[#a3a3a3] focus-visible:ring-0"
           placeholder="Search history"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-        {(historyLoading || loading) && <LoaderCircle className="size-3 animate-spin" />}
+        {(historyLoading || loading) && <LoaderCircle className="size-3 animate-spin text-[#a3a3a3]" />}
       </div>
 
       <ScrollArea className="mt-2 min-h-0 flex-1">
         {/* Pinned */}
         {pinnedItems.length > 0 && (
           <section className="px-2 pb-2" aria-labelledby="pinned-heading">
-            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="pinned-heading">
+            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-[#a3a3a3]" id="pinned-heading">
               <Pin size={12} className="mr-1.5" /> Pinned
             </div>
             {pinnedItems.map((item) => (
@@ -312,7 +312,7 @@ export function ProjectSidebar({
                   }
                 }}
               >
-                <Sparkles size={12} className="shrink-0 text-muted-foreground" />
+                <Sparkles size={12} className="shrink-0 text-[#a3a3a3]" />
                 <span className="min-w-0 flex-1 truncate">{item.title}</span>
               </Button>
             ))}
@@ -321,7 +321,7 @@ export function ProjectSidebar({
 
         {/* Projects */}
         <section className="px-2 pb-2" aria-labelledby="projects-heading">
-          <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
+          <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-[#a3a3a3]">
             <span id="projects-heading">Projects</span>
             <Button variant="ghost" size="icon-xs" aria-label="Add project" onClick={onOpenWorkspace}><Plus size={14} /></Button>
           </div>
@@ -333,14 +333,14 @@ export function ProjectSidebar({
               const isEmpty = projectJobs.length === 0 && projectChats.length === 0;
               return (
                 <Collapsible key={normalized(project.path)} defaultOpen={active || query.length > 0}>
-                  <CollapsibleTrigger className="group flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-foreground/90 hover:bg-muted">
-                    {active ? <FolderOpen className="size-3.5 text-primary" /> : <Folder className="size-3.5 text-muted-foreground" />}
+                  <CollapsibleTrigger className="group flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-[#ececf1] hover:bg-white/5">
+                    {active ? <FolderOpen className="size-3.5 text-[#72c99f]" /> : <Folder className="size-3.5 text-[#a3a3a3]" />}
                     <span className="min-w-0 flex-1 truncate">{projectName(project.path)}</span>
-                    <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[panel-open]:rotate-180" />
+                    <ChevronDown className="size-3 text-[#a3a3a3] transition-transform group-data-[panel-open]:rotate-180" />
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="ml-3 border-l border-border pl-1">
+                  <CollapsibleContent className="ml-3 border-l border-white/5 pl-1">
                     {isEmpty ? (
-                      <p className="px-2 py-1 text-[11px] text-muted-foreground">No conversations yet</p>
+                      <p className="px-2 py-1 text-[11px] text-[#a3a3a3]">No conversations yet</p>
                     ) : (
                       <>
                         {projectJobs.map((job) => (
@@ -354,7 +354,7 @@ export function ProjectSidebar({
                           >
                             <span className={`size-1.5 shrink-0 rounded-full ${taskTone(job.status)}`} />
                             <span className="min-w-0 flex-1 truncate">{job.title}</span>
-                            <time className="text-[10px] text-muted-foreground">{recentLabel(job.updatedAtMs)}</time>
+                            <time className="text-[10px] text-[#a3a3a3]">{recentLabel(job.updatedAtMs)}</time>
                           </Button>
                         ))}
                         {projectChats.map((chat) => (
@@ -366,7 +366,7 @@ export function ProjectSidebar({
                             onClick={() => onChatSelect?.(chat)}
                             onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
                           >
-                            <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                            <MessageSquareText size={12} className="shrink-0 text-[#a3a3a3]" />
                             <span className="min-w-0 flex-1 truncate">{chat.title}</span>
                           </Button>
                         ))}
@@ -382,7 +382,7 @@ export function ProjectSidebar({
         {/* Unattached Chats */}
         {unattachedChats.length > 0 && (
           <section className="px-2 pb-3" aria-labelledby="chats-heading">
-            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="chats-heading">Chats</div>
+            <div className="flex h-6 items-center px-2 text-[11px] font-medium text-[#a3a3a3]" id="chats-heading">Chats</div>
             {unattachedChats.slice(0, 8).map((chat) => (
               <Button
                 key={chat.id}
@@ -392,7 +392,7 @@ export function ProjectSidebar({
                 onClick={() => onChatSelect?.(chat)}
                 onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
               >
-                <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                <MessageSquareText size={12} className="shrink-0 text-[#a3a3a3]" />
                 <span className="min-w-0 flex-1 truncate">{chat.title}</span>
               </Button>
             ))}
@@ -401,13 +401,13 @@ export function ProjectSidebar({
       </ScrollArea>
 
       {/* Bottom */}
-      <div className="border-t border-border px-2 py-2">
-        <div className="flex items-center gap-2 px-2 py-1 text-[10px] text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+      <div className="border-t border-white/5 px-2 py-2">
+        <div className="flex items-center gap-2 px-2 py-1 text-[10px] text-[#a3a3a3]">
+          <span className="size-1.5 rounded-full bg-[#a3a3a3]/40" />
           <span>API usage — idle</span>
         </div>
-        <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[11px] text-muted-foreground">
-          <span className={`size-1.5 shrink-0 rounded-full ${workspace !== "No workspace open" ? "bg-emerald-400" : "bg-muted-foreground"}`} />
+        <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[11px] text-[#a3a3a3]">
+          <span className={`size-1.5 shrink-0 rounded-full ${workspace !== "No workspace open" ? "bg-[#72c99f]" : "bg-[#a3a3a3]"}`} />
           <span className="min-w-0 flex-1 truncate">{workspace !== "No workspace open" ? projectName(workspace) : "No project open"}</span>
           {branch && <span className="truncate font-mono text-[9px]">{branch}</span>}
         </div>
@@ -415,7 +415,7 @@ export function ProjectSidebar({
           <Settings2 size={14} /> Settings
         </Button>
         <Button variant="ghost" className="h-7 w-full justify-start gap-2 px-2 text-xs" onClick={() => { onRefresh?.(); void refreshHistory(); }}>
-          <span className="grid size-4 shrink-0 place-items-center rounded-full bg-primary text-[8px] font-semibold text-primary-foreground">W</span>
+          <span className="grid size-4 shrink-0 place-items-center rounded-full bg-[#72c99f] text-[8px] font-semibold text-[#08110d]">W</span>
           Whim workspace
         </Button>
       </div>

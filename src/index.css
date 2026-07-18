@@ -555,7 +555,7 @@ body {
   margin: 0 0 8px;
   font-size: 20px;
   font-weight: 600;
-  color: var(--foreground);
+  color: #ececf1;
   letter-spacing: -0.02em;
 }
 
@@ -563,7 +563,7 @@ body {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--muted-foreground);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .empty-chat-suggestions {
@@ -579,10 +579,10 @@ body {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--foreground);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #ececf1;
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
@@ -591,18 +591,18 @@ body {
 }
 
 .empty-chat-suggestion-card:hover {
-  background: var(--accent);
-  border-color: var(--accent-foreground, var(--border));
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .empty-chat-suggestion-icon {
   flex-shrink: 0;
   margin-top: 1px;
-  color: var(--muted-foreground);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .empty-chat-suggestion-text {
-  color: var(--foreground);
+  color: #ececf1;
   opacity: 0.85;
   line-height: 1.45;
 }
@@ -612,15 +612,15 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  background: var(--card);
+  background: rgba(255, 255, 255, 0.02);
   font-size: 11px;
-  color: var(--muted-foreground);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .empty-chat-project-name {
-  color: var(--foreground);
+  color: #ececf1;
   font-weight: 500;
 }
 
@@ -634,23 +634,23 @@ body {
 }
 
 .empty-chat-project-status {
-  color: var(--primary);
+  color: #72c99f;
 }
 
 .empty-chat-connect-repo {
   padding: 2px 8px;
-  border: 1px solid var(--primary);
+  border: 1px solid #72c99f;
   border-radius: 4px;
   background: transparent;
-  color: var(--primary);
+  color: #72c99f;
   font-size: 10px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .empty-chat-connect-repo:hover {
-  background: var(--primary);
-  color: var(--background);
+  background: #72c99f;
+  color: #08110d;
 }
 
 .jump-to-latest-button {
