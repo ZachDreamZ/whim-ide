@@ -676,7 +676,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                 let app_handle = app.clone();
                 let pool_clone = pool.clone();
 
-                let assigned = pool_clone.lock().ok().map(|mut guard| guard.next_ready());
+                let assigned = pool_clone.lock().ok().and_then(|mut guard| guard.next_ready());
                 let p: String;
                 let m: String;
                 if let Some((ref prov, ref model_name)) = assigned {
