@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build (e.g. v0.4.3)"
+        description: "Release tag to build (e.g. v0.4.4)"
         required: true
         type: string
 
@@ -48,27 +48,21 @@ jobs:
           fi
           echo "Signing key present."
 
-      # ── Build ──────────────────────────────────────────────
+      # ── Build (no upload — we handle release artifacts manually) ──
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Do NOT set TAURI_SIGNING_PRIVATE_KEY here — we sign manually below
         with:
-          tagName: ${{ env.TAG }}
-          releaseName: "Whim ${{ env.TAG }}"
-          releaseBody: ${{ github.event.release.body || 'Automated release build' }}
-          releaseDraft: false
-          # Skip tauri-action's broken latest.json — we generate it below
-          updaterJsonPreferNsis: true
+          releaseId: ${{ github.event.release.id }}
+          # Skip updater JSON generation (broken with spaces in filenames)
+          skipPublish: true
 
-      # ── Sign + upload missing artifacts ────────────────────
-      - name: Sign installer and upload updater artifacts
+      # ── Sign, generate manifest, upload all artifacts ──────
+      - name: Sign and publish updater artifacts
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -81,13 +75,11 @@ jobs:
           fi
           echo "Installer: $EXE"
 
-          # Write key to temp file (process substitution <(...) doesn't work on Windows)
+          # Write signing key to temp file
           KEY_FILE=$(mktemp)
-          echo "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > "$KEY_FILE"
 
-          # Sign it (produces .sig next to the .exe)
-          # Unset env var to avoid conflict with -f flag
-          unset TAURI_SIGNING_PRIVATE_KEY
+          # Sign the installer
           npx tauri signer sign \
             -f "$KEY_FILE" \
             -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
@@ -100,42 +92,43 @@ jobs:
             echo "::error::Signature file not generated"
             exit 1
           fi
-          echo "Signature: $SIG_FILE"
+          echo "Signature generated: $SIG_FILE"
 
-          # Read the signature
+          # Read signature content
           SIG_CONTENT=$(cat "$SIG_FILE")
 
           # Determine download URL
           EXE_NAME=$(basename "$EXE")
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${EXE_NAME}"
 
-          # Generate latest.json
-          cat > latest.json << EOF
-          {
-            "version": "${TAG#v}",
-            "notes": "Whim ${TAG}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${SIG_CONTENT}",
-                "url": "${DOWNLOAD_URL}"
-              }
-            }
-          }
-          EOF
-
-          # Clean up extra whitespace from heredoc indentation
+          # Generate latest.json using python for safe JSON handling
           python3 -c "
-          import json
-          with open('latest.json') as f:
-              data = json.load(f)
+          import json, sys, os
+          sig = open(sys.argv[1]).read().strip()
+          data = {
+              'version': sys.argv[2],
+              'notes': 'Whim ' + sys.argv[2],
+              'pub_date': sys.argv[3],
+              'platforms': {
+                  'windows-x86_64': {
+                      'signature': sig,
+                      'url': sys.argv[4]
+                  }
+              }
+          }
           with open('latest.json', 'w') as f:
               json.dump(data, f, indent=2)
-          "
+          print('Generated latest.json')
+          " "$SIG_FILE" "${TAG#v}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DOWNLOAD_URL"
 
-          echo "Generated latest.json:"
-          cat latest.json
+          # Upload installer, signature, and manifest to the release
+          gh release upload "$TAG" \
+            "$EXE" \
+            "$SIG_FILE" \
+            latest.json \
+            --clobber
 
-          # Upload .sig and latest.json to the release
-          gh release upload "$TAG" "$SIG_FILE" latest.json --clobber
-          echo "All updater artifacts uploaded to release ${TAG}"
+          echo "All artifacts uploaded to release ${TAG}"
+          echo "  - $EXE_NAME"
+          echo "  - ${EXE_NAME}.sig"
+          echo "  - latest.json"
