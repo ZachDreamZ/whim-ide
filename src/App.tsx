@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Check,
   CloudOff,
+  Download,
   FolderOpen,
   GitBranch,
   Radio,
@@ -37,6 +38,7 @@ import { PersonalizationSettings } from "./components/settings/pages/Personaliza
 import { ChatSettings } from "./components/settings/pages/ChatSettings";
 import { ConfigurationSettings } from "./components/settings/pages/ConfigurationSettings";
 import { KeyboardShortcutsSettings } from "./components/settings/pages/KeyboardShortcutsSettings";
+import { UpdatesSettings } from "./components/settings/pages/UpdatesSettings";
 import {
   bridge,
   defaultAppSettings,
@@ -47,6 +49,7 @@ import {
   type ChatThreadSummary,
   type WorkspaceInfo,
 } from "./lib/bridge";
+import { updateStore, useUpdate } from "./lib/updateService";
 import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
 import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
@@ -100,13 +103,23 @@ function App() {
   const [, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
-  const [, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
+  const [activity, setActivity] = useState<"idle" | "agent" | "checking" | "deploying">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const booted = useRef(false);
   const fileRequest = useRef(0);
   const settingsRevision = useRef(0);
+  const update = useUpdate();
+
+  // Initialize the central update service once, after the main UI mounts, and
+  // keep the restart gate in sync with active agent work.
+  useEffect(() => {
+    void updateStore.init();
+  }, []);
+  useEffect(() => {
+    updateStore.setWorkActive(activity === "agent");
+  }, [activity]);
   const settingsSaveChain = useRef<Promise<unknown>>(Promise.resolve());
   const scheduleRunnerActive = useRef(false);
 
@@ -433,6 +446,7 @@ function App() {
           {activeSettingsCategory === "shortcuts" && <KeyboardShortcutsSettings />}
           {activeSettingsCategory === "configuration" && <ConfigurationSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
           {activeSettingsCategory === "computer" && <ComputerUseSettings settings={appSettings} onChange={updateAppSettings} saving={settingsSaving} />}
+          {activeSettingsCategory === "updates" && <UpdatesSettings />}
         </SettingsLayout>
       )}
       <Titlebar projectName={projectName} native={bridge.isNative()} onCommand={() => setPaletteOpen(true)} onProjectClick={openWorkspace} />
@@ -596,8 +610,43 @@ function App() {
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
       {workspacePath && <SearchPanel workspace={workspacePath} open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={chooseFile} />}
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}
+      <UpdateNotification
+        update={update}
+        onViewUpdate={() => { setActiveSettingsCategory("updates"); setView("settings"); }}
+      />
     </div>
   );
+}
+
+/** Compact, non-blocking update notification that integrates with the chat-first UI. */
+function UpdateNotification({
+  update,
+  onViewUpdate,
+}: {
+  update: ReturnType<typeof useUpdate>;
+  onViewUpdate: () => void;
+}) {
+  if (!update.native) return null;
+  if (update.status === "update_available") {
+    return (
+      <div className="toast toast-update">
+        <span><Download size={13} /></span>
+        <span>Whim {update.newVersion} is available</span>
+        <button type="button" className="toast-action" onClick={onViewUpdate}>View update</button>
+        <button type="button" className="toast-action" onClick={() => updateStore.dismissNotification()}>Later</button>
+      </div>
+    );
+  }
+  if (update.status === "downloaded") {
+    return (
+      <div className="toast toast-update">
+        <span><Download size={13} /></span>
+        <span>{update.workActive ? "Update downloaded. Restart when your current work is complete." : "Update downloaded. Restart when your current work is complete."}</span>
+        <button type="button" className="toast-action" disabled={update.workActive} onClick={() => void updateStore.installAndRestart()}>Install and restart</button>
+      </div>
+    );
+  }
+  return null;
 }
 
 function LoadingFallback() {

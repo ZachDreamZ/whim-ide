@@ -1,4 +1,4 @@
-import { Blocks, Cable, FileCog, Keyboard, Settings, Paintbrush, Mic, Monitor, MessageSquareText, SlidersHorizontal } from "lucide-react";
+import { Blocks, Cable, Download, FileCog, Keyboard, Settings, Paintbrush, Mic, Monitor, MessageSquareText, SlidersHorizontal } from "lucide-react";
 
 interface CategoryGroup {
   name: string;
@@ -15,6 +15,12 @@ const CATEGORIES: CategoryGroup[] = [
       { id: "appearance", label: "Appearance", icon: <Paintbrush size={16} /> },
       { id: "voice", label: "Voice", icon: <Mic size={16} /> },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={16} /> },
+    ]
+  },
+  {
+    name: "Application",
+    items: [
+      { id: "updates", label: "Updates", icon: <Download size={16} /> },
     ]
   },
   {

@@ -74,7 +74,7 @@ export function CreativeStudio({ workspace, onOpenConfiguration }: { workspace: 
     if (!result) return () => undefined;
     void Promise.all(result.artifacts.filter((artifact) => ["image", "video", "audio"].includes(artifact.kind)).map(async (artifact) => {
       const bytes = await bridge.readMediaArtifact(workspace, artifact.path);
-      const url = URL.createObjectURL(new Blob([bytes], { type: artifact.mimeType }));
+      const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: artifact.mimeType }));
       urls.push(url);
       if (active) setPreviews((current) => ({ ...current, [artifact.path]: url }));
     })).catch((previewError) => {

@@ -29,6 +29,17 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Verify updater signing key is configured
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set. Refusing to publish an unsigned release (updates would fail signature verification)."
+            exit 1
+          fi
+          echo "Updater signing key is present; tauri-action will sign the installer and upload latest.json."
+
       - uses: tauri-apps/tauri-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

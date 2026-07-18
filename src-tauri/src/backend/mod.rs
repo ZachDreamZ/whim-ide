@@ -34,6 +34,7 @@ pub mod workflows;
 pub mod workspace;
 pub mod fs_watcher;
 pub mod search;
+pub mod update_state;
 
 #[cfg(test)]
 mod tests;

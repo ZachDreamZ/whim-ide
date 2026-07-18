@@ -1,7 +1,7 @@
 {
   "name": "workwhim-ide",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true}); require('fs').rmSync('.tsbuildinfo',{recursive:true,force:true})\"",
+    "bump-version": "node scripts/bump-version.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
