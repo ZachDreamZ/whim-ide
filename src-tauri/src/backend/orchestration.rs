@@ -547,6 +547,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
     request: crate::orchestrator::MultiAgentJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), Some(&request.workspace))
+        .await
         .map_err(orchestration_error)?;
 
     let intent = request.intent.clone();
