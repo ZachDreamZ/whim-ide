@@ -37,6 +37,10 @@ pub struct ChatThread {
     pub updated_at_ms: i64,
     pub model: Option<String>,
     pub messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,6 +52,10 @@ pub struct ChatThreadSummary {
     pub updated_at_ms: i64,
     pub message_count: usize,
     pub preview: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,17 +231,22 @@ pub fn list_chat_threads(
     threads.sort_by_key(|thread| std::cmp::Reverse(thread.updated_at_ms));
     Ok(threads
         .into_iter()
-        .map(|thread| ChatThreadSummary {
-            id: thread.id,
-            title: thread.title,
-            created_at_ms: thread.created_at_ms,
-            updated_at_ms: thread.updated_at_ms,
-            message_count: thread.messages.len(),
-            preview: thread
+        .map(|thread| {
+            let preview = thread
                 .messages
                 .last()
                 .map(|message| message.content.chars().take(160).collect())
-                .unwrap_or_default(),
+                .unwrap_or_default();
+            ChatThreadSummary {
+                id: thread.id,
+                title: thread.title,
+                created_at_ms: thread.created_at_ms,
+                updated_at_ms: thread.updated_at_ms,
+                message_count: thread.messages.len(),
+                preview,
+                workspace: thread.workspace,
+                branch: thread.branch,
+            }
         })
         .collect())
 }
@@ -306,6 +319,8 @@ mod tests {
                 content: "Hello".into(),
                 created_at_ms: 10,
             }],
+            workspace: Some("/test/workspace".into()),
+            branch: Some("main".into()),
         }
     }
 
