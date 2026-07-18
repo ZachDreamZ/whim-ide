@@ -138,20 +138,6 @@ pub(crate) fn blocking_lock<'a, T>(
     Ok(mutex.blocking_lock())
 }
 
-pub(crate) fn blocking_read_lock<'a, T>(
-    rwlock: &'a RwLock<T>,
-    _label: &str,
-) -> Result<RwLockReadGuard<'a, T>, String> {
-    Ok(rwlock.blocking_read())
-}
-
-pub(crate) fn blocking_write_lock<'a, T>(
-    rwlock: &'a RwLock<T>,
-    _label: &str,
-) -> Result<RwLockWriteGuard<'a, T>, String> {
-    Ok(rwlock.blocking_write())
-}
-
 pub(crate) fn whim_err(code: &str, detail: &str) -> String {
     format!("WHIM_ERROR: {} - {}", code, detail)
 }

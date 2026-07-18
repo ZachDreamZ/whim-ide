@@ -15,7 +15,7 @@ use super::workspace::{
     WriteFileRequest,
 };
 use super::{
-    read_lock, write_lock, finish_operation, is_operation_cancelled, register_agent_operation,
+    finish_operation, is_operation_cancelled, register_agent_operation,
     whim_err, AgentRunResult, BackendState, CommandResult,
 };
 use crate::backend::deployment::{DeployMode, DeployOptions, DeployTarget};
