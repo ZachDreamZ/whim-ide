@@ -9,7 +9,7 @@ use std::{
 use tauri::State;
 
 use super::deployment::{git_repository_root, git_worktrees_for_repository};
-use super::{lock, whim_err, BackendState, MAX_READ_BYTES, MAX_WRITE_BYTES};
+use super::{read_lock, write_lock, whim_err, BackendState, MAX_READ_BYTES, MAX_WRITE_BYTES};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,8 +130,9 @@ No project handoff has been recorded yet.
 - Inspect the current task and workspace before editing.
 "#;
 
-pub(crate) fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
-    lock(&state.selected_workspace, "workspace")?
+pub(crate) async fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
+    read_lock(&state.selected_workspace, "workspace")
+        .await?
         .clone()
         .ok_or_else(|| "No workspace is selected".to_string())
 }
@@ -188,10 +189,11 @@ mod project_context_tests {
     }
 }
 
-pub(crate) fn optional_selected_workspace_path(
+pub(crate) async fn optional_selected_workspace_path(
     state: &BackendState,
 ) -> Result<Option<PathBuf>, String> {
-    Ok(lock(&state.selected_workspace, "workspace")?
+    Ok(read_lock(&state.selected_workspace, "workspace")
+        .await?
         .clone()
         .filter(|path| path.is_dir()))
 }
@@ -225,7 +227,7 @@ pub(crate) async fn resolve_agent_workspace(
     state: &BackendState,
     requested_workspace: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let selected = selected_workspace_path(state)?;
+    let selected = selected_workspace_path(state).await?;
     let Some(requested_workspace) = requested_workspace else {
         return Ok(selected);
     };
@@ -510,21 +512,22 @@ fn is_generated_tree_directory(path: &Path) -> bool {
 }
 
 #[tauri::command]
-pub fn get_selected_workspace(
+pub async fn get_selected_workspace(
     state: State<'_, BackendState>,
 ) -> Result<Option<WorkspaceInfo>, String> {
-    lock(&state.selected_workspace, "workspace")
+    read_lock(&state.selected_workspace, "workspace")
+        .await
         .map(|path| path.as_ref().map(|path| workspace_info(path)))
 }
 
 #[tauri::command]
-pub fn select_workspace(
+pub async fn select_workspace(
     state: State<'_, BackendState>,
     request: SelectWorkspaceRequest,
 ) -> Result<WorkspaceInfo, String> {
     let candidate_path = canonical_workspace(&request.candidate_workspace)?;
     let info = workspace_info(&candidate_path);
-    *lock(&state.selected_workspace, "workspace")? = Some(candidate_path);
+    *write_lock(&state.selected_workspace, "workspace").await? = Some(candidate_path);
     Ok(info)
 }
 

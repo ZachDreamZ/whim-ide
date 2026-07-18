@@ -9,8 +9,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, OpenOptions},
-    io::Write,
+    fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -833,48 +832,17 @@ impl DurableJobStore {
     }
 
     fn save(&self, ledger: &Ledger) -> Result<(), String> {
-        let parent = self
-            .path
-            .parent()
-            .ok_or_else(|| "Task ledger path has no parent directory".to_string())?;
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "Could not create task ledger directory {}: {error}",
-                parent.display()
-            )
-        })?;
-        let encoded = serde_json::to_vec_pretty(ledger)
-            .map_err(|error| format!("Could not serialize task ledger: {error}"))?;
-        let temporary = self
-            .path
-            .with_extension(format!("{}.tmp", Uuid::new_v4().simple()));
-        {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .map_err(|error| format!("Could not create task ledger temporary file: {error}"))?;
-            file.write_all(&encoded)
-                .map_err(|error| format!("Could not write task ledger: {error}"))?;
-            file.write_all(b"\n")
-                .map_err(|error| format!("Could not finish task ledger write: {error}"))?;
-            file.sync_all()
-                .map_err(|error| format!("Could not sync task ledger: {error}"))?;
-        }
-        // Keep a last-known-good copy. If a machine loses power during a replace,
-        // the user can recover it manually without Whim silently dropping audit data.
+        // Keep a last-known-good copy before rewriting. If a machine loses power
+        // during a replace, the user can recover it manually without Whim silently
+        // dropping audit data.
         if self.path.exists() {
             let backup = self.path.with_extension("json.bak");
             fs::copy(&self.path, backup)
                 .map_err(|error| format!("Could not back up task ledger: {error}"))?;
         }
-        fs::rename(&temporary, &self.path).map_err(|error| {
-            let _ = fs::remove_file(&temporary);
-            format!(
-                "Could not replace task ledger {}: {error}",
-                self.path.display()
-            )
-        })
+        // Route through the shared atomic writer so a crash mid-write leaves the
+        // previous file (and the .bak) intact instead of truncating the ledger.
+        crate::backend::atomic_write_json(&self.path, ledger, crate::backend::MAX_LEDGER_BYTES)
     }
 }
 

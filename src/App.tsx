@@ -130,7 +130,6 @@ function App() {
   const [agentModel, setAgentModel] = useState(() => localStorage.getItem("whim:agent:model") ?? "");
   const [environment, setEnvironment] = useState<EnvironmentReport>(defaultEnvironment);
   const [credentials, setCredentials] = useState<CredentialReport>(defaultCredentials);
-  const [_entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [, setProfile] = useState<ProjectProfile>(defaultProfile);
   const [branch, setBranch] = useState<string | null>(null);
   const [changes, setChanges] = useState<WorkbenchFileChange[]>([]);
@@ -291,7 +290,6 @@ function App() {
     setTreeError(null);
     try {
       const nextEntries = await bridge.listWorkspace(root) as WorkspaceEntry[];
-      setEntries(nextEntries);
       const packageEntry = nextEntries.find((entry) => entry.kind === "file" && entry.path.replace(/\\/g, "/").toLowerCase() === "package.json");
       const packageJson = packageEntry ? await bridge.readFile(root, packageEntry.path).catch(() => null) : null;
       const nextProfile = inspectProject(nextEntries, packageJson);
@@ -300,13 +298,11 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not read workspace files.";
       setTreeError(message);
-      setEntries([]);
       throw error;
     } finally { setTreeLoading(false); }
   }, []);
 
   const activateWorkspace = useCallback(async (info: WorkspaceInfo) => {
-    setEntries([]);
     setWorkspace(info);
     localStorage.setItem("whim:recent-workspace", info.path);
     setTreeError(null);

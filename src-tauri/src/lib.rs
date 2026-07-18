@@ -11,11 +11,7 @@ use backend::BackendState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .setup(|app| {
-            backend::orchestration::start_orchestration_worker(app.handle().clone());
-
-            Ok(())
-        })
+        .setup(|_app| Ok(()))
         .manage(BackendState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

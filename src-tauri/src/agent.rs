@@ -1114,7 +1114,7 @@ fn record_agent_event<R: tauri::Runtime>(
     let event_val = serde_json::to_value(&event).unwrap();
     if let Some(label) = durable_audit_label(&event_val) {
         let backend = window.app_handle().state::<BackendState>();
-        crate::backend::record_orchestration_agent_evidence(&backend, operation_id, label);
+        crate::backend::record_orchestration_agent_evidence(&backend, operation_id, label).await;
     }
     let _ = window.emit(
         "whim:agent-event",
@@ -2308,7 +2308,7 @@ Windows environment; relative paths only.",
     })];
     let mut notes = String::new();
     for _ in 0..RESEARCH_MAX_ITERS {
-        if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+        if crate::backend::is_operation_cancelled(state.inner(), operation_id).await {
             return ("Research cancelled with the parent task.".into(), true);
         }
         let response =
@@ -2343,7 +2343,7 @@ Windows environment; relative paths only.",
             break;
         }
         for call in &response.tool_calls {
-            if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+            if crate::backend::is_operation_cancelled(state.inner(), operation_id).await {
                 return ("Research cancelled with the parent task.".into(), true);
             }
             let (output, is_error) = run_tool(
@@ -2480,7 +2480,7 @@ where
 
 async fn wait_for_operation_cancelled(state: &BackendState, operation_id: &str) {
     loop {
-        if crate::backend::is_operation_cancelled(state, operation_id) {
+        if crate::backend::is_operation_cancelled(state, operation_id).await {
             return;
         }
         sleep(Duration::from_millis(150)).await;
@@ -3204,7 +3204,9 @@ async fn run_background_suite<R: tauri::Runtime>(
         if crate::backend::is_operation_cancelled(
             app.state::<BackendState>().inner(),
             &parent_operation_id,
-        ) {
+        )
+        .await
+        {
             cancelled = true;
             break;
         }
@@ -3502,7 +3504,7 @@ async fn run_native_agent<R: tauri::Runtime>(
     // workspace while separate Git worktrees remain independently runnable.
     if owns_operation {
         if let Err(error) =
-            crate::backend::register_agent_operation(&state, operation_id, "native-agent", &root)
+            crate::backend::register_agent_operation(&state, operation_id, "native-agent", &root).await
         {
             return Err(format!("Cannot register agent operation: {error}"));
         }
@@ -3559,7 +3561,7 @@ async fn run_native_agent<R: tauri::Runtime>(
         iter += 1;
         // Check whether the user cancelled this run before making another
         // provider request or executing further tools.
-        if crate::backend::is_operation_cancelled(&state, operation_id) {
+        if crate::backend::is_operation_cancelled(&state, operation_id).await {
             record_agent_event(
                 app,
                 operation_id,
@@ -4064,10 +4066,11 @@ async fn run_native_agent<R: tauri::Runtime>(
                     questions.push(question);
                 }
                 let workspace = root.to_string_lossy().into_owned();
-                let child_jobs = questions.iter().enumerate().map(|(index, item)| {
+                let mut child_jobs = Vec::new();
+                for (index, item) in questions.iter().enumerate() {
                     let child_operation = format!("{operation_id}:r:{}:{}", call.id, index + 1);
                     let started_at = Instant::now();
-                    let created = crate::backend::lock(&state.orchestration, "orchestration").and_then(|mut store| {
+                    let created = crate::backend::lock(&state.orchestration, "orchestration").await.and_then(|mut store| {
                         let job = store.create(crate::orchestrator::CreateJobInput {
                             workspace: workspace.clone(),
                             intent: format!("Read-only research stream for parent operation {operation_id}: {item}"),
@@ -4080,8 +4083,8 @@ async fn run_native_agent<R: tauri::Runtime>(
                         })?;
                         store.transition(&workspace, &job.id, crate::orchestrator::JobAction::Start)
                     });
-                    created.ok().map(|job| (job.id, started_at))
-                }).collect::<Vec<_>>();
+                    child_jobs.push(created.ok().map(|job| (job.id, started_at)));
+                }
                 let research = join_all(questions.iter().map(|item| {
                     run_research(
                         state.clone(),
@@ -4128,7 +4131,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                         break 'agent_loop;
                     }
                 };
-                if let Ok(mut store) = crate::backend::lock(&state.orchestration, "orchestration") {
+                if let Ok(mut store) = crate::backend::lock(&state.orchestration, "orchestration").await {
                     for (index, (text, failed)) in results.iter().enumerate() {
                         let Some((job_id, started_at)) =
                             child_jobs.get(index).and_then(Option::as_ref)
@@ -4136,7 +4139,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                             continue;
                         };
                         let cancelled =
-                            crate::backend::is_operation_cancelled(state.inner(), operation_id);
+                            crate::backend::is_operation_cancelled(state.inner(), operation_id).await;
                         let outcome = if cancelled {
                             crate::orchestrator::JobOutcome::Cancelled
                         } else if *failed {
@@ -4337,11 +4340,11 @@ async fn run_native_agent<R: tauri::Runtime>(
 
     // Capture cancellation flag BEFORE finish_operation removes the registry
     // entry. After removal, is_operation_cancelled returns false regardless.
-    let was_cancelled = crate::backend::is_operation_cancelled(&state, operation_id);
+    let was_cancelled = crate::backend::is_operation_cancelled(&state, operation_id).await;
 
     // Clean up the operation registry entry regardless of how the run exits.
     if owns_operation {
-        crate::backend::finish_operation(&state, operation_id);
+        crate::backend::finish_operation(&state, operation_id).await;
     }
 
     Ok(AgentRunResult {
@@ -4571,7 +4574,8 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let (profile, profile_configured) =
         load_harness_profile(&root).map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
     let timeout_ms = profile.duration_cap(timeout_ms);
-    let settings = crate::backend::lock(&state.settings, "settings")
+    let settings = crate::backend::read_lock(&state.settings, "settings")
+        .await
         .map_err(|error| format!("WHIM:AGENT_START|{error}"))?
         .clone();
     // Resolve provider. auto (or empty) lets Whim pick the best available
@@ -4581,7 +4585,7 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let (provider, detected_base) = if provider_input.eq_ignore_ascii_case("auto")
         || provider_input.is_empty()
     {
-        match crate::backend::auto_provider() {
+        match crate::backend::auto_provider().await {
             Some((resolved, base)) => (parse_provider(&resolved).unwrap_or(Provider::Local), base),
             None => {
                 return Err(

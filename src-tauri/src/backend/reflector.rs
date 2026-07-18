@@ -91,28 +91,33 @@ pub(crate) fn spawn_janitor_if_needed<R: tauri::Runtime>(
         return;
     };
     let state = window.state::<BackendState>();
-    let eligible = lock(&state.settings, "settings")
-        .map(|settings| {
-            settings.agent.autonomous_janitor
-                && settings.agent.approval_policy == "risky"
-                && settings
-                    .agent
-                    .enabled_capabilities
-                    .iter()
-                    .any(|capability| capability == "coding")
-                && settings
-                    .agent
-                    .enabled_capabilities
-                    .iter()
-                    .any(|capability| capability == "verification")
-        })
-        .unwrap_or(false);
+    let eligible = state
+        .settings
+        .blocking_read()
+        .agent
+        .autonomous_janitor
+        && state.settings.blocking_read().agent.approval_policy == "risky"
+        && state
+            .settings
+            .blocking_read()
+            .agent
+            .enabled_capabilities
+            .iter()
+            .any(|capability| capability == "coding")
+        && state
+            .settings
+            .blocking_read()
+            .agent
+            .enabled_capabilities
+            .iter()
+            .any(|capability| capability == "verification");
     if !eligible {
         return;
     }
-    let inserted = lock(&state.janitor_workspaces, "janitor workspaces")
-        .map(|mut running| running.insert(workspace.clone()))
-        .unwrap_or(false);
+    let inserted = state
+        .janitor_workspaces
+        .blocking_lock()
+        .insert(workspace.clone());
     if !inserted {
         return;
     }
@@ -122,12 +127,11 @@ pub(crate) fn spawn_janitor_if_needed<R: tauri::Runtime>(
         if let Err(error) = result {
             eprintln!("Whim janitor skipped or failed: {error}");
         }
-        if let Ok(mut running) = lock(
-            &window.state::<BackendState>().janitor_workspaces,
-            "janitor workspaces",
-        ) {
-            running.remove(&workspace);
-        }
+        window
+            .state::<BackendState>()
+            .janitor_workspaces
+            .blocking_lock()
+            .remove(&workspace);
     });
 }
 
@@ -138,14 +142,14 @@ async fn run_janitor<R: tauri::Runtime>(
 ) -> Result<(), String> {
     tokio::time::sleep(Duration::from_secs(JANITOR_IDLE_DELAY_SECS)).await;
     let state = window.state::<BackendState>();
-    if lock(&state.operations, "operations")?
+    if lock(&state.operations, "operations").await?
         .values()
         .any(|operation| operation.workspace.as_deref() == Some(workspace.as_path()))
     {
         return Ok(());
     }
     let workspace_key = workspace.to_string_lossy().into_owned();
-    if lock(&state.orchestration, "orchestration")?
+    if lock(&state.orchestration, "orchestration").await?
         .list_for_workspace(&workspace_key)?
         .iter()
         .any(|job| job.status.is_active())
@@ -180,7 +184,7 @@ async fn run_janitor<R: tauri::Runtime>(
     let candidate_path = std::path::PathBuf::from(&candidate.path);
     let operation_id = format!("janitor-{}", &Uuid::new_v4().simple().to_string()[..12]);
     let job = {
-        let mut jobs = lock(&state.orchestration, "orchestration")?;
+        let mut jobs = lock(&state.orchestration, "orchestration").await?;
         let created = jobs.create(CreateJobInput {
             workspace: workspace_key.clone(),
             intent: janitor_prompt(),
@@ -285,15 +289,22 @@ async fn run_janitor<R: tauri::Runtime>(
                 ),
                 Err(_) => (false, None),
             };
-            if let Ok(mut jobs) = lock(&state.orchestration, "orchestration") {
-                let _ = jobs.record_verification(
-                    &workspace_key,
-                    &job.id,
-                    &check.id,
-                    &check.command,
-                    success,
-                    duration_ms,
-                );
+            match lock(&state.orchestration, "orchestration").await {
+                Ok(mut jobs) => {
+                    if let Err(error) = jobs.record_verification(
+                        &workspace_key,
+                        &job.id,
+                        &check.id,
+                        &check.command,
+                        success,
+                        duration_ms,
+                    ) {
+                        eprintln!("WHIM: janitor verification could not be recorded: {error}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("WHIM: task ledger locked; skipping verification record: {error}");
+                }
             }
             if !success {
                 failure = Some(format!(
@@ -326,18 +337,25 @@ async fn run_janitor<R: tauri::Runtime>(
             diff.changed_lines
         ),
     };
-    if let Ok(mut jobs) = lock(&state.orchestration, "orchestration") {
-        let _ = jobs.finish(
-            &workspace_key,
-            &job.id,
-            if failure.is_some() {
-                JobOutcome::Failed
-            } else {
-                JobOutcome::Completed
-            },
-            Some(summary.clone()),
-            evidence,
-        );
+    match lock(&state.orchestration, "orchestration").await {
+        Ok(mut jobs) => {
+            if let Err(error) = jobs.finish(
+                &workspace_key,
+                &job.id,
+                if failure.is_some() {
+                    JobOutcome::Failed
+                } else {
+                    JobOutcome::Completed
+                },
+                Some(summary.clone()),
+                evidence,
+            ) {
+                eprintln!("WHIM: janitor job could not be finalized: {error}");
+            }
+        }
+        Err(error) => {
+            eprintln!("WHIM: task ledger locked; skipping janitor job finalize: {error}");
+        }
     }
     let _ = ObservationStore::from_workspace(&workspace_key)
         .and_then(|mut store| store.append(summary, 6));

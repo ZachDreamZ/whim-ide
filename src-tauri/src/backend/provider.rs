@@ -334,7 +334,8 @@ async fn fetch_local_json(endpoint: &str, timeout_ms: u64) -> (Option<Value>, St
 pub async fn discover_environment(
     state: State<'_, BackendState>,
 ) -> Result<EnvironmentReport, String> {
-    let root = super::workspace::optional_selected_workspace_path(state.inner())?
+    let root = super::workspace::optional_selected_workspace_path(state.inner())
+        .await?
         .ok_or_else(|| "No workspace is selected".to_string())?;
     let shell = preferred_powershell();
     let script = "[PSCustomObject]@{ windowsVersion = [Environment]::OSVersion.VersionString; powershellVersion = $PSVersionTable.PSVersion.ToString(); tools = [PSCustomObject]@{ git = if (Get-Command git -ErrorAction SilentlyContinue) { (git --version).Trim() } else { $null }; node = if (Get-Command node -ErrorAction SilentlyContinue) { (node --version).Trim() } else { $null }; npm = if (Get-Command npm -ErrorAction SilentlyContinue) { (npm --version).Trim() } else { $null }; rustc = if (Get-Command rustc -ErrorAction SilentlyContinue) { (rustc --version).Trim() } else { $null }; cargo = if (Get-Command cargo -ErrorAction SilentlyContinue) { (cargo --version).Trim() } else { $null }; docker = if (Get-Command docker -ErrorAction SilentlyContinue) { (docker --version).Trim() } else { $null } } } | ConvertTo-Json".to_string();
@@ -370,7 +371,7 @@ pub async fn discover_environment(
 }
 
 #[tauri::command]
-pub fn discover_credential_names(
+pub async fn discover_credential_names(
     state: State<'_, BackendState>,
 ) -> Result<CredentialReport, String> {
     let mut entries = Vec::new();
@@ -390,7 +391,7 @@ pub fn discover_credential_names(
         }
     }
 
-    if let Ok(Some(workspace)) = super::workspace::optional_selected_workspace_path(state.inner()) {
+    if let Ok(Some(workspace)) = super::workspace::optional_selected_workspace_path(state.inner()).await {
         for file_name in [".env", ".env.local", ".env.development", ".env.production"] {
             let path = workspace.join(file_name);
             parse_env_names(&path, &format!("workspace:{file_name}"), &mut entries);
@@ -426,7 +427,7 @@ pub async fn discover_local_ai_providers(
     state: State<'_, BackendState>,
     request: LocalProvidersRequest,
 ) -> Result<LocalProvidersResult, String> {
-    let selected = super::workspace::optional_selected_workspace_path(state.inner())?;
+    let selected = super::workspace::optional_selected_workspace_path(state.inner()).await?;
     let timeout_ms = clamp_timeout(request.timeout_ms, 2_500, 15_000);
     let ollama_tool = resolve_tool("ollama", selected.as_deref())
         .await

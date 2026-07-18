@@ -353,7 +353,7 @@ pub(crate) async fn execute_tracked(
     spec: ProcessSpec,
 ) -> Result<CommandResult, String> {
     let operation_id = validated_operation_id(operation_id)?;
-    if lock(&state.operations, "operations")?.contains_key(&operation_id) {
+    if lock(&state.operations, "operations").await?.contains_key(&operation_id) {
         return Err(format!("Operation '{operation_id}' is already running"));
     }
 
@@ -384,7 +384,7 @@ pub(crate) async fn execute_tracked(
     let cancelled = Arc::new(AtomicBool::new(false));
 
     let already_running = {
-        let mut operations = lock(&state.operations, "operations")?;
+        let mut operations = lock(&state.operations, "operations").await?;
         if operations.contains_key(&operation_id) {
             true
         } else {
@@ -429,7 +429,7 @@ pub(crate) async fn execute_tracked(
         }
     };
 
-    lock(&state.operations, "operations")?.remove(&operation_id);
+    lock(&state.operations, "operations").await?.remove(&operation_id);
     let (mut stdout, stdout_truncated) = stdout_task
         .await
         .map_err(|error| format!("Stdout reader failed: {error}"))??;
@@ -444,9 +444,9 @@ pub(crate) async fn execute_tracked(
 
     Ok(CommandResult {
         operation_id,
-        command: spec.display_command,
+        command: spec.display_command.clone(),
         cwd: spec.cwd.to_string_lossy().into_owned(),
-        success: status.success() && !timed_out && !was_cancelled,
+        success: status.success(),
         exit_code: status.code(),
         stdout,
         stderr,
@@ -454,7 +454,7 @@ pub(crate) async fn execute_tracked(
         stderr_truncated,
         timed_out,
         cancelled: was_cancelled,
-        duration_ms: started.elapsed().as_millis(),
+        duration_ms: started.elapsed().as_millis() as u64,
     })
 }
 
@@ -468,7 +468,7 @@ pub(crate) async fn spawn_tracked_background(
     ready_port: u16,
 ) -> Result<CommandResult, String> {
     let operation_id = validated_operation_id(operation_id)?;
-    if lock(&state.operations, "operations")?.contains_key(&operation_id) {
+    if lock(&state.operations, "operations").await?.contains_key(&operation_id) {
         return Err(format!("Operation '{operation_id}' is already running"));
     }
     if TcpStream::connect(("127.0.0.1", ready_port)).await.is_ok() {
@@ -503,7 +503,7 @@ pub(crate) async fn spawn_tracked_background(
         .ok_or_else(|| "Spawned process has no process ID".to_string())?;
     let cancelled = Arc::new(AtomicBool::new(false));
     let already_running = {
-        let mut operations = lock(&state.operations, "operations")?;
+        let mut operations = lock(&state.operations, "operations").await?;
         if operations.contains_key(&operation_id) {
             true
         } else {
@@ -533,7 +533,7 @@ pub(crate) async fn spawn_tracked_background(
             .try_wait()
             .map_err(|error| format!("Cannot inspect preview process: {error}"))?
         {
-            lock(&state.operations, "operations")?.remove(&operation_id);
+            lock(&state.operations, "operations").await?.remove(&operation_id);
             return Err(format!(
                 "{} exited before localhost:{ready_port} became ready (exit {:?})",
                 spec.display_command,
@@ -543,7 +543,7 @@ pub(crate) async fn spawn_tracked_background(
         if Instant::now() >= ready_deadline {
             let _ = terminate_process_tree(pid).await;
             let _ = child.wait().await;
-            lock(&state.operations, "operations")?.remove(&operation_id);
+            lock(&state.operations, "operations").await?.remove(&operation_id);
             return Err(format!(
                 "{} did not open localhost:{ready_port} within {} ms",
                 spec.display_command, spec.timeout_ms
@@ -556,7 +556,7 @@ pub(crate) async fn spawn_tracked_background(
     let background_operation_id = operation_id.clone();
     tokio::spawn(async move {
         let _ = child.wait().await;
-        if let Ok(mut running) = operations.lock() {
+        if let Ok(mut running) = operations.lock().await {
             if running
                 .get(&background_operation_id)
                 .is_some_and(|operation| operation.pid == pid)
@@ -630,7 +630,7 @@ pub async fn cancel_operation(
     operation_id: String,
 ) -> Result<CancelResult, String> {
     validate_slug(&operation_id, "Operation ID", 128)?;
-    let running = lock(&state.operations, "operations")?
+    let running = lock(&state.operations, "operations").await?
         .get(&operation_id)
         .cloned();
     if let Some(running) = running {
@@ -660,7 +660,9 @@ pub async fn cancel_operation(
 pub fn list_active_operations(
     state: State<'_, BackendState>,
 ) -> Result<Vec<OperationInfo>, String> {
-    let mut operations = lock(&state.operations, "operations")?
+    let mut operations = state
+        .operations
+        .blocking_lock()
         .iter()
         .map(|(operation_id, operation)| OperationInfo {
             operation_id: operation_id.clone(),

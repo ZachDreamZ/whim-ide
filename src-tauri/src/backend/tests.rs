@@ -15,8 +15,8 @@ use super::workspace::{
     WriteFileRequest,
 };
 use super::{
-    finish_operation, is_operation_cancelled, register_agent_operation, whim_err, AgentRunResult,
-    BackendState, CommandResult,
+    read_lock, write_lock, finish_operation, is_operation_cancelled, register_agent_operation,
+    whim_err, AgentRunResult, BackendState, CommandResult,
 };
 use crate::backend::deployment::{DeployMode, DeployOptions, DeployTarget};
 use crate::worktrees::managed_worktree_root;
@@ -246,28 +246,32 @@ fn whim_error_envelope_is_parseable() {
     assert!(envelope.ends_with("needs confirmation"));
 }
 
-#[test]
-fn agent_cancellation_capture_before_finish() {
+#[tokio::test]
+async fn agent_cancellation_capture_before_finish() {
     // Full lifecycle: register, duplicate reject, set flag, capture true,
     // finish cleanup, verify false after removal.
     let state = BackendState::default();
     let workspace = std::path::Path::new("C:/work/whim");
 
-    register_agent_operation(&state, "op-1", "native-agent", workspace).unwrap();
+    register_agent_operation(&state, "op-1", "native-agent", workspace)
+        .await
+        .unwrap();
     assert!(
-        !is_operation_cancelled(&state, "op-1"),
+        !is_operation_cancelled(&state, "op-1").await,
         "fresh operation is not cancelled"
     );
 
     // Duplicate registration must be rejected.
     assert!(
-        register_agent_operation(&state, "op-1", "native-agent", workspace).is_err(),
+        register_agent_operation(&state, "op-1", "native-agent", workspace)
+            .await
+            .is_err(),
         "duplicate registration rejected"
     );
 
     // Simulate cancel_operation setting the flag.
     {
-        let mut ops = state.operations.lock().unwrap();
+        let mut ops = state.operations.blocking_lock();
         ops.get_mut("op-1")
             .unwrap()
             .cancelled
@@ -275,15 +279,15 @@ fn agent_cancellation_capture_before_finish() {
     }
 
     // Capture the flag BEFORE finish_operation (the bug-fix pattern).
-    let captured_cancelled = is_operation_cancelled(&state, "op-1");
+    let captured_cancelled = is_operation_cancelled(&state, "op-1").await;
     assert!(captured_cancelled, "captured cancellation flag is true");
 
     // finish_operation removes the entry.
-    finish_operation(&state, "op-1");
+    finish_operation(&state, "op-1").await;
 
     // After removal, is_operation_cancelled returns false (entry gone).
     assert!(
-        !is_operation_cancelled(&state, "op-1"),
+        !is_operation_cancelled(&state, "op-1").await,
         "after finish_operation, lookup returns false"
     );
 
@@ -292,30 +296,37 @@ fn agent_cancellation_capture_before_finish() {
     assert!(captured_cancelled, "captured value survives cleanup");
 }
 
-#[test]
-fn agent_operation_leases_one_execution_root_but_allows_distinct_worktrees() {
+#[tokio::test]
+async fn agent_operation_leases_one_execution_root_but_allows_distinct_worktrees() {
     let state = BackendState::default();
     let source = std::path::Path::new("C:/work/whim");
     let isolated = std::path::Path::new("C:/work/.whim-worktrees/whim/review-1");
 
-    register_agent_operation(&state, "source-agent", "native-agent", source).unwrap();
+    register_agent_operation(&state, "source-agent", "native-agent", source)
+        .await
+        .unwrap();
     let same_root = register_agent_operation(&state, "racing-agent", "native-agent", source)
+        .await
         .expect_err("the source worktree already has an active agent");
     assert!(same_root.contains("distinct registered worktree"));
 
     // A future roster can run this agent in parallel because its resolved
     // Git worktree has a different filesystem root.
-    register_agent_operation(&state, "isolated-agent", "native-agent", isolated).unwrap();
+    register_agent_operation(&state, "isolated-agent", "native-agent", isolated)
+        .await
+        .unwrap();
 
-    finish_operation(&state, "source-agent");
-    register_agent_operation(&state, "replacement-agent", "native-agent", source).unwrap();
+    finish_operation(&state, "source-agent").await;
+    register_agent_operation(&state, "replacement-agent", "native-agent", source)
+        .await
+        .unwrap();
 
-    finish_operation(&state, "isolated-agent");
-    finish_operation(&state, "replacement-agent");
+    finish_operation(&state, "isolated-agent").await;
+    finish_operation(&state, "replacement-agent").await;
 }
 
-#[test]
-fn agent_operation_has_pid_zero() {
+#[tokio::test]
+async fn agent_operation_has_pid_zero() {
     // Agent operations registered via register_agent_operation must have
     // pid == 0 so cancel_operation skips terminate_process_tree.
     let state = BackendState::default();
@@ -325,12 +336,12 @@ fn agent_operation_has_pid_zero() {
         "native-agent",
         std::path::Path::new("C:/work/whim"),
     )
+    .await
     .unwrap();
 
     let pid = state
         .operations
-        .lock()
-        .unwrap()
+        .blocking_lock()
         .get("op-pid-zero")
         .map(|op| op.pid);
     assert_eq!(pid, Some(0), "agent operations use pid=0 sentinel");
@@ -339,7 +350,7 @@ fn agent_operation_has_pid_zero() {
     // setting the flag alone should suffice for sentinel operations.
     // We simulate the guard logic here.
     {
-        let mut ops = state.operations.lock().unwrap();
+        let mut ops = state.operations.blocking_lock();
         let op = ops.get_mut("op-pid-zero").unwrap();
         op.cancelled.store(true, Ordering::SeqCst);
 
@@ -347,11 +358,11 @@ fn agent_operation_has_pid_zero() {
     }
 
     assert!(
-        is_operation_cancelled(&state, "op-pid-zero"),
+        is_operation_cancelled(&state, "op-pid-zero").await,
         "flag took effect via pid==0 guard"
     );
 
-    finish_operation(&state, "op-pid-zero");
+    finish_operation(&state, "op-pid-zero").await;
 }
 
 #[test]
@@ -534,7 +545,7 @@ async fn registered_worktrees_are_the_only_allowed_isolated_execution_targets() 
         .any(|worktree| Path::new(&worktree.path) == managed && worktree.managed));
 
     let state = BackendState::default();
-    *state.selected_workspace.lock().expect("workspace lock") = Some(root.clone());
+    *state.selected_workspace.write().await = Some(root.clone());
     assert_eq!(
         resolve_agent_workspace(&state, Some(&managed.to_string_lossy()))
             .await
@@ -796,24 +807,24 @@ fn ensure_inside_rejects_escape() {
     assert!(ensure_inside(&root, &escape).is_err());
 }
 
-#[test]
-fn selected_workspace_path_fails_without_selection() {
+#[tokio::test]
+async fn selected_workspace_path_fails_without_selection() {
     let state = BackendState::default();
-    let err = selected_workspace_path(&state).unwrap_err();
+    let err = selected_workspace_path(&state).await.unwrap_err();
     assert!(
         err.contains("No workspace is selected"),
         "Expected no-workspace error, got: {err}"
     );
 }
 
-#[test]
-fn selected_workspace_path_returns_selected() {
+#[tokio::test]
+async fn selected_workspace_path_returns_selected() {
     let state = BackendState::default();
     {
-        let mut ws = state.selected_workspace.lock().unwrap();
+        let mut ws = state.selected_workspace.blocking_write();
         *ws = Some(PathBuf::from("C:\\workspace"));
     }
-    let path = selected_workspace_path(&state).expect("should return path");
+    let path = selected_workspace_path(&state).await.expect("should return path");
     assert_eq!(path, PathBuf::from("C:\\workspace"));
 }
 
@@ -933,10 +944,10 @@ fn read_path_rejects_traversal() {
 }
 
 /// read path must fail without a selected workspace.
-#[test]
-fn read_path_fails_without_selected_workspace() {
+#[tokio::test]
+async fn read_path_fails_without_selected_workspace() {
     let state = BackendState::default();
-    let result = selected_workspace_path(&state);
+    let result = selected_workspace_path(&state).await;
     assert!(result.is_err(), "read without workspace must fail");
     let err = result.unwrap_err();
     assert!(
