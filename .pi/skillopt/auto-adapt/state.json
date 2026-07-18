@@ -36,9 +36,9 @@
     {
       "signature": "error:",
       "toolName": "bash",
-      "count": 16,
+      "count": 17,
       "firstSeen": 1784284995082,
-      "lastSeen": 1784325182317,
+      "lastSeen": 1784360380545,
       "exampleInput": "cd \"C:/Users/Vendex/Documents/Codex/2026-07-10/ca/work/whim-ide\" && rtk git checkout main && rtk git pull origin main 2>&1",
       "exampleOutput": "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc-tauri/Cargo.lock\nPlease commit your changes or stash them before you switch branches.\nAborting\n\n\nCommand exited with code 1",
       "evalCreated": true,
@@ -101,5 +101,5 @@
     }
   ],
   "totalAdaptations": 5,
-  "lastCheck": 1784350737483
+  "lastCheck": 1784360368438
 }
