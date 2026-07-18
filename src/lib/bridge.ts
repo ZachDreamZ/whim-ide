@@ -175,7 +175,7 @@ export type NativeBrowserState = {
 
 // App version synced with Cargo.toml
 // Keep in sync when bumping.
-export const APP_VERSION = "0.4.5";
+export const APP_VERSION = "0.4.6";
 
 export type AppSettings = {
   version: number;
