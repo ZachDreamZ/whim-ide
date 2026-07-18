@@ -454,7 +454,7 @@ pub(crate) async fn execute_tracked(
         stderr_truncated,
         timed_out,
         cancelled: was_cancelled,
-        duration_ms: started.elapsed().as_millis() as u64,
+        duration_ms: started.elapsed().as_millis(),
     })
 }
 
@@ -556,7 +556,7 @@ pub(crate) async fn spawn_tracked_background(
     let background_operation_id = operation_id.clone();
     tokio::spawn(async move {
         let _ = child.wait().await;
-        if let Ok(mut running) = operations.lock().await {
+        if let Ok(mut running) = lock(&operations, "operations").await {
             if running
                 .get(&background_operation_id)
                 .is_some_and(|operation| operation.pid == pid)

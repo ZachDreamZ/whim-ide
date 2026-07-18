@@ -127,6 +127,31 @@ pub(crate) async fn write_lock<'a, T>(
     Ok(rwlock.write().await)
 }
 
+/// Synchronous lock helpers for use inside non-async contexts (e.g. tests,
+/// event emitters, spawned threads). `blocking_lock` panics if called from an
+/// async runtime thread that is itself holding the async lock across an await,
+/// but for short critical sections that immediately release it is safe.
+pub(crate) fn blocking_lock<'a, T>(
+    mutex: &'a Mutex<T>,
+    _label: &str,
+) -> Result<MutexGuard<'a, T>, String> {
+    Ok(mutex.blocking_lock())
+}
+
+pub(crate) fn blocking_read_lock<'a, T>(
+    rwlock: &'a RwLock<T>,
+    _label: &str,
+) -> Result<RwLockReadGuard<'a, T>, String> {
+    Ok(rwlock.blocking_read())
+}
+
+pub(crate) fn blocking_write_lock<'a, T>(
+    rwlock: &'a RwLock<T>,
+    _label: &str,
+) -> Result<RwLockWriteGuard<'a, T>, String> {
+    Ok(rwlock.blocking_write())
+}
+
 pub(crate) fn whim_err(code: &str, detail: &str) -> String {
     format!("WHIM_ERROR: {} - {}", code, detail)
 }
@@ -173,12 +198,12 @@ pub(crate) fn atomic_write_json<T: serde::Serialize>(
 /// bounded state files to force compaction rather than unbounded growth.
 pub(crate) const MAX_LEDGER_BYTES: usize = 2 * 1024 * 1024;
 
-pub(crate) async fn record_orchestration_agent_evidence(
+pub(crate) fn record_orchestration_agent_evidence(
     state: &BackendState,
     operation_id: &str,
     message: &str,
 ) {
-    let Ok(mut store) = lock(&state.orchestration, "orchestration").await else {
+    let Ok(mut store) = blocking_lock(&state.orchestration, "orchestration") else {
         return;
     };
     let _ = store.append_agent_evidence_for_operation(operation_id, message);
