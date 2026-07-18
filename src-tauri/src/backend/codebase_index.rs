@@ -289,7 +289,6 @@ fn scan_rs_line(
                 exports.push(format!("{}{}", prefix, name));
             }
         }
-    }
 
     // use statements (local crate paths)
     if let Some(path) = trimmed.strip_prefix("use ") {
