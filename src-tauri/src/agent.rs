@@ -1114,7 +1114,7 @@ fn record_agent_event<R: tauri::Runtime>(
     let event_val = serde_json::to_value(&event).unwrap();
     if let Some(label) = durable_audit_label(&event_val) {
         let backend = window.app_handle().state::<BackendState>();
-        crate::backend::record_orchestration_agent_evidence(&backend, operation_id, label).await;
+        crate::backend::record_orchestration_agent_evidence(&backend, operation_id, label);
     }
     let _ = window.emit(
         "whim:agent-event",
