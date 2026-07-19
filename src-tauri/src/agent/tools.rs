@@ -11,13 +11,13 @@ use serde_json::json;
 
 use crate::agent::provider::AgentRole;
 use crate::backend::settings::AppSettings;
-use crate::backend::HarnessProfile;
+use crate::harness::HarnessProfile;
 use crate::capabilities::{capability_allows_tool, resolved_capabilities};
 
 pub(crate) struct ToolDef {
-    name: &'static str,
-    description: &'static str,
-    parameters: serde_json::Value,
+    pub(crate) name: &'static str,
+    pub(crate) description: &'static str,
+    pub(crate) parameters: serde_json::Value,
 }
 
 /// Tool names that mutate the workspace or perform external side effects.

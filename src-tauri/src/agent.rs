@@ -129,7 +129,7 @@ pub use events::{
 use events::{emit_agent_progress, record_agent_event};
 
 pub(crate) mod tools;
-pub use tools::{read_only_tool_defs, tool_defs, tool_defs_for_profile, tool_display, ToolDef};
+use tools::{read_only_tool_defs, tool_defs, tool_defs_for_profile, tool_display, ToolDef};
 
 
 #[derive(Debug, Deserialize)]
