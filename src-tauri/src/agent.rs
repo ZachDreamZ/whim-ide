@@ -126,7 +126,7 @@ pub(crate) mod events;
 pub use events::{
     AgentErrorDetail, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState,
 };
-use events::{durable_audit_label, emit_agent_progress, record_agent_event};
+use events::{emit_agent_progress, record_agent_event};
 
 
 #[derive(Debug, Deserialize)]
@@ -4082,6 +4082,7 @@ pub(crate) async fn run_model_chat(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::events::durable_audit_label;
     use crate::agent::provider::{
         parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
     };
