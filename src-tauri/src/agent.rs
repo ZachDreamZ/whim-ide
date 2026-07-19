@@ -17,14 +17,17 @@
 
 #![allow(dead_code)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
-use serde_json::{json, Value};
-use tauri::{Manager, State, WebviewWindow};
-
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
+#[cfg(test)]
 use crate::backend::settings::AppSettings;
-use crate::backend::{AgentRunResult, BackendState, CommandResult, ReadFileRequest};
+use tauri::{State, WebviewWindow};
+
+use crate::backend::{AgentRunResult, BackendState, ReadFileRequest};
 use crate::harness::{HarnessProfile, HARNESS_PROFILE_PATH, MAX_PROFILE_BYTES};
 
 const MIN_AGENT_TIMEOUT_MS: u64 = 15_000;
@@ -47,38 +50,28 @@ use provider::{
 use provider::provider_request_is_auto;
 
 pub(crate) mod events;
-pub use events::{
-    AgentErrorDetail, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState,
-};
+
 
 
 pub(crate) mod external;
 
 pub(crate) mod loop_detector;
-pub(crate) use loop_detector::LoopDetector;
+
 
 pub(crate) mod transport;
-pub(crate) use transport::{chat, chat_with_retry};
+pub(crate) use transport::chat;
 
 pub(crate) mod background;
-pub(crate) use background::{
-    append_background_report, background_check_specs, background_verification_allowed,
-    BackgroundVerifier,
-};
 
 pub(crate) mod tools;
-use tools::{tool_defs_for_profile, tool_display};
 
 pub(crate) mod execution;
 
 pub(crate) mod prompt;
-pub(crate) use prompt::{build_system_prompt, project_memory_for_run};
 
 pub(crate) mod r#loop;
 pub(crate) use r#loop::{
-    run_native_agent, run_research, compact_messages, summarize,
-    tool_may_change_workspace, tool_iteration_budget, remaining_agent_budget,
-    approx_chars, read_limited_stream, MAX_PROVIDER_RETRIES,
+    run_native_agent, tool_iteration_budget, remaining_agent_budget, MAX_PROVIDER_RETRIES,
 };
 
 #[derive(Debug, Deserialize)]
@@ -469,17 +462,18 @@ pub(crate) async fn run_model_chat(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::events::durable_audit_label;
+    use std::time::Instant;
+    use crate::agent::events::{durable_audit_label, AgentErrorDetail, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState};
+    use crate::agent::loop_detector::{LoopDetector, LOOP_DETECT_MIN_REPEATS};
+    use crate::agent::tools::{tool_defs, tool_defs_for_profile, tool_display};
+    use crate::agent::prompt::build_system_prompt;
     use crate::agent::provider::{
         parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
     };
-    use crate::agent::tools::tool_defs;
     use crate::agent::external::{
         claude_output_text, codex_output_text, external_harness_can_mutate, external_runtime_can_mutate,
         pi_tool_allowlist, plain_output_text,
     };
-    use crate::agent::loop_detector::LOOP_DETECT_MIN_REPEATS;
-
     #[test]
     fn provider_parsing_is_strict() {
         assert!(parse_provider("openai").is_ok());
