@@ -274,7 +274,7 @@ pub(crate) fn provider_requires_key(provider: Provider) -> bool {
     )
 }
 
-fn resolve_key_with(
+pub(crate) fn resolve_key_with(
     provider: Provider,
     api_key: &Option<String>,
     mut environment: impl FnMut(&str) -> Option<String>,
@@ -306,7 +306,7 @@ pub(crate) fn resolve_key(provider: Provider, api_key: &Option<String>) -> Optio
         .or_else(|| stored_opencode_api_key(provider))
 }
 
-fn parse_stored_opencode_api_key(value: &Value, provider: Provider) -> Option<String> {
+pub(crate) fn parse_stored_opencode_api_key(value: &Value, provider: Provider) -> Option<String> {
     let entry = value.get(provider_name(provider))?;
     if entry.get("type").and_then(Value::as_str) != Some("api") {
         return None;
@@ -374,7 +374,7 @@ pub fn default_model(provider: Provider, role: AgentRole) -> &'static str {
 /// OmniRoute is local by default. Plain HTTP is permitted only for an explicit
 /// loopback host; remote gateways must use HTTPS so prompts and endpoint keys
 /// cannot be sent over cleartext by a forged renderer request.
-fn validate_omniroute_base(base: &str) -> Result<String, String> {
+pub(crate) fn validate_omniroute_base(base: &str) -> Result<String, String> {
     let url = reqwest::Url::parse(base.trim())
         .map_err(|error| format!("Invalid OmniRoute base URL: {error}"))?;
     if !url.username().is_empty() || url.password().is_some() {
