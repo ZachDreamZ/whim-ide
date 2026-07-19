@@ -199,7 +199,7 @@ mod tests {
         let vibe = build_system_prompt("/test", "", "vibe", None, &settings);
         let plan = build_system_prompt("/test", "", "plan", None, &settings);
         let build = build_system_prompt("/test", "", "build", None, &settings);
-        let verify = build_system_prompt("/test", "", "verify", None, &settings);
+        let _verify = build_system_prompt("/test", "", "verify", None, &settings);
         let review = build_system_prompt("/test", "", "review", None, &settings);
         let ship = build_system_prompt("/test", "", "ship", None, &settings);
         // auto has its own native policy
