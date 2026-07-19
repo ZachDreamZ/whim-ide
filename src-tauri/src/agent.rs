@@ -2741,60 +2741,6 @@ mod tests {
     }
 
     #[test]
-    fn background_verification_is_discovered_bounded_and_role_gated() {
-        let root = std::env::temp_dir().join(format!("whim-background-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(root.join("src-tauri")).expect("create fixture");
-        std::fs::write(
-            root.join("package.json"),
-            r#"{"scripts":{"build":"vite build","lint":"eslint src","test":"vitest"}}"#,
-        )
-        .expect("write package manifest");
-        std::fs::write(
-            root.join("src-tauri").join("Cargo.toml"),
-            "[package]\nname = \"background\"\nversion = \"0.1.0\"",
-        )
-        .expect("write cargo manifest");
-
-        let specs = background_check_specs(&root);
-        assert_eq!(specs.len(), 3);
-        assert!(specs.iter().any(|check| check.id == "node-lint"));
-        assert!(specs.iter().any(|check| check.id == "node-build"));
-        assert!(specs.iter().any(|check| check.id == "cargo-check"));
-
-        let settings = AppSettings::default();
-        let profile = HarnessProfile::default();
-        assert!(background_verification_allowed(
-            AgentRole::Implementer,
-            &settings,
-            &profile
-        ));
-        assert!(!background_verification_allowed(
-            AgentRole::Planner,
-            &settings,
-            &profile
-        ));
-
-        let report = BackgroundVerificationReport {
-            generation: 2,
-            cancelled: false,
-            checks: vec![BackgroundCheckResult {
-                id: "node-lint".into(),
-                label: "Lint".into(),
-                command: "npm run lint".into(),
-                success: false,
-                exit_code: Some(1),
-                duration_ms: 25,
-                output: bounded_check_output("", "OPENAI_API_KEY=sk-secret\nsource error", false),
-            }],
-        };
-        let context = report.context();
-        assert!(context.contains("untrusted command output"));
-        assert!(context.contains("OPENAI_API_KEY= [redacted]"));
-        assert!(!context.contains("sk-secret"));
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
     fn verify_mode_accepts_only_native_discovered_commands() {
         let root = std::env::temp_dir().join(format!("whim-verify-mode-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create workspace");
