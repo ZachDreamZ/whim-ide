@@ -126,7 +126,7 @@ pub(crate) mod events;
 pub use events::{
     AgentErrorDetail, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState,
 };
-use events::{emit_agent_progress, record_agent_event};
+use events::{durable_audit_label, emit_agent_progress, record_agent_event};
 
 
 #[derive(Debug, Deserialize)]
