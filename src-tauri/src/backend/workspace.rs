@@ -621,9 +621,9 @@ pub(crate) fn list_workspace_tree_at(
 ) -> Result<DirectoryListing, String> {
     // Canonicalize the root so relative displays match the canonicalized
     // child paths returned by the filesystem walk (Windows long/short names).
-    let root = canonicalize_lenient(root);
+    let canonical_root = canonicalize_lenient(root);
     let relative = request.path.unwrap_or_default();
-    let directory = resolve_existing(&root, &relative, true)?;
+    let directory = resolve_existing(&canonical_root, &relative, true)?;
     if !directory.is_dir() {
         return Err("Requested tree root is not a directory".to_string());
     }
@@ -636,10 +636,10 @@ pub(crate) fn list_workspace_tree_at(
         max_entries,
         include_hidden: request.include_hidden.unwrap_or(false),
     };
-    collect_tree(root, &directory, 0, &options, &mut entries, &mut truncated)?;
+    collect_tree(&canonical_root, &directory, 0, &options, &mut entries, &mut truncated)?;
     Ok(DirectoryListing {
-        workspace: relative_display(root, root),
-        path: relative_display(root, &directory),
+        workspace: relative_display(&canonical_root, &canonical_root),
+        path: relative_display(&canonical_root, &directory),
         entries,
         truncated,
     })
