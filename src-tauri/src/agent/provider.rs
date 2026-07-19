@@ -17,7 +17,7 @@ use serde_json::Value;
 const MAX_STORED_API_KEY_BYTES: usize = 4 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Provider {
+pub enum Provider {
     OpenAi,
     Anthropic,
     Google,
@@ -33,7 +33,7 @@ pub(crate) enum Provider {
     OrcaRouter,
 }
 
-pub(crate) fn parse_provider(value: &str) -> Result<Provider, String> {
+pub fn parse_provider(value: &str) -> Result<Provider, String> {
     match value.to_ascii_lowercase().as_str() {
         "openai" => Ok(Provider::OpenAi),
         "anthropic" => Ok(Provider::Anthropic),
@@ -77,7 +77,7 @@ fn provider_name(provider: Provider) -> &'static str {
 /// Whim's fixed, project-discovered verification commands. Build, vibe, and
 /// ship retain the broader native tool set subject to the harness profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentRole {
+pub enum AgentRole {
     Chat,
     Auto,
     Planner,
@@ -101,7 +101,7 @@ pub(crate) enum AgentRole {
 }
 
 impl AgentRole {
-    fn parse(value: Option<&str>) -> Result<Self, String> {
+    pub(crate) fn parse(value: Option<&str>) -> Result<Self, String> {
         match value.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
             "chat" => Ok(Self::Chat),
             "auto" | "orchestrator" | "vibe" => Ok(Self::Auto),
@@ -129,7 +129,7 @@ impl AgentRole {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Chat => "chat",
             Self::Auto => "auto",
@@ -154,7 +154,7 @@ impl AgentRole {
         }
     }
 
-    fn permits_tool(self, name: &str) -> bool {
+    pub(crate) fn permits_tool(self, name: &str) -> bool {
         match self {
             Self::Chat => false,
             // Public Vibe mode owns the requested outcome end to end. It can
@@ -196,7 +196,7 @@ impl AgentRole {
 
 /// Default API base per provider. Local/DeepSeek/Xiaomi/Qwen are OpenAI-compatible.
 /// `base_url` from the request overrides this. `compatible` REQUIRES a base_url.
-fn default_base(provider: Provider) -> &'static str {
+pub(crate) fn default_base(provider: Provider) -> &'static str {
     match provider {
         Provider::OpenAi => "https://api.openai.com/v1",
         Provider::Anthropic => "https://api.anthropic.com",
@@ -215,7 +215,7 @@ fn default_base(provider: Provider) -> &'static str {
 }
 
 /// Human-readable provider name for error messages.
-fn provider_label(provider: Provider) -> &'static str {
+pub(crate) fn provider_label(provider: Provider) -> &'static str {
     match provider {
         Provider::OpenAi => "OpenAI",
         Provider::Anthropic => "Anthropic",
@@ -240,7 +240,7 @@ pub(crate) fn provider_request_is_auto(provider: Option<&str>) -> bool {
 /// Well-known environment variables that may hold each provider's API key.
 /// Keep aliases here so provider discovery, model listing, and agent runs all
 /// agree without sending environment secrets through the renderer.
-pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'static str] {
+pub fn provider_environment_variables(provider: &str) -> &'static [&'static str] {
     match provider {
         "openai" => &["OPENAI_API_KEY"],
         "anthropic" => &["ANTHROPIC_API_KEY"],
@@ -301,7 +301,7 @@ fn resolve_key_with(
 /// Resolve the API key to use: prefer the explicit in-session key, otherwise
 /// fall back to a supported environment alias. This lets Vibe authenticate
 /// without exposing native environment values to the webview.
-fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
+pub(crate) fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
     resolve_key_with(provider, api_key, |name| std::env::var(name).ok())
         .or_else(|| stored_opencode_api_key(provider))
 }
@@ -335,7 +335,7 @@ fn stored_opencode_api_key(provider: Provider) -> Option<String> {
     parse_stored_opencode_api_key(&value, provider)
 }
 
-pub(crate) fn provider_key_available(provider: &str) -> bool {
+pub fn provider_key_available(provider: &str) -> bool {
     parse_provider(provider)
         .ok()
         .and_then(|parsed| resolve_key(parsed, &None))
@@ -344,7 +344,7 @@ pub(crate) fn provider_key_available(provider: &str) -> bool {
 
 /// Sensible default model per provider so vibecoding needs no configuration
 /// when the user has not named a specific model.
-pub(crate) fn default_model(provider: Provider, role: AgentRole) -> &'static str {
+pub fn default_model(provider: Provider, role: AgentRole) -> &'static str {
     match provider {
         Provider::OpenAi => "gpt-4o-mini",
         Provider::Anthropic => "claude-3-5-sonnet-latest",
@@ -391,7 +391,7 @@ fn validate_omniroute_base(base: &str) -> Result<String, String> {
     Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
-fn validate_provider_base(provider: Provider, base: &str) -> Result<String, String> {
+pub(crate) fn validate_provider_base(provider: Provider, base: &str) -> Result<String, String> {
     if provider == Provider::OmniRoute {
         return validate_omniroute_base(base);
     }
@@ -456,7 +456,7 @@ fn validate_provider_base(provider: Provider, base: &str) -> Result<String, Stri
     Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
-async fn first_local_model(base: &str) -> Option<String> {
+pub(crate) async fn first_local_model(base: &str) -> Option<String> {
     let url = format!("{}/models", base.trim_end_matches('/'));
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
@@ -475,7 +475,7 @@ async fn first_local_model(base: &str) -> Option<String> {
     None
 }
 
-fn op_id() -> String {
+pub(crate) fn op_id() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
