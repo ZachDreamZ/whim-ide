@@ -78,14 +78,14 @@ struct BackgroundCheckResult {
 }
 
 #[derive(Debug)]
-struct BackgroundVerificationReport {
-    generation: u64,
+pub(crate) struct BackgroundVerificationReport {
+    pub(crate) generation: u64,
     cancelled: bool,
     checks: Vec<BackgroundCheckResult>,
 }
 
 impl BackgroundVerificationReport {
-    fn success(&self) -> bool {
+    pub(crate) fn success(&self) -> bool {
         !self.cancelled && !self.checks.is_empty() && self.checks.iter().all(|check| check.success)
     }
 
