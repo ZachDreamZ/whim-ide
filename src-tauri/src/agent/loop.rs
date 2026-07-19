@@ -147,13 +147,14 @@ Windows environment; relative paths only.",
         }
         Err(_) => (cap_output(notes), false),
     }
-
+}
 
 fn approx_chars(messages: &[Value]) -> usize {
     messages
         .iter()
         .map(|message| message.to_string().chars().count())
         .sum()
+}
 
 /// while keeping the original task and the most recent turns intact.
 async fn compact_messages(
@@ -192,6 +193,7 @@ async fn compact_messages(
     let mut out = vec![head, json!({ "role": "user", "content": summary_content })];
     out.extend(tail);
     out
+}
 
 
 async fn summarize(
@@ -218,6 +220,7 @@ async fn summarize(
         }
         _ => middle_text.chars().take(4000).collect::<String>(),
     }
+}
 
 
 async fn read_limited_stream<R>(reader: R) -> (String, bool)
@@ -231,14 +234,14 @@ where
     let truncated = bytes.len() > limit;
     bytes.truncate(limit);
     (String::from_utf8_lossy(&bytes).into_owned(), truncated)
-
+}
 
 fn tool_may_change_workspace(name: &str) -> bool {
     matches!(
         name,
         "write_file" | "edit_file" | "run_command" | "rollback"
     )
-
+}
 
 fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
     // No fixed iteration cap. The native agent continues until the model
@@ -247,7 +250,7 @@ fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
     // A harness profile or request may still set an *advisory* budget that only
     // produces a warning, never an automatic stop.
     None
-
+}
 
 fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Duration> {
     let elapsed_ms = start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
@@ -255,7 +258,7 @@ fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Durat
         .checked_sub(elapsed_ms)
         .filter(|remaining| *remaining > 0)
         .map(Duration::from_millis)
-
+}
 
 #[allow(clippy::too_many_arguments)]
 async fn run_native_agent<R: tauri::Runtime>(
