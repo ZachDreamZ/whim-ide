@@ -17,11 +17,8 @@ use crate::agent::events::{
 };
 use crate::backend::settings::AppSettings;
 use crate::backend::{BackendState, PowerShellRequest};
-use crate::capabilities::AgentRole;
+use crate::agent::provider::AgentRole;
 use crate::harness::{ExecutionAdapter, HarnessProfile};
-
-const BACKGROUND_REPORT_MAX_CHARS: usize = 12_000;
-const BACKGROUND_CHECK_OUTPUT_CHARS: usize = 3_000;
 
 async fn wait_for_operation_cancelled(state: &BackendState, operation_id: &str) {
     loop {
@@ -125,7 +122,7 @@ impl BackgroundVerificationReport {
     }
 }
 
-fn background_check_specs(root: &Path) -> Vec<BackgroundCheckSpec> {
+pub(crate) fn background_check_specs(root: &Path) -> Vec<BackgroundCheckSpec> {
     let (checks, _) = crate::backend::verification_plan_for_root(root);
     checks
         .into_iter()
@@ -144,7 +141,7 @@ fn background_check_specs(root: &Path) -> Vec<BackgroundCheckSpec> {
         .collect()
 }
 
-fn background_verification_allowed(
+pub(crate) fn background_verification_allowed(
     mode: AgentRole,
     settings: &AppSettings,
     profile: &HarnessProfile,
@@ -253,7 +250,7 @@ async fn run_background_suite<R: tauri::Runtime>(
     }
 }
 
-struct BackgroundVerifier<R: tauri::Runtime> {
+pub(crate) struct BackgroundVerifier<R: tauri::Runtime> {
     app: WebviewWindow<R>,
     root: PathBuf,
     parent_operation_id: String,
@@ -264,7 +261,7 @@ struct BackgroundVerifier<R: tauri::Runtime> {
     task: Option<JoinHandle<BackgroundVerificationReport>>,
 }
 
-impl<R: tauri::Runtime> BackgroundVerifier<R> {
+pub(crate) impl<R: tauri::Runtime> BackgroundVerifier<R> {
     fn new(
         app: WebviewWindow<R>,
         root: PathBuf,
@@ -371,7 +368,7 @@ impl<R: tauri::Runtime> BackgroundVerifier<R> {
     }
 }
 
-fn append_background_report<R: tauri::Runtime>(
+pub(crate) fn append_background_report<R: tauri::Runtime>(
     app: &WebviewWindow<R>,
     operation_id: &str,
     messages: &mut Vec<Value>,
