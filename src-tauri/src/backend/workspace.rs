@@ -280,14 +280,37 @@ pub(crate) fn sanitize_relative(path: &str, allow_empty: bool) -> Result<PathBuf
     Ok(safe)
 }
 
+/// Canonicalize `path`, climbing to the nearest existing ancestor when the
+/// full path does not yet exist (so prefix checks still work for files/dirs
+/// that are about to be created). This keeps Windows 8.3 short names,
+/// differing casing, and mixed long/short forms consistent.
+fn canonicalize_lenient(path: &Path) -> PathBuf {
+    if let Ok(canonical) = dunce::canonicalize(path) {
+        return canonical;
+    }
+    let mut current = path.to_path_buf();
+    while !current.as_os_str().is_empty() {
+        if let Ok(canonical) = dunce::canonicalize(&current) {
+            if let Ok(suffix) = path.strip_prefix(&current) {
+                return canonical.join(suffix);
+            }
+            return canonical;
+        }
+        current = match current.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => break,
+        };
+    }
+    path.to_path_buf()
+}
+
 pub(crate) fn ensure_inside(root: &Path, candidate: &Path) -> Result<(), String> {
     // Canonicalize both sides so that prefix comparison is robust against
     // Windows path quirks (8.3 short names like `RUNNER~1`, differing
     // casing, or mixed long/short forms between a raw temp_dir() root and
     // a dunce-canonicalized candidate).
-    let canonical_root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    let canonical_candidate =
-        dunce::canonicalize(candidate).unwrap_or_else(|_| candidate.to_path_buf());
+    let canonical_root = canonicalize_lenient(root);
+    let canonical_candidate = canonicalize_lenient(candidate);
     if canonical_candidate.starts_with(&canonical_root) {
         Ok(())
     } else {
@@ -596,8 +619,11 @@ pub(crate) fn list_workspace_tree_at(
     root: &Path,
     request: WorkspaceTreeRequest,
 ) -> Result<DirectoryListing, String> {
+    // Canonicalize the root so relative displays match the canonicalized
+    // child paths returned by the filesystem walk (Windows long/short names).
+    let root = canonicalize_lenient(root);
     let relative = request.path.unwrap_or_default();
-    let directory = resolve_existing(root, &relative, true)?;
+    let directory = resolve_existing(&root, &relative, true)?;
     if !directory.is_dir() {
         return Err("Requested tree root is not a directory".to_string());
     }
