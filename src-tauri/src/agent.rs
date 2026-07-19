@@ -80,7 +80,10 @@ pub(crate) mod tools;
 use tools::{read_only_tool_defs, tool_defs_for_profile, tool_display};
 
 pub(crate) mod execution;
-pub(crate) use execution::{cap_output, is_discovered_verification_command, run_tool};
+pub(crate) use execution::{
+    cap_output, edit_workspace_file, format_directory, grep_workspace,
+    is_discovered_verification_command, is_destructive_command, resolve_grep_scope, run_tool,
+};
 
 
 #[derive(Debug, Deserialize)]

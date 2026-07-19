@@ -38,7 +38,7 @@ pub(crate) fn cap_output(text: String) -> String {
 /// clearly destructive shell commands so the autonomous agent cannot wipe
 /// state, force-push, or pipe remote scripts into a shell. The system prompt
 /// already forbids these; this refuses them at the tool boundary.
-fn is_destructive_command(command: &str) -> Option<&'static str> {
+pub(crate) fn is_destructive_command(command: &str) -> Option<&'static str> {
     let lowered = command.to_ascii_lowercase();
     let checks: &[(&str, &str)] = &[
         ("rm -rf", "recursive force delete"),
@@ -458,7 +458,7 @@ pub(crate) async fn run_tool(
     }
 }
 
-fn edit_workspace_file(
+pub(crate) fn edit_workspace_file(
     root: &Path,
     path: &str,
     old_text: &str,
@@ -494,7 +494,7 @@ fn edit_workspace_file(
     ))
 }
 
-fn format_directory(listing: DirectoryListing) -> String {
+pub(crate) fn format_directory(listing: DirectoryListing) -> String {
     let mut lines = vec![format!("{}:", listing.path)];
     for entry in &listing.entries {
         let (kind, suffix) = match entry.kind {
@@ -510,7 +510,7 @@ fn format_directory(listing: DirectoryListing) -> String {
     lines.join("\n")
 }
 
-fn resolve_grep_scope(root: &Path, scope: &str) -> Result<PathBuf, String> {
+pub(crate) fn resolve_grep_scope(root: &Path, scope: &str) -> Result<PathBuf, String> {
     if scope.contains('\0') {
         return Err("grep_files path contains an invalid null byte".to_string());
     }
@@ -541,7 +541,7 @@ fn resolve_grep_scope(root: &Path, scope: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn grep_workspace(root: &Path, pattern: &str, scope: &str) -> Result<String, String> {
+pub(crate) fn grep_workspace(root: &Path, pattern: &str, scope: &str) -> Result<String, String> {
     let needle = pattern.to_lowercase();
     let root = dunce::canonicalize(root)
         .map_err(|error| format!("Cannot resolve workspace for grep_files: {error}"))?;
