@@ -281,12 +281,14 @@ pub(crate) fn sanitize_relative(path: &str, allow_empty: bool) -> Result<PathBuf
 }
 
 pub(crate) fn ensure_inside(root: &Path, candidate: &Path) -> Result<(), String> {
-    // Canonicalize the root so that callers passing a non-canonical prefix
-    // (e.g. std::env::temp_dir() on Windows, which may use a short or
-    // differently-cased form) still validate correctly against an already
-    // canonicalized candidate.
+    // Canonicalize both sides so that prefix comparison is robust against
+    // Windows path quirks (8.3 short names like `RUNNER~1`, differing
+    // casing, or mixed long/short forms between a raw temp_dir() root and
+    // a dunce-canonicalized candidate).
     let canonical_root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    if candidate.starts_with(&canonical_root) {
+    let canonical_candidate =
+        dunce::canonicalize(candidate).unwrap_or_else(|_| candidate.to_path_buf());
+    if canonical_candidate.starts_with(&canonical_root) {
         Ok(())
     } else {
         Err("Resolved path escapes the selected workspace".to_string())
