@@ -406,7 +406,6 @@ mod tests {
     use crate::agent::provider::AgentRole;
     use crate::backend::settings::AppSettings;
     use crate::harness::HarnessProfile;
-    use std::path::Path;
 
     #[test]
     fn background_verification_is_discovered_bounded_and_role_gated() {
