@@ -261,8 +261,8 @@ pub(crate) struct BackgroundVerifier<R: tauri::Runtime> {
     task: Option<JoinHandle<BackgroundVerificationReport>>,
 }
 
-pub(crate) impl<R: tauri::Runtime> BackgroundVerifier<R> {
-    fn new(
+impl<R: tauri::Runtime> BackgroundVerifier<R> {
+    pub(crate) fn new(
         app: WebviewWindow<R>,
         root: PathBuf,
         parent_operation_id: &str,
@@ -310,16 +310,16 @@ pub(crate) impl<R: tauri::Runtime> BackgroundVerifier<R> {
         )));
     }
 
-    fn mark_workspace_changed(&mut self) {
+    pub(crate) fn mark_workspace_changed(&mut self) {
         self.desired_generation = self.desired_generation.saturating_add(1);
         self.start_if_idle();
     }
 
-    fn needs_fresh_report(&self, last_injected_generation: u64) -> bool {
+    pub(crate) fn needs_fresh_report(&self, last_injected_generation: u64) -> bool {
         last_injected_generation < self.desired_generation
     }
 
-    async fn poll_ready(&mut self) -> Option<BackgroundVerificationReport> {
+    pub(crate) async fn poll_ready(&mut self) -> Option<BackgroundVerificationReport> {
         if !self.task.as_ref().is_some_and(JoinHandle::is_finished) {
             return None;
         }
@@ -334,7 +334,7 @@ pub(crate) impl<R: tauri::Runtime> BackgroundVerifier<R> {
         }
     }
 
-    async fn wait_latest(&mut self) -> Option<BackgroundVerificationReport> {
+    pub(crate) async fn wait_latest(&mut self) -> Option<BackgroundVerificationReport> {
         loop {
             self.start_if_idle();
             let report = self.task.take()?.await.ok()?;
@@ -347,7 +347,7 @@ pub(crate) impl<R: tauri::Runtime> BackgroundVerifier<R> {
         }
     }
 
-    async fn shutdown(&mut self) {
+    pub(crate) async fn shutdown(&mut self) {
         for operation_id in std::mem::take(&mut self.child_operation_ids) {
             let _ = crate::backend::execution::cancel_operation(
                 self.app.state::<BackendState>(),
