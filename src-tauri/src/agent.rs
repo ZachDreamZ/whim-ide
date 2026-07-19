@@ -30,7 +30,7 @@ use tokio::time::sleep;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{Manager, WebviewWindow};
+use tauri::{Manager, State, WebviewWindow};
 
 use crate::backend::settings::AppSettings;
 use crate::backend::{
