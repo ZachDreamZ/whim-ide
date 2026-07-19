@@ -59,7 +59,7 @@ const BACKGROUND_REPORT_MAX_CHARS: usize = 12_000;
 const BACKGROUND_CHECK_OUTPUT_CHARS: usize = 3_000;
 
 #[derive(Debug, Clone)]
-struct BackgroundCheckSpec {
+pub(crate) struct BackgroundCheckSpec {
     id: String,
     label: String,
     command: String,
