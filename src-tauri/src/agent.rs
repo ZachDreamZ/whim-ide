@@ -116,8 +116,9 @@ pub use provider::{
     Provider,
 };
 use provider::{
-    default_base, first_local_model, op_id, provider_env_var, provider_label, provider_name,
-    provider_requires_key, resolve_key, validate_provider_base,
+    default_base, first_local_model, op_id, parse_stored_opencode_api_key, provider_env_var,
+    provider_label, provider_name, provider_requires_key, resolve_key, resolve_key_with,
+    validate_omniroute_base, validate_provider_base,
 };
 #[cfg(test)]
 use provider::provider_request_is_auto;
