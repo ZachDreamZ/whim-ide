@@ -25,7 +25,7 @@ use crate::harness::{HarnessProfile, HARNESS_PROFILE_PATH};
 const MAX_TOOL_OUTPUT_CHARS: usize = 8_000;
 const VERIFY_TIMEOUT_MS: u64 = 30_000;
 
-fn cap_output(text: String) -> String {
+pub(crate) fn cap_output(text: String) -> String {
     if text.chars().count() > MAX_TOOL_OUTPUT_CHARS {
         let truncated: String = text.chars().take(MAX_TOOL_OUTPUT_CHARS).collect();
         format!("{truncated}\n... (output truncated to {MAX_TOOL_OUTPUT_CHARS} chars)")
