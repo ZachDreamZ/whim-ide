@@ -271,7 +271,7 @@ async fn agent_cancellation_capture_before_finish() {
 
     // Simulate cancel_operation setting the flag.
     {
-        let mut ops = state.operations.blocking_lock();
+        let mut ops = state.operations.lock().await;
         ops.get_mut("op-1")
             .unwrap()
             .cancelled
@@ -341,7 +341,8 @@ async fn agent_operation_has_pid_zero() {
 
     let pid = state
         .operations
-        .blocking_lock()
+        .lock()
+        .await
         .get("op-pid-zero")
         .map(|op| op.pid);
     assert_eq!(pid, Some(0), "agent operations use pid=0 sentinel");
@@ -350,7 +351,7 @@ async fn agent_operation_has_pid_zero() {
     // setting the flag alone should suffice for sentinel operations.
     // We simulate the guard logic here.
     {
-        let mut ops = state.operations.blocking_lock();
+        let mut ops = state.operations.lock().await;
         let op = ops.get_mut("op-pid-zero").unwrap();
         op.cancelled.store(true, Ordering::SeqCst);
 
@@ -821,7 +822,7 @@ async fn selected_workspace_path_fails_without_selection() {
 async fn selected_workspace_path_returns_selected() {
     let state = BackendState::default();
     {
-        let mut ws = state.selected_workspace.blocking_write();
+        let mut ws = state.selected_workspace.write().await;
         *ws = Some(PathBuf::from("C:\\workspace"));
     }
     let path = selected_workspace_path(&state).await.expect("should return path");

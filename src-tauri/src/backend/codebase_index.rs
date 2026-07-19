@@ -265,15 +265,13 @@ fn scan_rs_line(
     db_ops: &mut Vec<String>,
 ) {
     // pub fn, pub struct, pub enum, pub trait, pub mod, pub type
-    let Some(after_pub) = trimmed
+    if let Some(after_pub) = trimmed
         .strip_prefix("pub(crate) ")
         .or_else(|| trimmed.strip_prefix("pub(super) "))
         .or_else(|| trimmed.strip_prefix("pub "))
         .or_else(|| trimmed.strip_prefix("pub("))
-    else {
-        return;
-    };
-    let after_pub = after_pub.trim();
+    {
+        let after_pub = after_pub.trim();
         if let Some(name) = after_pub
             .split(|c: char| c.is_whitespace() || c == '<' || c == '(' || c == ';' || c == '{' || c == '!')
             .nth(1)
@@ -291,6 +289,7 @@ fn scan_rs_line(
                 exports.push(format!("{}{}", prefix, name));
             }
         }
+    }
 
     // use statements (local crate paths)
     if let Some(path) = trimmed.strip_prefix("use ") {
