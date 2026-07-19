@@ -2526,7 +2526,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn resolve_key_prefers_explicit_key() {
         // Explicit in-session key wins over (potential) environment key.
         assert_eq!(
