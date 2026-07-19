@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{Manager, WebviewWindow};
+use tauri::{Emitter, Manager, WebviewWindow};
 
 use crate::backend::{record_orchestration_agent_evidence, BackendState};
 
@@ -87,7 +87,7 @@ pub(crate) fn record_agent_event<R: tauri::Runtime>(
         let backend = window.app_handle().state::<BackendState>();
         record_orchestration_agent_evidence(&backend, operation_id, label);
     }
-    let _ = window.emit(
+    let _ = Emitter::emit(window,
         "whim:agent-event",
         json!({ "operationId": operation_id, "event": event_val.clone() }),
     );
