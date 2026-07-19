@@ -80,7 +80,7 @@ pub(crate) mod tools;
 use tools::{read_only_tool_defs, tool_defs_for_profile, tool_display};
 
 pub(crate) mod execution;
-pub(crate) use execution::run_tool;
+pub(crate) use execution::{cap_output, run_tool};
 
 
 #[derive(Debug, Deserialize)]
