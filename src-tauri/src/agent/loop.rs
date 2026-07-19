@@ -14,7 +14,7 @@ use tauri::{Manager, State, WebviewWindow};
 
 use crate::backend::settings::AppSettings;
 use crate::backend::{AgentRunResult, BackendState, CommandResult};
-use crate::harness::HarnessProfile;
+use crate::harness::{HarnessProfile, HARNESS_PROFILE_PATH};
 use crate::agent::provider::{AgentRole, Provider, provider_name};
 use crate::agent::events::{
     emit_agent_progress, record_agent_event, AgentEvent, AgentErrorDetail,
@@ -37,7 +37,7 @@ const MAX_RECOVERY_ITERS: usize = 5;
 pub(crate) const MAX_PROVIDER_RETRIES: usize = 3;
 
 #[allow(clippy::too_many_arguments)]
-async fn run_research(
+pub(crate) async fn run_research(
     state: State<'_, BackendState>,
     provider: Provider,
     base: &str,
@@ -149,7 +149,7 @@ Windows environment; relative paths only.",
     }
 }
 
-fn approx_chars(messages: &[Value]) -> usize {
+pub(crate) fn approx_chars(messages: &[Value]) -> usize {
     messages
         .iter()
         .map(|message| message.to_string().chars().count())
@@ -157,7 +157,7 @@ fn approx_chars(messages: &[Value]) -> usize {
 }
 
 /// while keeping the original task and the most recent turns intact.
-async fn compact_messages(
+pub(crate) async fn compact_messages(
     provider: Provider,
     base: &str,
     api_key: &Option<String>,
@@ -196,7 +196,7 @@ async fn compact_messages(
 }
 
 
-async fn summarize(
+pub(crate) async fn summarize(
     provider: Provider,
     base: &str,
     api_key: &Option<String>,
@@ -223,7 +223,7 @@ async fn summarize(
 }
 
 
-async fn read_limited_stream<R>(reader: R) -> (String, bool)
+pub(crate) async fn read_limited_stream<R>(reader: R) -> (String, bool)
 where
     R: AsyncRead + Unpin,
 {
@@ -236,14 +236,14 @@ where
     (String::from_utf8_lossy(&bytes).into_owned(), truncated)
 }
 
-fn tool_may_change_workspace(name: &str) -> bool {
+pub(crate) fn tool_may_change_workspace(name: &str) -> bool {
     matches!(
         name,
         "write_file" | "edit_file" | "run_command" | "rollback"
     )
 }
 
-fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
+pub(crate) fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
     // No fixed iteration cap. The native agent continues until the model
     // returns no tool calls (normal completion), the user cancels, a fatal
     // error occurs, or behavioral loop detection asks the parent to revise.
@@ -252,7 +252,7 @@ fn tool_iteration_budget(_mode: AgentRole, _speed: &str) -> Option<usize> {
     None
 }
 
-fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Duration> {
+pub(crate) fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Duration> {
     let elapsed_ms = start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
     total_timeout_ms
         .checked_sub(elapsed_ms)
@@ -261,7 +261,7 @@ fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> Option<Durat
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn run_native_agent<R: tauri::Runtime>(
+pub(crate) async fn run_native_agent<R: tauri::Runtime>(
     app: &WebviewWindow<R>,
     state: State<'_, BackendState>,
     root: PathBuf,
