@@ -89,7 +89,7 @@ fn is_destructive_command(command: &str) -> Option<&'static str> {
 /// Verify mode does not accept model-authored shell strings. It can execute
 /// only the conservative commands the native verification planner derives
 /// from fixed project signals (package script names, Cargo.toml, etc.).
-fn is_discovered_verification_command(root: &Path, command: &str) -> bool {
+pub(crate) fn is_discovered_verification_command(root: &Path, command: &str) -> bool {
     let command = command.trim();
     if command.is_empty() {
         return false;
