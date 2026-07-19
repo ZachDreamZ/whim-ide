@@ -2100,7 +2100,6 @@ mod tests {
     /// Ensures that the tool_display mapping covers every tool definition
     /// in tool_defs() so no tool produces an unmapped display name.
     #[test]
-    #[test]
     fn sensitive_tool_policy_gates_mutation_tools_in_both_modes() {
         let profile = HarnessProfile::default();
         let risky = AppSettings::default(); // approval_policy defaults to "risky"
