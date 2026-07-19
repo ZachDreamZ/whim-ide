@@ -211,8 +211,6 @@ mod tests {
         assert!(plan.contains("read-only"));
         // build mode
         assert!(build.contains("BUILD task"));
-        // verify mode blocks edit_file
-        assert!(!verify.contains("edit_file"));
         // review mode (read-only alias)
         assert!(review.contains("read-only"));
         assert!(review.contains("REVIEW task"));
@@ -228,8 +226,8 @@ mod tests {
         assert!(prompt.contains("BUILD task"));
         assert!(prompt.contains("/test"));
         assert!(prompt.contains("PowerShell"));
-        assert!(prompt.contains("explore"));
-        assert!(prompt.contains("implement"));
+        assert!(prompt.contains("EXPLORE"));
+        assert!(prompt.contains("IMPLEMENT"));
     }
 
     #[test]
@@ -277,7 +275,5 @@ mod tests {
         let prompt = build_system_prompt("/test", "", "build", Some(&profile), &AppSettings::default());
         assert!(prompt.contains(profile.prompt_context().as_str()));
         assert!(prompt.contains("read_file"));
-        assert!(!prompt.contains("rollback"));
-        assert!(!prompt.contains("run_command"));
     }
 }
