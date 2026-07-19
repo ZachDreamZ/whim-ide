@@ -70,9 +70,9 @@ pub(crate) mod execution;
 pub(crate) mod prompt;
 
 pub(crate) mod r#loop;
-pub(crate) use r#loop::{
-    run_native_agent, tool_iteration_budget, remaining_agent_budget, MAX_PROVIDER_RETRIES,
-};
+pub(crate) use r#loop::{run_native_agent, MAX_PROVIDER_RETRIES};
+#[cfg(test)]
+pub(crate) use r#loop::{tool_iteration_budget, remaining_agent_budget};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -463,7 +463,7 @@ pub(crate) async fn run_model_chat(
 mod tests {
     use super::*;
     use std::time::Instant;
-    use crate::agent::events::{durable_audit_label, AgentErrorDetail, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState};
+    use crate::agent::events::{durable_audit_label, AgentEvent, ReasoningPart, ToolUsePart, ToolUseState};
     use crate::agent::loop_detector::{LoopDetector, LOOP_DETECT_MIN_REPEATS};
     use crate::agent::tools::{tool_defs, tool_defs_for_profile, tool_display};
     use crate::agent::prompt::build_system_prompt;
