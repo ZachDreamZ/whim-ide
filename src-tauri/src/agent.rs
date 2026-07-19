@@ -2116,22 +2116,6 @@ mod tests {
     }
 
     #[test]
-    fn verify_mode_accepts_only_native_discovered_commands() {
-        let root = std::env::temp_dir().join(format!("whim-verify-mode-{}", uuid::Uuid::new_v4()));
-        let event = json!({
-            "type": "tool_use",
-            "part": {
-                "id": "call_1",
-                "tool": "Bash",
-                "state": { "status": "completed", "input": {"command": "ls"}, "output": "ok" }
-            }
-        });
-        assert_eq!(event["type"], "tool_use");
-        assert_eq!(event["part"]["tool"], "Bash");
-        assert_eq!(event["part"]["state"]["status"], "completed");
-    }
-
-    #[test]
     fn durable_audit_labels_never_retain_tool_or_provider_payloads() {
         let tool_event = json!({
             "type": "tool_use",
