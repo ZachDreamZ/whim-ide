@@ -54,7 +54,7 @@ pub fn parse_provider(value: &str) -> Result<Provider, String> {
     }
 }
 
-fn provider_name(provider: Provider) -> &'static str {
+pub(crate) fn provider_name(provider: Provider) -> &'static str {
     match provider {
         Provider::OpenAi => "openai",
         Provider::Anthropic => "anthropic",
