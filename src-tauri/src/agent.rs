@@ -47,60 +47,6 @@ const VERIFY_TIMEOUT_MS: u64 = 30_000;
 const MIN_AGENT_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_AGENT_TIMEOUT_MS: u64 = 10 * 60 * 1000;
 
-/// After this many consecutive identical tool calls (same tool, same
-/// arguments, same result) the run flags a *possible non-progress loop* and
-/// reports it as evidence. This is a detection signal only: it must never
-/// terminate a run. The parent/main agent decides whether to revise.
-const LOOP_DETECT_MIN_REPEATS: usize = 3;
-
-/// Detects genuine non-progress loops without any fixed iteration cap.
-///
-/// A loop is suspected when the same tool is invoked repeatedly with the same
-/// arguments and produces the same result. The detector only records evidence;
-/// the agent run loop is responsible for continuing (and for surfacing the
-/// evidence to the parent). Resetting happens as soon as a different call or
-/// result appears, so legitimate repeated-but-changing work is never flagged.
-struct LoopDetector {
-    last: Option<(String, String, String)>,
-    repeat_count: usize,
-}
-
-impl LoopDetector {
-    fn new() -> Self {
-        Self {
-            last: None,
-            repeat_count: 0,
-        }
-    }
-
-    /// Record one completed tool call. `args` and `result` are serialized to
-    /// stable strings so structural equality (not pointer identity) is compared.
-    /// `repeat_count` is the number of consecutive identical calls (1-based),
-    /// so three identical calls in a row crosses `LOOP_DETECT_MIN_REPEATS`.
-    fn observe(&mut self, tool: &str, args: &Value, result: &str) {
-        let signature = (tool.to_string(), args.to_string(), result.to_string());
-        if let Some(last) = &self.last {
-            if *last == signature {
-                self.repeat_count += 1;
-            } else {
-                self.repeat_count = 1;
-            }
-        } else {
-            self.repeat_count = 1;
-        }
-        self.last = Some(signature);
-    }
-
-    /// Returns `Some(repeats)` once the same (tool, args, result) has repeated
-    /// at least `LOOP_DETECT_MIN_REPEATS` times consecutively. `None` otherwise.
-    fn detected_repeats(&self) -> Option<usize> {
-        if self.repeat_count >= LOOP_DETECT_MIN_REPEATS {
-            Some(self.repeat_count)
-        } else {
-            None
-        }
-    }
-}
 const MAX_AGENT_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 const RESEARCH_MAX_ITERS: usize = 6;
 const MAX_CONTEXT_CHARS: usize = 80_000;
@@ -129,6 +75,9 @@ pub use events::{
 use events::{emit_agent_progress, record_agent_event};
 
 pub(crate) mod external;
+
+pub(crate) mod loop_detector;
+pub(crate) use loop_detector::LoopDetector;
 
 pub(crate) mod tools;
 use tools::{
@@ -3308,6 +3257,7 @@ mod tests {
         claude_output_text, codex_output_text, external_harness_can_mutate, external_runtime_can_mutate,
         pi_tool_allowlist, plain_output_text,
     };
+    use crate::agent::loop_detector::LOOP_DETECT_MIN_REPEATS;
 
     #[test]
     fn provider_parsing_is_strict() {
