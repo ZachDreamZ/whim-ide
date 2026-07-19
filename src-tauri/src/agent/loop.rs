@@ -1188,4 +1188,5 @@ async fn run_native_agent<R: tauri::Runtime>(
         iteration_count: iter,
         loop_warnings: reported_loop_repeats,
     })
+}
 
