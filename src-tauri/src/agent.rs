@@ -129,7 +129,9 @@ pub use events::{
 use events::{emit_agent_progress, record_agent_event};
 
 pub(crate) mod tools;
-use tools::{read_only_tool_defs, tool_defs, tool_defs_for_profile, tool_display, ToolDef};
+use tools::{
+    read_only_tool_defs, tool_defs_for_profile, tool_display, ToolDef,
+};
 
 
 #[derive(Debug, Deserialize)]
@@ -3855,6 +3857,7 @@ mod tests {
     use crate::agent::provider::{
         parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
     };
+    use crate::agent::tools::tool_defs;
 
     #[test]
     fn provider_parsing_is_strict() {
