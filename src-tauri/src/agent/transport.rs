@@ -7,7 +7,6 @@
 //! `agent.rs` and calls `chat`).
 
 use serde_json::{json, Value};
-use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::agent::MAX_PROVIDER_RETRIES;

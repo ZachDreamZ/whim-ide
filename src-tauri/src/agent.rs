@@ -80,12 +80,10 @@ pub(crate) mod loop_detector;
 pub(crate) use loop_detector::LoopDetector;
 
 pub(crate) mod transport;
-pub(crate) use transport::{chat, chat_with_retry, ModelResponse, ToolCall};
+pub(crate) use transport::{chat, chat_with_retry};
 
 pub(crate) mod tools;
-use tools::{
-    read_only_tool_defs, tool_defs_for_profile, tool_display, ToolDef,
-};
+use tools::{read_only_tool_defs, tool_defs_for_profile, tool_display};
 
 
 #[derive(Debug, Deserialize)]
