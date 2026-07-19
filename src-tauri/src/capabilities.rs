@@ -8,7 +8,7 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::backend::{lock, settings::AppSettings, BackendState};
+use crate::backend::{read_lock, settings::AppSettings, BackendState};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -158,11 +158,11 @@ pub(crate) fn capability_prompt(capabilities: &[AgentCapabilitySpec]) -> String 
 }
 
 #[tauri::command]
-pub fn list_agent_capabilities(
+pub async fn list_agent_capabilities(
     state: State<'_, BackendState>,
     mode: Option<String>,
 ) -> Result<Vec<AgentCapabilitySpec>, String> {
-    let settings = lock(&state.settings, "settings")?.clone();
+    let settings = read_lock(&state.settings, "settings").await?.clone();
     Ok(resolved_capabilities(
         &settings,
         mode.as_deref().unwrap_or("auto"),

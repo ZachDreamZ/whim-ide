@@ -108,7 +108,7 @@ pub(crate) async fn git_worktrees_for_repository(
 pub async fn list_git_worktrees(
     state: State<'_, BackendState>,
 ) -> Result<Vec<GitWorktree>, String> {
-    let selected = selected_workspace_path(state.inner())?;
+    let selected = selected_workspace_path(state.inner()).await?;
     let repo_root = git_repository_root(&selected)
         .await
         .map_err(|error| whim_err("WORKTREE", &error))?;
@@ -125,7 +125,7 @@ pub async fn create_git_worktree(
     state: State<'_, BackendState>,
     request: CreateGitWorktreeRequest,
 ) -> Result<GitWorktree, String> {
-    let selected = selected_workspace_path(state.inner())?;
+    let selected = selected_workspace_path(state.inner()).await?;
     create_git_worktree_at(state.inner(), selected, request).await
 }
 
@@ -487,7 +487,7 @@ pub async fn inspect_worktree_candidate(
     state: State<'_, BackendState>,
     request: InspectWorktreeCandidateRequest,
 ) -> Result<WorktreeCandidateReport, String> {
-    let selected = selected_workspace_path(state.inner())?;
+    let selected = selected_workspace_path(state.inner()).await?;
     let repository = git_repository_root(&selected)
         .await
         .map_err(|error| whim_err("CANDIDATE_REVIEW", &error))?;
@@ -911,7 +911,7 @@ pub async fn workspace_checkpoint(
     state: State<'_, BackendState>,
     request: CheckpointRequest,
 ) -> Result<CheckpointResult, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = selected_workspace_path(state.inner()).await?;
     workspace_checkpoint_at(state, root, request).await
 }
 
@@ -1059,7 +1059,7 @@ pub async fn install_dependencies(
     request: InstallRequest,
 ) -> Result<InstallResult, String> {
     let operation_id = validated_operation_id(request.operation_id)?;
-    let root = selected_workspace_path(state.inner())?;
+    let root = selected_workspace_path(state.inner()).await?;
     let mut installed: Vec<String> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
     for package in &request.packages {
@@ -1107,7 +1107,7 @@ pub async fn start_local_preview(
     state: State<'_, BackendState>,
     request: PreviewRequest,
 ) -> Result<CommandResult, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = selected_workspace_path(state.inner()).await?;
     start_local_preview_at(state, root, request).await
 }
 
@@ -1240,7 +1240,7 @@ pub async fn start_tunnel(
     state: State<'_, BackendState>,
     request: TunnelRequest,
 ) -> Result<CommandResult, String> {
-    let root = selected_workspace_path(state.inner())?;
+    let root = selected_workspace_path(state.inner()).await?;
     start_tunnel_at(state, root, request).await
 }
 

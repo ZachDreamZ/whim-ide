@@ -11,7 +11,7 @@ use crate::orchestrator::{
 
 use futures::future::join_all;
 use super::execution::CommandResult;
-use super::{lock, BackendState};
+use super::{lock, read_lock, BackendState};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,7 +112,7 @@ fn orchestration_error(error: String) -> String {
 /// Resolve the workspace key for an orchestration task: an explicit path wins,
 /// otherwise the currently selected workspace. The key is just a stable string
 /// used to group tasks; the durable ledger stores it verbatim.
-fn orchestration_workspace(
+async fn orchestration_workspace(
     state: &BackendState,
     workspace: Option<&str>,
 ) -> Result<String, String> {
@@ -122,7 +122,7 @@ fn orchestration_workspace(
             return Ok(trimmed.to_string());
         }
     }
-    let selected = lock(&state.selected_workspace, "selected_workspace")?;
+    let selected = read_lock(&state.selected_workspace, "selected_workspace").await?;
     match selected.as_ref() {
         Some(path) => Ok(path.to_string_lossy().into_owned()),
         None => {
@@ -154,9 +154,10 @@ pub async fn create_orchestration_job(
     request: CreateOrchestrationJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), Some(request.workspace.as_str()))
+        .await
         .map_err(orchestration_error)?;
     let mode = request.mode.unwrap_or(JobMode::Auto);
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .create(CreateJobInput {
             workspace,
@@ -177,8 +178,9 @@ pub async fn list_orchestration_jobs(
     request: OrchestrationWorkspaceRequest,
 ) -> Result<Vec<OrchestrationJob>, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .list_for_workspace(&workspace)
         .map_err(orchestration_error)
@@ -190,8 +192,10 @@ pub async fn list_orchestration_jobs(
 pub async fn list_project_orchestration_jobs(
     state: State<'_, BackendState>,
 ) -> Result<Vec<OrchestrationJob>, String> {
-    let workspace = orchestration_workspace(state.inner(), None).map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let workspace = orchestration_workspace(state.inner(), None)
+        .await
+        .map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .list_for_workspace(&workspace)
         .map_err(orchestration_error)
@@ -203,8 +207,9 @@ pub async fn get_orchestration_job(
     request: OrchestrationJobRequest,
 ) -> Result<OrchestrationJobDetail, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .detail(&workspace, &request.job_id)
         .map_err(orchestration_error)
@@ -216,8 +221,9 @@ pub async fn transition_orchestration_job(
     request: OrchestrationJobTransitionRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .transition(&workspace, &request.job_id, request.action)
         .map_err(orchestration_error)
@@ -229,8 +235,9 @@ pub async fn record_verification_result(
     request: RecordVerificationRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .record_verification(
             &workspace,
@@ -249,8 +256,9 @@ pub async fn finish_orchestration_job(
     request: FinishOrchestrationJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     let job = store
         .finish(
             &workspace,
@@ -262,7 +270,8 @@ pub async fn finish_orchestration_job(
         .map_err(orchestration_error)?;
     drop(store);
 
-    let project_memory_enabled = lock(&state.settings, "settings")
+    let project_memory_enabled = read_lock(&state.settings, "settings")
+        .await
         .map(|settings| settings.personalization.project_memory)
         .unwrap_or(false);
     // Observer Agent hook: persist only when the user has enabled project memory.
@@ -288,8 +297,9 @@ pub async fn retry_orchestration_job(
     request: RetryOrchestrationJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
     store
         .schedule_retry(
             &workspace,
@@ -322,6 +332,7 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
     request: DispatchOrchestrationJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
+        .await
         .map_err(orchestration_error)?;
 
     let (started, agent_request) = {
@@ -336,7 +347,7 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
 
         let intent = {
             let mut store =
-                lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+                lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
             let detail = store
                 .detail(&workspace, &request.job_id)
                 .map_err(orchestration_error)?;
@@ -373,7 +384,7 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
         )
         .await;
 
-        let mut store = lock(&state.orchestration, "orchestration").map_err(orchestration_error)?;
+        let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
         let detail = store
             .detail(&workspace, &request.job_id)
             .map_err(orchestration_error)?;
@@ -411,14 +422,26 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
         let cancel_future = async {
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                if let Ok(mut store) = lock(
+                match lock(
                     &cancel_app.state::<BackendState>().inner().orchestration,
                     "orchestration",
-                ) {
-                    if let Ok(detail) = store.detail(&workspace_check, &job_id) {
-                        if detail.job.status == JobStatus::Cancelled {
-                            return;
+                )
+                .await
+                {
+                    Ok(mut store) => {
+                        match store.detail(&workspace_check, &job_id) {
+                            Ok(detail) => {
+                                if detail.job.status == JobStatus::Cancelled {
+                                    return;
+                                }
+                            }
+                            Err(error) => {
+                                eprintln!("WHIM: could not read orchestration job {job_id}: {error}");
+                            }
                         }
+                    }
+                    Err(error) => {
+                        eprintln!("WHIM: task ledger locked during cancellation poll: {error}");
                     }
                 }
             }
@@ -431,7 +454,9 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                 let mut store = match lock(
                     &app.state::<BackendState>().inner().orchestration,
                     "orchestration",
-                ) {
+                )
+                .await
+                {
                     Ok(store) => store,
                     Err(_) => return,
                 };
@@ -464,10 +489,11 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                             background_agent_evidence(&run),
                         );
                         drop(store);
-                        let project_memory_enabled = lock(
+                        let project_memory_enabled = read_lock(
                             &app.state::<BackendState>().inner().settings,
                             "settings",
                         )
+                        .await
                         .map(|settings| settings.personalization.project_memory)
                         .unwrap_or(false);
                         if finish.is_ok()
@@ -521,6 +547,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
     request: crate::orchestrator::MultiAgentJobRequest,
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), Some(&request.workspace))
+        .await
         .map_err(orchestration_error)?;
 
     let intent = request.intent.clone();
@@ -532,6 +559,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
     let parent_job = {
         let operation_id = Uuid::new_v4().to_string();
         let mut store = lock(&state.orchestration, "orchestration")
+            .await
             .map_err(orchestration_error)?;
         store
             .create(CreateJobInput {
@@ -546,7 +574,6 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
             })
             .map_err(orchestration_error)?
     };
-    drop(state);
 
     // 2. Build provider pool from discovered providers
     let providers = crate::backend::deployment::discover_providers();
@@ -591,6 +618,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
         let app_state = app.state::<BackendState>();
         // Transition to Started
         let _ = lock(&app_state.orchestration, "orchestration")
+            .await
             .and_then(|mut store| store.transition(&wc, &job_id, JobAction::Start));
 
         // Shared sub-task results (accessible across retry waves)
@@ -654,7 +682,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                 if let Some((ref prov, ref model_name)) = assigned {
                     p = prov.clone();
                     m = model_name.clone();
-                    pool_clone.lock().ok().map(|mut guard| guard.mark_busy(&p, &m));
+                    if let Ok(mut guard) = pool_clone.lock() {
+                        guard.mark_busy(&p, &m);
+                    }
                 } else {
                     if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
                         entry.status = SubTaskStatus::Failed;
@@ -713,7 +743,7 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                     r.events
                         .iter()
                         .filter_map(|ev| ev["text"].as_str())
-                        .last()
+                        .next_back()
                         .map(|s| s.chars().take(500).collect::<String>())
                         .unwrap_or_else(|| r.command.stdout.chars().take(500).collect::<String>())
                 });
@@ -727,7 +757,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                         entry.model = Some(mdl.clone());
                         completed_count += 1;
                     }
-                    pool.lock().ok().map(|mut guard| guard.record_success(&prov, &mdl));
+                    if let Ok(mut guard) = pool.lock() {
+                        guard.record_success(&prov, &mdl);
+                    }
                 } else {
                     // Error recovery: retry if attempts remain
                     let should_retry = sub_task_results
@@ -745,7 +777,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                                     .unwrap_or_else(|| "Unknown error".into()),
                             );
                         }
-                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                        if let Ok(mut guard) = pool.lock() {
+                            guard.record_failure(&prov, &mdl);
+                        }
                     } else {
                         if let Some(entry) = sub_task_results.iter_mut().find(|r| r.id == task_id) {
                             entry.status = SubTaskStatus::Failed;
@@ -754,7 +788,9 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
                             entry.model = Some(mdl.clone());
                             failed_count += 1;
                         }
-                        pool.lock().ok().map(|mut guard| guard.record_failure(&prov, &mdl));
+                        if let Ok(mut guard) = pool.lock() {
+                            guard.record_failure(&prov, &mdl);
+                        }
                     }
                 }
             }
@@ -799,7 +835,8 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
         // Mark parent job complete
         let app_state = app.state::<BackendState>();
         let _ = lock(&app_state.orchestration, "orchestration")
-            .and_then(|mut store| {
+            .await
+            .map(|mut store| {
                 store.finish(
                     &wc,
                     &job_id,
@@ -819,25 +856,6 @@ pub async fn dispatch_multi_agent_job<R: tauri::Runtime>(
     });
 
     Ok(parent_job)
-}
-
-pub fn start_orchestration_worker(app: tauri::AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            let state = app.state::<BackendState>();
-            let mut _store = match lock(&state.inner().orchestration, "orchestration") {
-                Ok(store) => store,
-                Err(_) => continue,
-            };
-
-            // Note: Since jobs belong to workspaces, we'd need to iterate across
-            // all jobs, or just check the active workspace's queued jobs.
-            // For now, we omit an aggressive global drain to avoid conflicts with
-            // the explicit dispatch_orchestration_job logic, which acts as the
-            // active dispatch mechanism requested by the user.
-        }
-    });
 }
 
 #[cfg(test)]
@@ -883,7 +901,7 @@ mod e2e {
         });
 
         let state = BackendState::default();
-        let mut store = state.orchestration.lock().unwrap();
+        let mut store = state.orchestration.blocking_lock();
 
         let created = store
             .create(CreateJobInput {

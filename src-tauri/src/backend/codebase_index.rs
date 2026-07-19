@@ -81,7 +81,9 @@ fn classify_file(path: &Path) -> &'static str {
 
 /// Lightweight regex-free line scanner for a source file.
 /// Returns (exports, imports, routes, db_ops, local_deps).
-fn scan_source_file(path: &Path, content: &str) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+type ScanResult = (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<String>);
+
+fn scan_source_file(path: &Path, content: &str) -> ScanResult {
     let language = classify_file(path);
     let mut exports: Vec<String> = Vec::new();
     let mut imports: Vec<String> = Vec::new();
@@ -129,9 +131,9 @@ fn scan_ts_js_line(
     }
 
     // Export declarations
-    if trimmed.starts_with("export ") {
+    if let Some(after_export) = trimmed.strip_prefix("export ") {
         // export function foo, export const foo, export class Foo, export interface Foo, export type Foo
-        let after_export = &trimmed[7..].trim();
+        let after_export = after_export.trim();
         if let Some(name) = after_export
             .split(|c: char| c.is_whitespace() || c == '(' || c == '{' || c == '<' || c == '=')
             .nth(1)
@@ -142,8 +144,8 @@ fn scan_ts_js_line(
             }
         }
         // export default function foo
-        if after_export.starts_with("default ") {
-            if let Some(name) = after_export[8..]
+        if let Some(after_default) = after_export.strip_prefix("default ") {
+            if let Some(name) = after_default
                 .split(|c: char| c.is_whitespace() || c == '(')
                 .nth(1)
                 .filter(|n| !n.is_empty() && !n.starts_with("function") && !n.starts_with("class") && !n.starts_with('{'))
@@ -263,14 +265,12 @@ fn scan_rs_line(
     db_ops: &mut Vec<String>,
 ) {
     // pub fn, pub struct, pub enum, pub trait, pub mod, pub type
-    if trimmed.starts_with("pub ") || trimmed.starts_with("pub(") || trimmed.starts_with("pub(crate) ") {
-        let after_pub = if trimmed.starts_with("pub(crate) ") {
-            &trimmed[11..]
-        } else if trimmed.starts_with("pub(super) ") {
-            &trimmed[11..]
-        } else {
-            &trimmed[4..]
-        };
+    if let Some(after_pub) = trimmed
+        .strip_prefix("pub(crate) ")
+        .or_else(|| trimmed.strip_prefix("pub(super) "))
+        .or_else(|| trimmed.strip_prefix("pub "))
+        .or_else(|| trimmed.strip_prefix("pub("))
+    {
         let after_pub = after_pub.trim();
         if let Some(name) = after_pub
             .split(|c: char| c.is_whitespace() || c == '<' || c == '(' || c == ';' || c == '{' || c == '!')
@@ -292,8 +292,8 @@ fn scan_rs_line(
     }
 
     // use statements (local crate paths)
-    if trimmed.starts_with("use ") {
-        let path = trimmed[4..].trim().trim_end_matches(';');
+    if let Some(path) = trimmed.strip_prefix("use ") {
+        let path = path.trim().trim_end_matches(';');
         if path.starts_with("crate::") || path.starts_with("super::") || path.starts_with("self::") {
             imports.push(path.to_string());
         }
@@ -302,8 +302,8 @@ fn scan_rs_line(
     // mod declarations
     if trimmed.starts_with("mod ") && !trimmed.contains(';') && !trimmed.starts_with("mod!") {
         // inline mod — body follows, not an import
-    } else if trimmed.starts_with("mod ") {
-        let name = trimmed[4..].trim().trim_end_matches(';');
+    } else if let Some(name) = trimmed.strip_prefix("mod ") {
+        let name = name.trim().trim_end_matches(';');
         if !name.is_empty() && !name.contains('{') && !name.contains('"') {
             imports.push(format!("mod:{}", name));
         }
@@ -774,15 +774,15 @@ mod tests {
         let dir = std::env::temp_dir().join("whim-index-test");
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("hello.ts"), "export function hello() {}".to_string()).unwrap();
-        fs::write(dir.join("main.rs"), "pub fn main() {}".to_string()).unwrap();
-        fs::write(dir.join("package.json"), "{}".to_string()).unwrap();
+        fs::write(dir.join("hello.ts"), "export function hello() {}").unwrap();
+        fs::write(dir.join("main.rs"), "pub fn main() {}").unwrap();
+        fs::write(dir.join("package.json"), "{}").unwrap();
         fs::create_dir_all(dir.join("node_modules")).unwrap();
-        fs::write(dir.join("node_modules/ignore.ts"), "export const x = 1;".to_string()).unwrap();
+        fs::write(dir.join("node_modules/ignore.ts"), "export const x = 1;").unwrap();
         fs::create_dir_all(dir.join(".git")).unwrap();
         fs::write(
             dir.join(".git/config"),
-            "[core]\n\trepositoryformatversion = 0\n".to_string(),
+            "[core]\n\trepositoryformatversion = 0\n",
         )
         .unwrap();
 

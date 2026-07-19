@@ -7,7 +7,7 @@ use std::{
 };
 use tauri::State;
 
-use super::{lock, workspace::selected_workspace_path, BackendState};
+use super::{read_lock, workspace::selected_workspace_path, BackendState};
 
 const MAX_CONTEXT_CHARS: usize = 16_000;
 
@@ -155,11 +155,11 @@ try {
 /// Reads another app only after the user explicitly selects a context source.
 /// PowerShell is launched with CREATE_NO_WINDOW so capture never flashes a console.
 #[tauri::command]
-pub fn capture_app_context(
+pub async fn capture_app_context(
     state: State<'_, BackendState>,
     request: AppContextRequest,
 ) -> Result<AppContextResult, String> {
-    let permissions = lock(&state.settings, "settings")?.computer_use.clone();
+    let permissions = read_lock(&state.settings, "settings").await?.computer_use.clone();
     if !permissions.enabled {
         return Err("Computer use is disabled in Settings".into());
     }
@@ -169,7 +169,7 @@ pub fn capture_app_context(
             Err("App context is disabled in Whim Settings > Computer use".into())
         }
         "screenshot" if permissions.screen_capture => {
-            capture_screenshot(&selected_workspace_path(state.inner())?)
+            capture_screenshot(&selected_workspace_path(state.inner()).await?)
         }
         "screenshot" => Err("Screen capture is disabled in Whim Settings > Computer use".into()),
         _ => Err("Unknown desktop context source".into()),

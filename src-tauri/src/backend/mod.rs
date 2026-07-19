@@ -1,12 +1,14 @@
 use crate::orchestrator::DurableJobStore;
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, MutexGuard,
+        Arc,
     },
 };
+use tokio::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub mod browser;
 pub mod chat;
@@ -75,10 +77,10 @@ pub(crate) const DEFAULT_DEPLOY_TIMEOUT_MS: u64 = 20 * 60 * 1000;
 pub(crate) const MAX_DEPLOY_TIMEOUT_MS: u64 = 2 * 60 * 60 * 1000;
 
 pub struct BackendState {
-    pub(crate) selected_workspace: Mutex<Option<PathBuf>>,
+    pub(crate) selected_workspace: RwLock<Option<PathBuf>>,
     pub(crate) operations: Arc<Mutex<HashMap<String, RunningOperation>>>,
     pub(crate) orchestration: Mutex<DurableJobStore>,
-    pub(crate) settings: Mutex<settings::AppSettings>,
+    pub(crate) settings: RwLock<settings::AppSettings>,
     pub(crate) janitor_workspaces: Mutex<HashSet<PathBuf>>,
     pub(crate) codebase_watcher: Mutex<Option<crate::backend::fs_watcher::FileWatcher>>,
 }
@@ -86,10 +88,10 @@ pub struct BackendState {
 impl Default for BackendState {
     fn default() -> Self {
         Self {
-            selected_workspace: Mutex::new(None),
+            selected_workspace: RwLock::new(None),
             operations: Arc::new(Mutex::new(HashMap::new())),
             orchestration: Mutex::new(DurableJobStore::default()),
-            settings: Mutex::new(settings::load_settings_from_disk()),
+            settings: RwLock::new(settings::load_settings_from_disk()),
             janitor_workspaces: Mutex::new(HashSet::new()),
             codebase_watcher: Mutex::new(None),
         }
@@ -104,23 +106,90 @@ pub(crate) struct RunningOperation {
     pub(crate) cancelled: Arc<AtomicBool>,
 }
 
-pub(crate) fn lock<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, T>, String> {
-    mutex.lock().map_err(|error| {
-        let detail = error.to_string();
-        format!("A internal resource is locked: {label} ({detail})")
-    })
+pub(crate) async fn lock<'a, T>(
+    mutex: &'a Mutex<T>,
+    _label: &str,
+) -> Result<MutexGuard<'a, T>, String> {
+    Ok(mutex.lock().await)
+}
+
+pub(crate) async fn read_lock<'a, T>(
+    rwlock: &'a RwLock<T>,
+    _label: &str,
+) -> Result<RwLockReadGuard<'a, T>, String> {
+    Ok(rwlock.read().await)
+}
+
+pub(crate) async fn write_lock<'a, T>(
+    rwlock: &'a RwLock<T>,
+    _label: &str,
+) -> Result<RwLockWriteGuard<'a, T>, String> {
+    Ok(rwlock.write().await)
+}
+
+/// Synchronous lock helpers for use inside non-async contexts (e.g. tests,
+/// event emitters, spawned threads). `blocking_lock` panics if called from an
+/// async runtime thread that is itself holding the async lock across an await,
+/// but for short critical sections that immediately release it is safe.
+pub(crate) fn blocking_lock<'a, T>(
+    mutex: &'a Mutex<T>,
+    _label: &str,
+) -> Result<MutexGuard<'a, T>, String> {
+    Ok(mutex.blocking_lock())
 }
 
 pub(crate) fn whim_err(code: &str, detail: &str) -> String {
     format!("WHIM_ERROR: {} - {}", code, detail)
 }
 
+/// Write `value` as pretty JSON to `path` atomically: serialize to a temp file
+/// beside the target, then `rename` over the original. A crash mid-write leaves
+/// the previous file intact instead of truncating the durable artifact. The
+/// serialized bytes must not exceed `max_bytes`; otherwise the write is refused
+/// (consistent with the other bounded state files in this crate).
+pub(crate) fn atomic_write_json<T: serde::Serialize>(
+    path: &Path,
+    value: &T,
+    max_bytes: usize,
+) -> Result<(), String> {
+    let directory = path
+        .parent()
+        .ok_or_else(|| "Atomic write path has no parent directory".to_string())?;
+    fs::create_dir_all(directory)
+        .map_err(|error| format!("Could not create directory for {}: {error}", path.display()))?;
+    let content = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("Could not serialize {}: {error}", path.display()))?;
+    if content.len() > max_bytes {
+        return Err(format!(
+            "Refusing to write {}: {} bytes exceeds the {} byte limit",
+            path.display(),
+            content.len(),
+            max_bytes
+        ));
+    }
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, content)
+        .map_err(|error| format!("Could not write {}: {error}", temporary.display()))?;
+    if path.exists() {
+        fs::remove_file(path)
+            .map_err(|error| format!("Could not replace {}: {error}", path.display()))?;
+    }
+    fs::rename(&temporary, path)
+        .map_err(|error| format!("Could not finalize {}: {error}", path.display()))?;
+    Ok(())
+}
+
+/// Bound applied to the durable task ledger (`jobs.json`). The ledger is the most
+/// important artifact in the crate, so it is capped slightly below the other
+/// bounded state files to force compaction rather than unbounded growth.
+pub(crate) const MAX_LEDGER_BYTES: usize = 2 * 1024 * 1024;
+
 pub(crate) fn record_orchestration_agent_evidence(
     state: &BackendState,
     operation_id: &str,
     message: &str,
 ) {
-    let Ok(mut store) = lock(&state.orchestration, "orchestration") else {
+    let Ok(mut store) = blocking_lock(&state.orchestration, "orchestration") else {
         return;
     };
     let _ = store.append_agent_evidence_for_operation(operation_id, message);
@@ -132,13 +201,13 @@ pub(crate) fn record_orchestration_agent_evidence(
 /// the same workspace root, while separate Git worktrees remain independently
 /// runnable. Agent operations use the `pid == 0` sentinel so `cancel_operation`
 /// skips `terminate_process_tree` and only sets the cooperative flag.
-pub(crate) fn register_agent_operation(
+pub(crate) async fn register_agent_operation(
     state: &BackendState,
     operation_id: &str,
     kind: &str,
     root: &Path,
 ) -> Result<(), String> {
-    let mut operations = lock(&state.operations, "operations")?;
+    let mut operations = lock(&state.operations, "operations").await?;
     if operations
         .values()
         .any(|operation| operation.pid == 0 && operation.workspace.as_deref() == Some(root))
@@ -162,8 +231,8 @@ pub(crate) fn register_agent_operation(
 /// True only while the operation is registered and its cancellation flag is
 /// set. Once `finish_operation` removes the entry, this returns false even if
 /// the flag was previously true — callers must capture the value beforehand.
-pub(crate) fn is_operation_cancelled(state: &BackendState, operation_id: &str) -> bool {
-    match lock(&state.operations, "operations") {
+pub(crate) async fn is_operation_cancelled(state: &BackendState, operation_id: &str) -> bool {
+    match lock(&state.operations, "operations").await {
         Ok(operations) => operations
             .get(operation_id)
             .map(|operation| operation.cancelled.load(Ordering::SeqCst))
@@ -174,8 +243,8 @@ pub(crate) fn is_operation_cancelled(state: &BackendState, operation_id: &str) -
 
 /// Remove an operation from the registry. After this returns, lookups for the
 /// operation id report it as not-cancelled (the entry is gone).
-pub(crate) fn finish_operation(state: &BackendState, operation_id: &str) {
-    if let Ok(mut operations) = lock(&state.operations, "operations") {
+pub(crate) async fn finish_operation(state: &BackendState, operation_id: &str) {
+    if let Ok(mut operations) = lock(&state.operations, "operations").await {
         operations.remove(operation_id);
     }
 }
@@ -185,7 +254,10 @@ pub(crate) fn finish_operation(state: &BackendState, operation_id: &str) {
 /// API key is available to Whim is chosen. Availability includes supported
 /// environment aliases and bounded API-key records in OpenCode's local auth
 /// store. As a final fallback we assume local Ollama so a run can be attempted.
-pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
+/// Probe the local network for a reachable model gateway. Each probe is a
+/// blocking `TcpStream::connect_timeout`, so this must only be called from a
+/// thread that is allowed to block (e.g. inside `spawn_blocking`).
+fn probe_local_providers() -> Option<(String, Option<String>)> {
     let omniroute = "127.0.0.1:20128"
         .parse()
         .ok()
@@ -199,19 +271,6 @@ pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
             "omniroute".to_string(),
             Some("http://127.0.0.1:20128/v1".to_string()),
         ));
-    }
-    if let Ok(base) = std::env::var("LM_STUDIO_BASE_URL") {
-        if !base.trim().is_empty() {
-            return Some(("local".to_string(), Some(base.trim().to_string())));
-        }
-    }
-    if let Ok(host) = std::env::var("OLLAMA_HOST") {
-        if !host.trim().is_empty() {
-            return Some((
-                "local".to_string(),
-                Some(format!("{}/v1", host.trim().trim_end_matches('/'))),
-            ));
-        }
     }
     for (port, base) in [
         (1234, "http://127.0.0.1:1234/v1"),
@@ -231,6 +290,38 @@ pub(crate) fn auto_provider() -> Option<(String, Option<String>)> {
         if available {
             return Some(("local".to_string(), Some(base.to_string())));
         }
+    }
+    None
+}
+
+/// Detect the best available provider with zero configuration. Local models
+/// win when explicitly pointed at; otherwise the first cloud provider whose
+/// API key is available to Whim is chosen. Availability includes supported
+/// environment aliases and bounded API-key records in OpenCode's local auth
+/// store. As a final fallback we assume local Ollama so a run can be attempted.
+///
+/// The TCP probes are blocking, so they run on a dedicated blocking thread
+/// rather than the async executor.
+pub(crate) async fn auto_provider() -> Option<(String, Option<String>)> {
+    if let Ok(base) = std::env::var("LM_STUDIO_BASE_URL") {
+        if !base.trim().is_empty() {
+            return Some(("local".to_string(), Some(base.trim().to_string())));
+        }
+    }
+    if let Ok(host) = std::env::var("OLLAMA_HOST") {
+        if !host.trim().is_empty() {
+            return Some((
+                "local".to_string(),
+                Some(format!("{}/v1", host.trim().trim_end_matches('/'))),
+            ));
+        }
+    }
+    if let Some(found) = tauri::async_runtime::spawn_blocking(probe_local_providers)
+        .await
+        .ok()
+        .flatten()
+    {
+        return Some(found);
     }
     for provider in [
         "opencode",

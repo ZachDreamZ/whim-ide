@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 use tauri::State;
 
-use super::{lock, BackendState};
+use super::{read_lock, write_lock, BackendState};
 
 const SETTINGS_VERSION: u32 = 1;
 const MAX_SETTINGS_BYTES: u64 = 128 * 1024;
@@ -355,18 +355,18 @@ fn persist_settings(settings: &AppSettings) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_app_settings(state: State<'_, BackendState>) -> Result<AppSettings, String> {
-    Ok(lock(&state.settings, "settings")?.clone())
+pub async fn get_app_settings(state: State<'_, BackendState>) -> Result<AppSettings, String> {
+    Ok(read_lock(&state.settings, "settings").await?.clone())
 }
 
 #[tauri::command]
-pub fn save_app_settings(
+pub async fn save_app_settings(
     state: State<'_, BackendState>,
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
     validate_settings(&settings)?;
     persist_settings(&settings)?;
-    *lock(&state.settings, "settings")? = settings.clone();
+    *write_lock(&state.settings, "settings").await? = settings.clone();
     Ok(settings)
 }
 

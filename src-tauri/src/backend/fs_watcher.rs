@@ -154,23 +154,23 @@ impl Drop for FileWatcher {
 /// Tauri command: start watching a workspace for file changes.
 /// Returns immediately; the watcher runs in a background thread.
 #[tauri::command]
-pub fn start_codebase_watcher(
+pub async fn start_codebase_watcher(
     app: AppHandle,
     path: String,
 ) -> Result<(), String> {
     // Store the watcher in app state so it lives across calls
     let watcher = FileWatcher::start(app.clone(), path)?;
     let state = app.state::<super::BackendState>();
-    let mut guard = state.codebase_watcher.lock().map_err(|e| e.to_string())?;
+    let mut guard = state.codebase_watcher.lock().await;
     *guard = Some(watcher);
     Ok(())
 }
 
 /// Tauri command: stop the file watcher.
 #[tauri::command]
-pub fn stop_codebase_watcher(app: AppHandle) -> Result<(), String> {
+pub async fn stop_codebase_watcher(app: AppHandle) -> Result<(), String> {
     let state = app.state::<super::BackendState>();
-    let mut guard = state.codebase_watcher.lock().map_err(|e| e.to_string())?;
+    let mut guard = state.codebase_watcher.lock().await;
     *guard = None; // Drop old watcher
     Ok(())
 }

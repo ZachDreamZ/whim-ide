@@ -227,8 +227,14 @@ fn now_ms() -> u64 {
 
 #[tauri::command]
 pub async fn get_observational_memory(workspace_path: String) -> Result<Vec<Observation>, String> {
-    let store = ObservationStore::from_workspace(&workspace_path)?;
-    store.list()
+    // The store performs synchronous, process-serialized file I/O. Run it on a
+    // blocking thread so it never occupies a multi-thread async worker.
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = ObservationStore::from_workspace(&workspace_path)?;
+        store.list()
+    })
+    .await
+    .map_err(|error| format!("Observation memory task panicked: {error}"))?
 }
 
 #[cfg(test)]

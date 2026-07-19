@@ -9,7 +9,7 @@ use std::{
 use tauri::State;
 
 use super::deployment::{git_repository_root, git_worktrees_for_repository};
-use super::{lock, whim_err, BackendState, MAX_READ_BYTES, MAX_WRITE_BYTES};
+use super::{read_lock, write_lock, whim_err, BackendState, MAX_READ_BYTES, MAX_WRITE_BYTES};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,8 +130,9 @@ No project handoff has been recorded yet.
 - Inspect the current task and workspace before editing.
 "#;
 
-pub(crate) fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
-    lock(&state.selected_workspace, "workspace")?
+pub(crate) async fn selected_workspace_path(state: &BackendState) -> Result<PathBuf, String> {
+    read_lock(&state.selected_workspace, "workspace")
+        .await?
         .clone()
         .ok_or_else(|| "No workspace is selected".to_string())
 }
@@ -188,10 +189,11 @@ mod project_context_tests {
     }
 }
 
-pub(crate) fn optional_selected_workspace_path(
+pub(crate) async fn optional_selected_workspace_path(
     state: &BackendState,
 ) -> Result<Option<PathBuf>, String> {
-    Ok(lock(&state.selected_workspace, "workspace")?
+    Ok(read_lock(&state.selected_workspace, "workspace")
+        .await?
         .clone()
         .filter(|path| path.is_dir()))
 }
@@ -225,7 +227,7 @@ pub(crate) async fn resolve_agent_workspace(
     state: &BackendState,
     requested_workspace: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let selected = selected_workspace_path(state)?;
+    let selected = selected_workspace_path(state).await?;
     let Some(requested_workspace) = requested_workspace else {
         return Ok(selected);
     };
@@ -278,8 +280,38 @@ pub(crate) fn sanitize_relative(path: &str, allow_empty: bool) -> Result<PathBuf
     Ok(safe)
 }
 
+/// Canonicalize `path`, climbing to the nearest existing ancestor when the
+/// full path does not yet exist (so prefix checks still work for files/dirs
+/// that are about to be created). This keeps Windows 8.3 short names,
+/// differing casing, and mixed long/short forms consistent.
+fn canonicalize_lenient(path: &Path) -> PathBuf {
+    if let Ok(canonical) = dunce::canonicalize(path) {
+        return canonical;
+    }
+    let mut current = path.to_path_buf();
+    while !current.as_os_str().is_empty() {
+        if let Ok(canonical) = dunce::canonicalize(&current) {
+            if let Ok(suffix) = path.strip_prefix(&current) {
+                return canonical.join(suffix);
+            }
+            return canonical;
+        }
+        current = match current.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => break,
+        };
+    }
+    path.to_path_buf()
+}
+
 pub(crate) fn ensure_inside(root: &Path, candidate: &Path) -> Result<(), String> {
-    if candidate.starts_with(root) {
+    // Canonicalize both sides so that prefix comparison is robust against
+    // Windows path quirks (8.3 short names like `RUNNER~1`, differing
+    // casing, or mixed long/short forms between a raw temp_dir() root and
+    // a dunce-canonicalized candidate).
+    let canonical_root = canonicalize_lenient(root);
+    let canonical_candidate = canonicalize_lenient(candidate);
+    if canonical_candidate.starts_with(&canonical_root) {
         Ok(())
     } else {
         Err("Resolved path escapes the selected workspace".to_string())
@@ -510,21 +542,22 @@ fn is_generated_tree_directory(path: &Path) -> bool {
 }
 
 #[tauri::command]
-pub fn get_selected_workspace(
+pub async fn get_selected_workspace(
     state: State<'_, BackendState>,
 ) -> Result<Option<WorkspaceInfo>, String> {
-    lock(&state.selected_workspace, "workspace")
+    read_lock(&state.selected_workspace, "workspace")
+        .await
         .map(|path| path.as_ref().map(|path| workspace_info(path)))
 }
 
 #[tauri::command]
-pub fn select_workspace(
+pub async fn select_workspace(
     state: State<'_, BackendState>,
     request: SelectWorkspaceRequest,
 ) -> Result<WorkspaceInfo, String> {
     let candidate_path = canonical_workspace(&request.candidate_workspace)?;
     let info = workspace_info(&candidate_path);
-    *lock(&state.selected_workspace, "workspace")? = Some(candidate_path);
+    *write_lock(&state.selected_workspace, "workspace").await? = Some(candidate_path);
     Ok(info)
 }
 
@@ -586,8 +619,11 @@ pub(crate) fn list_workspace_tree_at(
     root: &Path,
     request: WorkspaceTreeRequest,
 ) -> Result<DirectoryListing, String> {
+    // Canonicalize the root so relative displays match the canonicalized
+    // child paths returned by the filesystem walk (Windows long/short names).
+    let canonical_root = canonicalize_lenient(root);
     let relative = request.path.unwrap_or_default();
-    let directory = resolve_existing(root, &relative, true)?;
+    let directory = resolve_existing(&canonical_root, &relative, true)?;
     if !directory.is_dir() {
         return Err("Requested tree root is not a directory".to_string());
     }
@@ -600,10 +636,10 @@ pub(crate) fn list_workspace_tree_at(
         max_entries,
         include_hidden: request.include_hidden.unwrap_or(false),
     };
-    collect_tree(root, &directory, 0, &options, &mut entries, &mut truncated)?;
+    collect_tree(&canonical_root, &directory, 0, &options, &mut entries, &mut truncated)?;
     Ok(DirectoryListing {
-        workspace: relative_display(root, root),
-        path: relative_display(root, &directory),
+        workspace: relative_display(&canonical_root, &canonical_root),
+        path: relative_display(&canonical_root, &directory),
         entries,
         truncated,
     })

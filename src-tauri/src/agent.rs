@@ -110,472 +110,18 @@ const MAX_PROVIDER_RETRIES: usize = 3;
 const MAX_OPENCODE_AUTH_BYTES: u64 = 128 * 1024;
 const MAX_STORED_API_KEY_BYTES: usize = 4 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Provider {
-    OpenAi,
-    Anthropic,
-    Google,
-    OpenCode,
-    Local,
-    DeepSeek,
-    Xiaomi,
-    Qwen,
-    OmniRoute,
-    Compatible,
-    ZenMux,
-    XAi,
-    OrcaRouter,
-}
+pub(crate) mod provider;
+pub use provider::{
+    default_model, parse_provider, provider_environment_variables, provider_key_available, AgentRole,
+    Provider,
+};
+use provider::{
+    default_base, first_local_model, op_id, provider_env_var, provider_label, provider_name,
+    provider_requires_key, resolve_key, validate_provider_base,
+};
+#[cfg(test)]
+use provider::provider_request_is_auto;
 
-pub(crate) fn parse_provider(value: &str) -> Result<Provider, String> {
-    match value.to_ascii_lowercase().as_str() {
-        "openai" => Ok(Provider::OpenAi),
-        "anthropic" => Ok(Provider::Anthropic),
-        "google" | "gemini" => Ok(Provider::Google),
-        "opencode" | "opencode-zen" | "zen" => Ok(Provider::OpenCode),
-        "local" | "ollama" | "lmstudio" => Ok(Provider::Local),
-        "deepseek" => Ok(Provider::DeepSeek),
-        "xiaomi" => Ok(Provider::Xiaomi),
-        "qwen" => Ok(Provider::Qwen),
-        "omniroute" | "omni-route" | "omni" => Ok(Provider::OmniRoute),
-        "compatible" | "openai-compatible" | "openai_compatible" => Ok(Provider::Compatible),
-        "zenmux" => Ok(Provider::ZenMux),
-        "xai" | "grok" => Ok(Provider::XAi),
-        "orcarouter" | "orca-router" | "orca" => Ok(Provider::OrcaRouter),
-        other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai, orcarouter"
-        )),
-    }
-}
-
-fn provider_name(provider: Provider) -> &'static str {
-    match provider {
-        Provider::OpenAi => "openai",
-        Provider::Anthropic => "anthropic",
-        Provider::Google => "google",
-        Provider::OpenCode => "opencode",
-        Provider::Local => "local",
-        Provider::DeepSeek => "deepseek",
-        Provider::Xiaomi => "xiaomi",
-        Provider::Qwen => "qwen",
-        Provider::OmniRoute => "omniroute",
-        Provider::Compatible => "compatible",
-        Provider::ZenMux => "zenmux",
-        Provider::XAi => "xai",
-        Provider::OrcaRouter => "orcarouter",
-    }
-}
-
-/// The mode is an enforced execution boundary, not merely a prompt label.
-/// Planning and review cannot mutate a workspace; verification can only use
-/// Whim's fixed, project-discovered verification commands. Build, vibe, and
-/// ship retain the broader native tool set subject to the harness profile.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentRole {
-    Chat,
-    Auto,
-    Planner,
-    Researcher,
-    Implementer,
-    Reviewer,
-    Tester,
-    SecurityReviewer,
-    Designer,
-    Debugger,
-    ReleaseAgent,
-    Janitor,
-    GameDesigner,
-    TechArtist,
-    Playtester,
-    AssetGenerator,
-    Refactorer,
-    DataScientist,
-    AccessibilityExpert,
-    Localizer,
-}
-
-impl AgentRole {
-    fn parse(value: Option<&str>) -> Result<Self, String> {
-        match value.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
-            "chat" => Ok(Self::Chat),
-            "auto" | "orchestrator" | "vibe" => Ok(Self::Auto),
-            "plan" | "planner" => Ok(Self::Planner),
-            "research" | "researcher" => Ok(Self::Researcher),
-            "build" | "implementer" => Ok(Self::Implementer),
-            "verify" | "tester" => Ok(Self::Tester),
-            "review" | "reviewer" => Ok(Self::Reviewer),
-            "security" | "securityreviewer" => Ok(Self::SecurityReviewer),
-            "design" | "designer" => Ok(Self::Designer),
-            "debug" | "debugger" => Ok(Self::Debugger),
-            "ship" | "releaseagent" => Ok(Self::ReleaseAgent),
-            "janitor" => Ok(Self::Janitor),
-            "gamedesigner" | "game_designer" => Ok(Self::GameDesigner),
-            "techartist" | "tech_artist" => Ok(Self::TechArtist),
-            "playtester" => Ok(Self::Playtester),
-            "assetgenerator" | "asset_generator" => Ok(Self::AssetGenerator),
-            "refactorer" | "architect" => Ok(Self::Refactorer),
-            "datascientist" | "data_scientist" => Ok(Self::DataScientist),
-            "accessibilityexpert" | "a11y" => Ok(Self::AccessibilityExpert),
-            "localizer" => Ok(Self::Localizer),
-            other => Err(format!(
-                "Unsupported agent role '{other}'. Supported: chat, auto, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer"
-            )),
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Chat => "chat",
-            Self::Auto => "auto",
-            Self::Planner => "planner",
-            Self::Researcher => "researcher",
-            Self::Implementer => "implementer",
-            Self::Reviewer => "reviewer",
-            Self::Tester => "tester",
-            Self::SecurityReviewer => "securityreviewer",
-            Self::Designer => "designer",
-            Self::Debugger => "debugger",
-            Self::ReleaseAgent => "releaseagent",
-            Self::Janitor => "janitor",
-            Self::GameDesigner => "gamedesigner",
-            Self::TechArtist => "techartist",
-            Self::Playtester => "playtester",
-            Self::AssetGenerator => "assetgenerator",
-            Self::Refactorer => "refactorer",
-            Self::DataScientist => "datascientist",
-            Self::AccessibilityExpert => "accessibilityexpert",
-            Self::Localizer => "localizer",
-        }
-    }
-
-    fn permits_tool(self, name: &str) -> bool {
-        match self {
-            Self::Chat => false,
-            // Public Vibe mode owns the requested outcome end to end. It can
-            // inspect, research, implement, and verify directly, while still
-            // retaining delegation as an optimization. Public tunneling stays
-            // behind the explicit release/share flow.
-            Self::Auto => name != "tunnel",
-            Self::Planner | Self::Researcher | Self::SecurityReviewer | Self::GameDesigner => {
-                matches!(
-                    name,
-                    "read_file" | "list_directory" | "grep_files" | "plan" | "research"
-                )
-            }
-            Self::Reviewer => matches!(
-                name,
-                "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "github"
-            ),
-            Self::Tester | Self::Playtester => matches!(
-                name,
-                "read_file" | "list_directory" | "grep_files" | "plan" | "research" | "verify"
-            ),
-            Self::Janitor => matches!(
-                name,
-                "read_file" | "list_directory" | "grep_files" | "plan" | "edit_file" | "verify"
-            ),
-            Self::Implementer
-            | Self::Designer
-            | Self::Debugger
-            | Self::ReleaseAgent
-            | Self::TechArtist
-            | Self::AssetGenerator
-            | Self::Refactorer
-            | Self::DataScientist
-            | Self::AccessibilityExpert
-            | Self::Localizer => true,
-        }
-    }
-}
-
-/// Default API base per provider. Local/DeepSeek/Xiaomi/Qwen are OpenAI-compatible.
-/// `base_url` from the request overrides this. `compatible` REQUIRES a base_url.
-fn default_base(provider: Provider) -> &'static str {
-    match provider {
-        Provider::OpenAi => "https://api.openai.com/v1",
-        Provider::Anthropic => "https://api.anthropic.com",
-        Provider::Google => "https://generativelanguage.googleapis.com",
-        Provider::OpenCode => "https://opencode.ai/zen/v1",
-        Provider::Local => "http://127.0.0.1:11434/v1",
-        Provider::DeepSeek => "https://api.deepseek.com",
-        Provider::Xiaomi => "https://api.xiaomi.com/v1",
-        Provider::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        Provider::OmniRoute => "http://127.0.0.1:20128/v1",
-        Provider::Compatible => "",
-        Provider::ZenMux => "https://zenmux.ai/api/v1",
-        Provider::XAi => "https://api.x.ai/v1",
-        Provider::OrcaRouter => "https://api.orcarouter.ai/v1",
-    }
-}
-
-/// Human-readable provider name for error messages.
-fn provider_label(provider: Provider) -> &'static str {
-    match provider {
-        Provider::OpenAi => "OpenAI",
-        Provider::Anthropic => "Anthropic",
-        Provider::Google => "Google Gemini",
-        Provider::OpenCode => "OpenCode Zen",
-        Provider::DeepSeek => "DeepSeek",
-        Provider::Xiaomi => "Xiaomi",
-        Provider::Qwen => "Qwen",
-        Provider::OmniRoute => "OmniRoute",
-        Provider::Local => "Local (Ollama / LM Studio)",
-        Provider::Compatible => "OpenAI-Compatible",
-        Provider::ZenMux => "ZenMux",
-        Provider::XAi => "xAI (Grok)",
-        Provider::OrcaRouter => "OrcaRouter",
-    }
-}
-
-fn provider_request_is_auto(provider: Option<&str>) -> bool {
-    provider.is_none_or(|value| value.trim().is_empty() || value.eq_ignore_ascii_case("auto"))
-}
-
-/// Well-known environment variables that may hold each provider's API key.
-/// Keep aliases here so provider discovery, model listing, and agent runs all
-/// agree without sending environment secrets through the renderer.
-pub(crate) fn provider_environment_variables(provider: &str) -> &'static [&'static str] {
-    match provider {
-        "openai" => &["OPENAI_API_KEY"],
-        "anthropic" => &["ANTHROPIC_API_KEY"],
-        "google" => &[
-            "GOOGLE_API_KEY",
-            "GEMINI_API_KEY",
-            "GOOGLE_GENERATIVE_AI_API_KEY",
-        ],
-        "opencode" => &["OPENCODE_API_KEY"],
-        "deepseek" => &["DEEPSEEK_API_KEY"],
-        "qwen" => &["DASHSCOPE_API_KEY"],
-        "xiaomi" => &["XIAOMI_API_KEY"],
-        "omniroute" => &["OMNIROUTE_API_KEY"],
-        "zenmux" => &["ZENMUX_API_KEY"],
-        "xai" => &["XAI_API_KEY"],
-        "orcarouter" => &["ORCAROUTER_API_KEY"],
-        _ => &[],
-    }
-}
-
-fn provider_env_var(provider: Provider) -> Option<&'static str> {
-    provider_environment_variables(provider_name(provider))
-        .first()
-        .copied()
-}
-
-fn provider_requires_key(provider: Provider) -> bool {
-    !matches!(
-        provider,
-        Provider::Local | Provider::OmniRoute | Provider::Compatible
-    )
-}
-
-fn resolve_key_with(
-    provider: Provider,
-    api_key: &Option<String>,
-    mut environment: impl FnMut(&str) -> Option<String>,
-) -> Option<String> {
-    if let Some(key) = api_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|key| !key.is_empty())
-    {
-        return Some(key.to_string());
-    }
-
-    for env_var in provider_environment_variables(provider_name(provider)) {
-        if let Some(value) = environment(env_var) {
-            let value = value.trim();
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
-        }
-    }
-    None
-}
-
-/// Resolve the API key to use: prefer the explicit in-session key, otherwise
-/// fall back to a supported environment alias. This lets Vibe authenticate
-/// without exposing native environment values to the webview.
-fn resolve_key(provider: Provider, api_key: &Option<String>) -> Option<String> {
-    resolve_key_with(provider, api_key, |name| std::env::var(name).ok())
-        .or_else(|| stored_opencode_api_key(provider))
-}
-
-fn parse_stored_opencode_api_key(value: &Value, provider: Provider) -> Option<String> {
-    let entry = value.get(provider_name(provider))?;
-    if entry.get("type").and_then(Value::as_str) != Some("api") {
-        return None;
-    }
-    let key = entry.get("key")?.as_str()?.trim();
-    if key.is_empty() || key.len() > MAX_STORED_API_KEY_BYTES || key.chars().any(char::is_control) {
-        return None;
-    }
-    Some(key.to_string())
-}
-
-/// Reuse API credentials already stored by OpenCode without sending the key to
-/// the renderer. OAuth records are intentionally ignored because their token
-/// lifecycles are provider-specific and must not be repurposed as API keys.
-fn stored_opencode_api_key(provider: Provider) -> Option<String> {
-    let path = dirs::home_dir()?.join(".local/share/opencode/auth.json");
-    let metadata = std::fs::symlink_metadata(&path).ok()?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || metadata.len() > MAX_OPENCODE_AUTH_BYTES
-    {
-        return None;
-    }
-    let content = std::fs::read_to_string(path).ok()?;
-    let value: Value = serde_json::from_str(&content).ok()?;
-    parse_stored_opencode_api_key(&value, provider)
-}
-
-pub(crate) fn provider_key_available(provider: &str) -> bool {
-    parse_provider(provider)
-        .ok()
-        .and_then(|parsed| resolve_key(parsed, &None))
-        .is_some()
-}
-
-/// Sensible default model per provider so vibecoding needs no configuration
-/// when the user has not named a specific model.
-pub(crate) fn default_model(provider: Provider, role: AgentRole) -> &'static str {
-    match provider {
-        Provider::OpenAi => "gpt-4o-mini",
-        Provider::Anthropic => "claude-3-5-sonnet-latest",
-        Provider::Google => "gemini-1.5-flash",
-        Provider::OpenCode => "deepseek-v4-flash-free",
-        Provider::DeepSeek => "deepseek-chat",
-        Provider::Xiaomi => "mixtral-8x7b-instruct",
-        Provider::Qwen => "qwen-plus",
-        Provider::Local => "llama3",
-        Provider::OmniRoute => match role {
-            AgentRole::Chat
-            | AgentRole::Planner
-            | AgentRole::Researcher
-            | AgentRole::Reviewer
-            | AgentRole::Tester
-            | AgentRole::SecurityReviewer
-            | AgentRole::Janitor => "auto/cheap",
-            _ => "auto/coding",
-        },
-        Provider::Compatible => "local-model",
-        Provider::ZenMux => "claude-3-5-sonnet-latest",
-        Provider::XAi => "grok-4.5",
-        Provider::OrcaRouter => "openai/gpt-4o-mini",
-    }
-}
-
-/// OmniRoute is local by default. Plain HTTP is permitted only for an explicit
-/// loopback host; remote gateways must use HTTPS so prompts and endpoint keys
-/// cannot be sent over cleartext by a forged renderer request.
-fn validate_omniroute_base(base: &str) -> Result<String, String> {
-    let url = reqwest::Url::parse(base.trim())
-        .map_err(|error| format!("Invalid OmniRoute base URL: {error}"))?;
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err("OmniRoute base URL must not contain embedded credentials".to_string());
-    }
-    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-    let loopback = matches!(host.as_str(), "127.0.0.1" | "::1" | "localhost");
-    if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
-        return Err(
-            "OmniRoute must use loopback HTTP (127.0.0.1/localhost) or a remote HTTPS endpoint"
-                .to_string(),
-        );
-    }
-    Ok(url.as_str().trim_end_matches('/').to_string())
-}
-
-fn validate_provider_base(provider: Provider, base: &str) -> Result<String, String> {
-    if provider == Provider::OmniRoute {
-        return validate_omniroute_base(base);
-    }
-    let label = provider_label(provider);
-    let url = reqwest::Url::parse(base.trim())
-        .map_err(|error| format!("Invalid {label} base URL: {error}"))?;
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(format!(
-            "{label} base URL must not contain embedded credentials"
-        ));
-    }
-    if url.query().is_some() || url.fragment().is_some() {
-        return Err(format!(
-            "{label} base URL must not contain a query or fragment"
-        ));
-    }
-    let host = url
-        .host_str()
-        .ok_or_else(|| format!("{label} base URL must include a host"))?
-        .to_ascii_lowercase();
-    let parsed_ip = host.parse::<std::net::IpAddr>().ok();
-    let loopback = matches!(host.as_str(), "localhost")
-        || parsed_ip
-            .as_ref()
-            .is_some_and(std::net::IpAddr::is_loopback);
-
-    if provider == Provider::OpenCode && (url.scheme() != "https" || host != "opencode.ai") {
-        return Err("OpenCode Zen must use the official https://opencode.ai endpoint".to_string());
-    }
-
-    if provider == Provider::Local {
-        if !loopback || !matches!(url.scheme(), "http" | "https") {
-            return Err(
-                "Local model endpoints must use HTTP or HTTPS on localhost/127.0.0.1/::1"
-                    .to_string(),
-            );
-        }
-    } else if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
-        return Err(format!(
-            "{label} must use HTTPS, except for an explicit loopback endpoint"
-        ));
-    }
-
-    if provider == Provider::Compatible && !loopback {
-        let private_ip = match parsed_ip {
-            Some(std::net::IpAddr::V4(ip)) => {
-                ip.is_private() || ip.is_link_local() || ip.is_unspecified()
-            }
-            Some(std::net::IpAddr::V6(ip)) => {
-                ip.is_unique_local() || ip.is_unicast_link_local() || ip.is_unspecified()
-            }
-            None => false,
-        };
-        if private_ip {
-            return Err(
-                "OpenAI-compatible endpoints may not target non-loopback private IP addresses"
-                    .to_string(),
-            );
-        }
-    }
-
-    Ok(url.as_str().trim_end_matches('/').to_string())
-}
-
-async fn first_local_model(base: &str) -> Option<String> {
-    let url = format!("{}/models", base.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-        .ok()?;
-    let response = client.get(&url).send().await.ok()?;
-    let value: Value = response.json().await.ok()?;
-    let data = value.get("data")?.as_array()?;
-    for entry in data {
-        if let Some(id) = entry.get("id").and_then(|inner| inner.as_str()) {
-            if !id.is_empty() {
-                return Some(id.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn op_id() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    format!("whim-{nanos}")
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1911,7 +1457,7 @@ async fn run_tool(
             {
                 Ok(result) => Ok(format!(
                     "Tracked Git checkpoint saved at commit {} (the current branch was not moved).",
-                    &result.commit.chars().take(12).collect::<String>()
+                    result.commit.chars().take(12).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -1930,7 +1476,7 @@ async fn run_tool(
             {
                 Ok(result) => Ok(format!(
                     "Tracked files restored to {} ({}; untracked files were left untouched).",
-                    &result.restored_commit.chars().take(12).collect::<String>(),
+                    result.restored_commit.chars().take(12).collect::<String>(),
                     if result.stash_created {
                         "previous tracked state kept in a local Git stash"
                     } else {
@@ -1955,7 +1501,7 @@ async fn run_tool(
                 Ok(result) => Ok(format!(
                     "Local preview ready at {} (operation {}).",
                     result.stdout,
-                    &operation.chars().take(8).collect::<String>()
+                    operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -1971,7 +1517,7 @@ async fn run_tool(
             {
                 Ok(_) => Ok(format!(
                     "Public tunnel starting (operation {}). Whim writes the URL to .whim/tunnel-url.txt; read that file to share it.",
-                    &operation.chars().take(8).collect::<String>()
+                    operation.chars().take(8).collect::<String>()
                 )),
                 Err(error) => Err(error),
             }
@@ -2308,7 +1854,7 @@ Windows environment; relative paths only.",
     })];
     let mut notes = String::new();
     for _ in 0..RESEARCH_MAX_ITERS {
-        if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+        if crate::backend::is_operation_cancelled(state.inner(), operation_id).await {
             return ("Research cancelled with the parent task.".into(), true);
         }
         let response =
@@ -2343,7 +1889,7 @@ Windows environment; relative paths only.",
             break;
         }
         for call in &response.tool_calls {
-            if crate::backend::is_operation_cancelled(state.inner(), operation_id) {
+            if crate::backend::is_operation_cancelled(state.inner(), operation_id).await {
                 return ("Research cancelled with the parent task.".into(), true);
             }
             let (output, is_error) = run_tool(
@@ -2480,7 +2026,7 @@ where
 
 async fn wait_for_operation_cancelled(state: &BackendState, operation_id: &str) {
     loop {
-        if crate::backend::is_operation_cancelled(state, operation_id) {
+        if crate::backend::is_operation_cancelled(state, operation_id).await {
             return;
         }
         sleep(Duration::from_millis(150)).await;
@@ -2729,7 +2275,7 @@ fn eve_info_model(info: &Value) -> Option<String> {
         .and_then(Value::as_str)
         .or_else(|| info.get("model").and_then(Value::as_str))
         .or_else(|| info.pointer("/model/id").and_then(Value::as_str))
-        .and_then(|model| if model.is_empty() { None } else { Some(model) })
+        .filter(|model| !model.is_empty())
         .map(str::to_string)
 }
 
@@ -3204,7 +2750,9 @@ async fn run_background_suite<R: tauri::Runtime>(
         if crate::backend::is_operation_cancelled(
             app.state::<BackendState>().inner(),
             &parent_operation_id,
-        ) {
+        )
+        .await
+        {
             cancelled = true;
             break;
         }
@@ -3502,7 +3050,7 @@ async fn run_native_agent<R: tauri::Runtime>(
     // workspace while separate Git worktrees remain independently runnable.
     if owns_operation {
         if let Err(error) =
-            crate::backend::register_agent_operation(&state, operation_id, "native-agent", &root)
+            crate::backend::register_agent_operation(&state, operation_id, "native-agent", &root).await
         {
             return Err(format!("Cannot register agent operation: {error}"));
         }
@@ -3559,7 +3107,7 @@ async fn run_native_agent<R: tauri::Runtime>(
         iter += 1;
         // Check whether the user cancelled this run before making another
         // provider request or executing further tools.
-        if crate::backend::is_operation_cancelled(&state, operation_id) {
+        if crate::backend::is_operation_cancelled(&state, operation_id).await {
             record_agent_event(
                 app,
                 operation_id,
@@ -4064,10 +3612,11 @@ async fn run_native_agent<R: tauri::Runtime>(
                     questions.push(question);
                 }
                 let workspace = root.to_string_lossy().into_owned();
-                let child_jobs = questions.iter().enumerate().map(|(index, item)| {
+                let mut child_jobs = Vec::new();
+                for (index, item) in questions.iter().enumerate() {
                     let child_operation = format!("{operation_id}:r:{}:{}", call.id, index + 1);
                     let started_at = Instant::now();
-                    let created = crate::backend::lock(&state.orchestration, "orchestration").and_then(|mut store| {
+                    let created = crate::backend::lock(&state.orchestration, "orchestration").await.and_then(|mut store| {
                         let job = store.create(crate::orchestrator::CreateJobInput {
                             workspace: workspace.clone(),
                             intent: format!("Read-only research stream for parent operation {operation_id}: {item}"),
@@ -4080,8 +3629,8 @@ async fn run_native_agent<R: tauri::Runtime>(
                         })?;
                         store.transition(&workspace, &job.id, crate::orchestrator::JobAction::Start)
                     });
-                    created.ok().map(|job| (job.id, started_at))
-                }).collect::<Vec<_>>();
+                    child_jobs.push(created.ok().map(|job| (job.id, started_at)));
+                }
                 let research = join_all(questions.iter().map(|item| {
                     run_research(
                         state.clone(),
@@ -4128,7 +3677,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                         break 'agent_loop;
                     }
                 };
-                if let Ok(mut store) = crate::backend::lock(&state.orchestration, "orchestration") {
+                if let Ok(mut store) = crate::backend::lock(&state.orchestration, "orchestration").await {
                     for (index, (text, failed)) in results.iter().enumerate() {
                         let Some((job_id, started_at)) =
                             child_jobs.get(index).and_then(Option::as_ref)
@@ -4136,7 +3685,7 @@ async fn run_native_agent<R: tauri::Runtime>(
                             continue;
                         };
                         let cancelled =
-                            crate::backend::is_operation_cancelled(state.inner(), operation_id);
+                            crate::backend::is_operation_cancelled(state.inner(), operation_id).await;
                         let outcome = if cancelled {
                             crate::orchestrator::JobOutcome::Cancelled
                         } else if *failed {
@@ -4337,11 +3886,11 @@ async fn run_native_agent<R: tauri::Runtime>(
 
     // Capture cancellation flag BEFORE finish_operation removes the registry
     // entry. After removal, is_operation_cancelled returns false regardless.
-    let was_cancelled = crate::backend::is_operation_cancelled(&state, operation_id);
+    let was_cancelled = crate::backend::is_operation_cancelled(&state, operation_id).await;
 
     // Clean up the operation registry entry regardless of how the run exits.
     if owns_operation {
-        crate::backend::finish_operation(&state, operation_id);
+        crate::backend::finish_operation(&state, operation_id).await;
     }
 
     Ok(AgentRunResult {
@@ -4571,7 +4120,8 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let (profile, profile_configured) =
         load_harness_profile(&root).map_err(|error| format!("WHIM:AGENT_START|{error}"))?;
     let timeout_ms = profile.duration_cap(timeout_ms);
-    let settings = crate::backend::lock(&state.settings, "settings")
+    let settings = crate::backend::read_lock(&state.settings, "settings")
+        .await
         .map_err(|error| format!("WHIM:AGENT_START|{error}"))?
         .clone();
     // Resolve provider. auto (or empty) lets Whim pick the best available
@@ -4581,7 +4131,7 @@ pub async fn run_agent_prompt<R: tauri::Runtime>(
     let (provider, detected_base) = if provider_input.eq_ignore_ascii_case("auto")
         || provider_input.is_empty()
     {
-        match crate::backend::auto_provider() {
+        match crate::backend::auto_provider().await {
             Some((resolved, base)) => (parse_provider(&resolved).unwrap_or(Provider::Local), base),
             None => {
                 return Err(
@@ -4711,6 +4261,9 @@ pub(crate) async fn run_model_chat(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::provider::{
+        parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
+    };
 
     #[test]
     fn provider_parsing_is_strict() {

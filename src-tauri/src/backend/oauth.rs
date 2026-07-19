@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
@@ -56,6 +56,15 @@ pub static BUILTIN_PROVIDERS: LazyLock<Vec<OAuthProviderConfig>> = LazyLock::new
 });
 
 // ─── Types ──────────────────────────────────────────────────────────────
+
+/// Anti-forgery states handed out by `oauth_build_auth_url` and consumed by
+/// `oauth_exchange`. A state absent here (never issued, already used, or forged)
+/// causes the exchange to be refused, closing the CSRF gap where an attacker's
+/// authorization code could be exchanged against a victim's client.
+static PENDING_STATES: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuthProviderConfig {
@@ -112,6 +121,10 @@ pub struct ExchangeRequest {
     pub code_verifier: Option<String>,
     pub redirect_uri: String,
     pub client_id: Option<String>,
+    /// Anti-forgery state returned by `oauth_build_auth_url`. The caller must
+    /// echo the exact value it received; a mismatch is rejected to prevent
+    /// CSRF-driven authorization-code injection.
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -140,7 +153,7 @@ pub fn generate_code_verifier() -> String {
 /// Compute the S256 code challenge for a given verifier.
 pub fn code_challenge_s256(verifier: &str) -> String {
     let hash = Sha256::digest(verifier.as_bytes());
-    URL_SAFE_NO_PAD.encode(&hash)
+    URL_SAFE_NO_PAD.encode(hash)
 }
 
 /// Create a PKCE pair.
@@ -559,10 +572,11 @@ pub fn oauth_build_auth_url(
 
     let client_id = resolve_client_id(&req.provider_id, req.client_id.as_deref(), config);
     if client_id.is_empty() {
+        let env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase());
         return Err(format!(
             "No OAuth client_id for {provider}. Set the {env_var} environment variable or pass client_id.",
             provider = config.name,
-            env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase())
+            env_var = env_var
         ));
     }
 
@@ -570,6 +584,10 @@ pub fn oauth_build_auth_url(
     let redirect_uri = req.redirect_uri.unwrap_or(format!("http://127.0.0.1:{port}/callback"));
 
     let state = generate_state();
+    PENDING_STATES
+        .lock()
+        .map_err(|error| format!("OAuth state registry is poisoned: {error}"))?
+        .insert(state.clone());
     let pkce = if config.use_pkce {
         Some(generate_pkce_pair())
     } else {
@@ -623,10 +641,11 @@ pub async fn oauth_authorize(
 
     let client_id = resolve_client_id(&req.provider_id, req.client_id.as_deref(), config);
     if client_id.is_empty() {
+        let env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase());
         return Err(format!(
             "No OAuth client_id for {provider}. Set the {env_var} environment variable or pass client_id.",
             provider = config.name,
-            env_var = format!("{}_OAUTH_CLIENT_ID", req.provider_id.to_uppercase())
+            env_var = env_var
         ));
     }
 
@@ -666,9 +685,16 @@ pub async fn oauth_authorize(
         return Err(format!("Failed to open browser: {e}. Open the URL manually:\n{url_str}"));
     }
 
-    // Wait for the callback
-    let code = match port_check(&port) {
-        Ok(true) => listen_for_callback(port, 300),
+    // Wait for the callback. The local redirect server is a blocking listener, so
+    // run it on a dedicated blocking thread rather than the async executor (it
+    // would otherwise stall a Tokio worker for the whole 300s authorization window).
+    let code: String = match port_check(&port) {
+        Ok(true) => {
+            let cb = tauri::async_runtime::spawn_blocking(move || listen_for_callback(port, 300))
+                .await
+                .map_err(|error| format!("OAuth callback thread panicked: {error}"))??;
+            cb
+        }
         _ => {
             // Port might be in use — try a random port
             let fallback_port = find_available_port(48915, 49000)?;
@@ -677,7 +703,7 @@ pub async fn oauth_authorize(
                 "Default redirect port {port} is unavailable. Try again with:\n  redirect_uri: {fallback_uri}"
             ));
         }
-    }?;
+    };
 
     // Exchange code for token
     let code_verifier = pkce.as_ref().map(|p| p.code_verifier.as_str());
@@ -703,6 +729,25 @@ pub async fn oauth_exchange(req: ExchangeRequest) -> Result<OAuthToken, String> 
             "No OAuth client_id for {provider}",
             provider = config.name
         ));
+    }
+
+    // CSRF guard: the caller must echo the exact anti-forgery `state` it was
+    // given by `oauth_build_auth_url`. The expected value is held server-side in
+    // `PENDING_STATES` from the moment the auth URL was built, so a stolen
+    // authorization code from a different session is rejected instead of
+    // exchanged.
+    let provided = req
+        .state
+        .ok_or_else(|| "OAuth CSRF state was not supplied; refusing token exchange.".to_string())?;
+    {
+        let mut pending = PENDING_STATES
+            .lock()
+            .map_err(|error| format!("OAuth state registry is poisoned: {error}"))?;
+        if !pending.remove(&provided) {
+            return Err(
+                "OAuth CSRF state did not match a pending authorization request; refusing token exchange.".into(),
+            );
+        }
     }
 
     exchange_code(
