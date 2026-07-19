@@ -52,7 +52,7 @@ const RESEARCH_MAX_ITERS: usize = 6;
 const MAX_CONTEXT_CHARS: usize = 80_000;
 const KEEP_RECENT_MESSAGES: usize = 8;
 const MAX_RECOVERY_ITERS: usize = 5;
-const MAX_PROVIDER_RETRIES: usize = 3;
+pub(crate) const MAX_PROVIDER_RETRIES: usize = 3;
 const MAX_OPENCODE_AUTH_BYTES: u64 = 128 * 1024;
 const MAX_STORED_API_KEY_BYTES: usize = 4 * 1024;
 

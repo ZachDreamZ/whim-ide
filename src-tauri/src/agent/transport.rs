@@ -10,19 +10,20 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::time::sleep;
 
+use crate::agent::MAX_PROVIDER_RETRIES;
 use crate::agent::provider::{resolve_key, Provider};
 use crate::agent::tools::ToolDef;
 
 pub(crate) struct ModelResponse {
-    text: Option<String>,
-    reasoning: Option<String>,
-    tool_calls: Vec<ToolCall>,
+    pub(crate) text: Option<String>,
+    pub(crate) reasoning: Option<String>,
+    pub(crate) tool_calls: Vec<ToolCall>,
 }
 
 pub(crate) struct ToolCall {
-    id: String,
-    name: String,
-    arguments: Value,
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) arguments: Value,
 }
 
 pub(crate) async fn chat(
