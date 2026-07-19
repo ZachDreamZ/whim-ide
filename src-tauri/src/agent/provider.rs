@@ -59,7 +59,7 @@ pub(crate) fn provider_name(provider: Provider) -> &'static str {
         Provider::OpenAi => "openai",
         Provider::Anthropic => "anthropic",
         Provider::Google => "google",
-        Provider::OpenCode => "openai",
+        Provider::OpenCode => "opencode",
         Provider::Local => "local",
         Provider::DeepSeek => "deepseek",
         Provider::Xiaomi => "xiaomi",
@@ -201,7 +201,7 @@ pub(crate) fn default_base(provider: Provider) -> &'static str {
         Provider::OpenAi => "https://api.openai.com/v1",
         Provider::Anthropic => "https://api.anthropic.com",
         Provider::Google => "https://generativelanguage.googleapis.com",
-        Provider::OpenCode => "https://openai.ai/zen/v1",
+        Provider::OpenCode => "https://opencode.ai/zen/v1",
         Provider::Local => "http://127.0.0.1:11434/v1",
         Provider::DeepSeek => "https://api.deepseek.com",
         Provider::Xiaomi => "https://api.xiaomi.com/v1",
@@ -322,7 +322,7 @@ pub(crate) fn parse_stored_opencode_api_key(value: &Value, provider: Provider) -
 /// the renderer. OAuth records are intentionally ignored because their token
 /// lifecycles are provider-specific and must not be repurposed as API keys.
 fn stored_opencode_api_key(provider: Provider) -> Option<String> {
-    let path = dirs::home_dir()?.join(".local/share/openai/auth.json");
+    let path = dirs::home_dir()?.join(".local/share/opencode/auth.json");
     let metadata = std::fs::symlink_metadata(&path).ok()?;
     if metadata.file_type().is_symlink()
         || !metadata.is_file()
@@ -418,8 +418,8 @@ pub(crate) fn validate_provider_base(provider: Provider, base: &str) -> Result<S
             .as_ref()
             .is_some_and(std::net::IpAddr::is_loopback);
 
-    if provider == Provider::OpenCode && (url.scheme() != "https" || host != "openai.ai") {
-        return Err("OpenCode Zen must use the official https://openai.ai endpoint".to_string());
+    if provider == Provider::OpenCode && (url.scheme() != "https" || host != "opencode.ai") {
+        return Err("OpenCode Zen must use the official https://opencode.ai endpoint".to_string());
     }
 
     if provider == Provider::Local {
