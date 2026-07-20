@@ -67,7 +67,7 @@ pub(crate) use r#loop::{tool_iteration_budget, remaining_agent_budget};
 
 pub(crate) mod api;
 pub(crate) use api::{
-    AgentRunRequest, load_harness_profile, run_agent_prompt,
+    AgentRunRequest, load_harness_profile, run_agent_prompt, run_model_chat,
 };
 
 
