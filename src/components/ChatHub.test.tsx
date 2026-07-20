@@ -17,6 +17,7 @@ vi.mock("../lib/bridge", () => ({
   bridge: {
     isNative: vi.fn(), listChatThreads: vi.fn(), getChatThread: vi.fn(), saveChatThread: vi.fn(),
     deleteChatThread: vi.fn(), cancelOperation: vi.fn(), runAgent: vi.fn(), readFileContent: vi.fn(), openGptSection: vi.fn(),
+    onAmbientCommand: vi.fn(() => () => {}), emitAssistantText: vi.fn(),
   },
   agentEventsToParts: vi.fn(),
   partsToText: (parts: Record<string, unknown>[], fallback: string) => {
@@ -45,6 +46,7 @@ describe("ChatHub", () => {
     await waitFor(() => expect(bridge.runAgent).toHaveBeenCalledWith(expect.objectContaining({ agent: "chat", provider: "local", prompt: expect.stringContaining("Current user message:\nHello from Chat") })));
     expect(vi.mocked(bridge.runAgent).mock.calls[0]?.[0]).not.toHaveProperty("workspace");
     await waitFor(() => expect(bridge.saveChatThread).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(bridge.emitAssistantText).toHaveBeenCalledWith("Hello back"));
     const saveCalls = vi.mocked(bridge.saveChatThread).mock.calls;
     const saved = saveCalls[saveCalls.length - 1]?.[0];
     expect(saved?.messages.map((message) => message.role)).toEqual(["user", "assistant"]);

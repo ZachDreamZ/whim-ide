@@ -1267,6 +1267,63 @@ pub(crate) async fn start_tunnel_at(
     .await
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthRequest {
+    pub url: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthReport {
+    pub url: String,
+    pub reachable: bool,
+    pub status: Option<u16>,
+    pub latency_ms: Option<u128>,
+    pub error: Option<String>,
+}
+
+/// Probe a deployment endpoint for basic health. Uses a bounded GET so the
+/// check never hangs or follows redirects into private networks unchecked.
+#[tauri::command]
+pub async fn deployment_health(request: HealthRequest) -> Result<HealthReport, String> {
+    let parsed = reqwest::Url::parse(request.url.trim())
+        .map_err(|_| "Health check URL is invalid".to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Health check requires an http(s) URL".into());
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "Health check URL has no host".to_string())?;
+    let is_loopback = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback());
+    if !is_loopback {
+        return Err("Health checks are restricted to local (127.0.0.1 / localhost) endpoints".into());
+    }
+    let start = std::time::Instant::now();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| error.to_string())?;
+    match client.get(parsed.as_str()).send().await {
+        Ok(response) => Ok(HealthReport {
+            url: request.url.clone(),
+            reachable: response.status().is_success() || response.status().is_redirection(),
+            status: Some(response.status().as_u16()),
+            latency_ms: Some(start.elapsed().as_millis()),
+            error: None,
+        }),
+        Err(cause) => Ok(HealthReport {
+            url: request.url.clone(),
+            reachable: false,
+            status: None,
+            latency_ms: Some(start.elapsed().as_millis()),
+            error: Some(cause.to_string()),
+        }),
+    }
+}
+
 // ─── Deploy types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -1742,4 +1799,36 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod health_tests {
+    use super::{deployment_health, HealthRequest};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn rejects_non_loopback_health_targets() {
+        // Health checks are restricted to local endpoints to avoid probing
+        // private or public infrastructure from the app.
+        let result = deployment_health(HealthRequest { url: "http://example.com".into() }).await;
+        assert!(result.is_err(), "non-loopback URL must be rejected");
+    }
+
+    #[tokio::test]
+    async fn rejects_malformed_health_url() {
+        let result = deployment_health(HealthRequest { url: "not-a-url".into() }).await;
+        assert!(result.is_err(), "malformed URL must be rejected");
+    }
+
+    #[tokio::test]
+    async fn reports_unreachable_loopback_without_panic() {
+        // 1.2.3.4 is not a real host; the probe must return a report, not error.
+        let report = deployment_health(HealthRequest { url: "http://127.0.0.1:1".into() })
+            .await
+            .expect("loopback health check returns a report, never an error");
+        assert_eq!(report.url, "http://127.0.0.1:1");
+        assert!(!report.reachable);
+        assert!(report.status.is_none());
+        let _ = json!(report);
+    }
 }

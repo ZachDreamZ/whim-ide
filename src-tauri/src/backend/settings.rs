@@ -63,6 +63,9 @@ pub struct VoiceSettings {
     pub voice: String,
     pub language: String,
     pub dictionary: String,
+    pub ambient: bool,
+    pub auto_speak: bool,
+    pub wake_phrase: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -151,6 +154,9 @@ impl Default for VoiceSettings {
             voice: "alloy".into(),
             language: "auto".into(),
             dictionary: String::new(),
+            ambient: false,
+            auto_speak: false,
+            wake_phrase: String::new(),
         }
     }
 }
@@ -270,6 +276,17 @@ pub(crate) fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     {
         return Err(
             "Dictation dictionary must be at most 1000 characters of printable text".into(),
+        );
+    }
+    if settings.voice.wake_phrase.chars().count() > 60
+        || settings
+            .voice
+            .wake_phrase
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return Err(
+            "Wake phrase must be at most 60 characters of printable text".into(),
         );
     }
 

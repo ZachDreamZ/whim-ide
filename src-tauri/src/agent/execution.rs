@@ -410,46 +410,54 @@ pub(crate) async fn run_tool(
             }
         }
         "computer_action" => {
-            let action = arguments["action"].as_str().unwrap_or("").to_string();
-            match action.as_str() {
-                "launch" => {
-                    let path = arguments["args"]["path"].as_str().unwrap_or("");
-                    match crate::backend::computer::computer_launch(path) {
-                        Ok(_) => Ok(format!("Launched {}", path)),
-                        Err(e) => Err(e),
+            #[cfg(windows)]
+            {
+                let action = arguments["action"].as_str().unwrap_or("").to_string();
+                match action.as_str() {
+                    "launch" => {
+                        let path = arguments["args"]["path"].as_str().unwrap_or("");
+                        match crate::backend::computer::computer_launch(path) {
+                            Ok(_) => Ok(format!("Launched {}", path)),
+                            Err(e) => Err(e),
+                        }
                     }
-                }
-                "inspect" => match crate::backend::computer::computer_inspect() {
-                    Ok(state) => serde_json::to_string(&state)
-                        .map_err(|error| format!("Failed to serialize desktop state: {error}")),
-                    Err(e) => Err(e),
-                },
-                "invoke" => {
-                    let ref_id = arguments["args"]["ref_id"].as_str().unwrap_or("");
-                    match crate::backend::computer::computer_invoke(ref_id) {
-                        Ok(_) => {
-                            // Action Verification Loop
-                            // 1. Wait for UI to update
-                            tokio::time::sleep(Duration::from_millis(500)).await;
-                            // 2. Capture a fresh, bounded UI Automation state.
-                            match crate::backend::computer::computer_inspect() {
-                                Ok(new_state) => {
-                                    // 3. Return concrete observable evidence for the action.
-                                    Ok(format!(
-                                        "Action Verified. Invoked {}, UI updated with {} elements.",
-                                        ref_id,
-                                        new_state.elements.len()
-                                    ))
-                                }
-                                Err(e) => {
-                                    Err(format!("Action succeeded but verification failed: {}", e))
+                    "inspect" => match crate::backend::computer::computer_inspect() {
+                        Ok(state) => serde_json::to_string(&state)
+                            .map_err(|error| format!("Failed to serialize desktop state: {error}")),
+                        Err(e) => Err(e),
+                    },
+                    "invoke" => {
+                        let ref_id = arguments["args"]["ref_id"].as_str().unwrap_or("");
+                        match crate::backend::computer::computer_invoke(ref_id) {
+                            Ok(_) => {
+                                // Action Verification Loop
+                                // 1. Wait for UI to update
+                                tokio::time::sleep(Duration::from_millis(500)).await;
+                                // 2. Capture a fresh, bounded UI Automation state.
+                                match crate::backend::computer::computer_inspect() {
+                                    Ok(new_state) => {
+                                        // 3. Return concrete observable evidence for the action.
+                                        Ok(format!(
+                                            "Action Verified. Invoked {}, UI updated with {} elements.",
+                                            ref_id,
+                                            new_state.elements.len()
+                                        ))
+                                    }
+                                    Err(e) => {
+                                        Err(format!("Action succeeded but verification failed: {}", e))
+                                    }
                                 }
                             }
+                            Err(e) => Err(e),
                         }
-                        Err(e) => Err(e),
                     }
+                    _ => Err(format!("Unknown computer action {}", action)),
                 }
-                _ => Err(format!("Unknown computer action {}", action)),
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = arguments;
+                Err("The computer-use desktop action is only available on Windows.".into())
             }
         }
         other if is_mcp_tool(other) => {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Whim IDE",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "identifier": "com.vendex.workwhim-ide",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -38,13 +38,16 @@
         "https://github.com/ZachDreamZ/whim-ide/releases/latest/download/latest.json"
       ],
       "dialog": false,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNDRjc1NTFGNTcxRTRFRTgKUldUb1RoNVhIMVgzUExKVi84cTAxR2RnNkZRb1VINytzb0FRVytXRWRXdEgrd3FhVGFVNWVYR2YK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE1NUUwNkM0OEYwQkU1M0QKUldROTVRdVB4QVplcGVaaC9CcTJMOUczVG9pMTMwM1hmQysvb3dSZWxiZldtNk5zbzVRbFpzSDMK"
     }
   },
   "bundle": {
     "active": true,
     "targets": [
-      "nsis"
+      "nsis",
+      "app",
+      "deb",
+      "rpm"
     ],
     "windows": {
       "webviewInstallMode": {
@@ -52,6 +55,14 @@
       },
       "nsis": {
         "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "deb": {
+        "depends": []
       }
     },
     "icon": [

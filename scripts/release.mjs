@@ -59,7 +59,7 @@ execSync("npx tauri build --bundles nsis", { cwd: ROOT, stdio: "inherit" });
 
 // ── Locate installer ──────────────────────────────────────────────
 const arch = "x64";
-const installerGlob = `target/release/bundle/nsis/Whim IDE_${newVersion}_${arch}-setup.exe`;
+const installerGlob = `src-tauri/target/release/bundle/nsis/Whim IDE_${newVersion}_${arch}-setup.exe`;
 const installerPath = resolve(ROOT, installerGlob);
 if (!existsSync(installerPath)) {
   console.error(`Installer not found at ${installerPath}`);

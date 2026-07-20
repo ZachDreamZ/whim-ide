@@ -21,7 +21,7 @@ vi.mock("./WorktreeCard", () => ({
   WorktreeCard: () => <div data-testid="worktree-card" />,
 }));
 vi.mock("../lib/bridge", () => ({
-  bridge: { isNative: () => false },
+  bridge: { isNative: () => false, onAmbientCommand: () => () => {}, emitAssistantText: () => {} },
   agentEventsToParts: () => [],
   agentLiveSummary: () => null,
   agentRunEvidence: () => ({ eventCount: 0, toolCallCount: 0, failedToolCallCount: 0, durationMs: null, timedOut: false }),

@@ -907,6 +907,17 @@ ${messageContent}`;
     }
   };
 
+  useEffect(() => {
+    const off = bridge.onAmbientCommand((text) => {
+      if (status === "ready") void send({ role: "user", content: text });
+    });
+    return off;
+  }, [send, status]);
+
+  useEffect(() => {
+    if (status === "ready" && latestAssistantText) bridge.emitAssistantText(latestAssistantText);
+  }, [latestAssistantText, status]);
+
   const stop = async () => {
     const active = operationId.current;
     if (!active) return;

@@ -34,6 +34,7 @@ import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { GeneralSettings } from "./components/settings/pages/GeneralSettings";
 import { AppearanceSettings } from "./components/settings/pages/AppearanceSettings";
 import { VoiceSettings } from "./components/settings/pages/VoiceSettings";
+import { AmbientVoiceBar } from "./components/ui/AmbientVoiceBar";
 import { ComputerUseSettings } from "./components/settings/pages/ComputerUseSettings";
 import { PersonalizationSettings } from "./components/settings/pages/PersonalizationSettings";
 import { ChatSettings } from "./components/settings/pages/ChatSettings";
@@ -647,6 +648,19 @@ function App() {
           <span><Sparkles size={11} /> Whim 0.4</span>
         </div>
       </footer>}
+      {appSettings.voice.ambient && (
+        <AmbientVoiceBar
+          enabled={appSettings.voice.ambient}
+          wakePhrase={appSettings.voice.wakePhrase}
+          autoSpeak={appSettings.voice.autoSpeak}
+          provider={agentProvider}
+          apiKey={agentApiKey}
+          baseUrl={agentBaseUrl}
+          voice={appSettings.voice.voice}
+          language={appSettings.voice.language}
+          dictionary={appSettings.voice.dictionary}
+        />
+      )}
       <CommandPalette open={paletteOpen} projectName={projectName} onClose={() => setPaletteOpen(false)} onNavigate={setView} onOpenWorkspace={openWorkspace} />
       {workspacePath && <SearchPanel workspace={workspacePath} open={searchOpen} onClose={() => setSearchOpen(false)} onOpenFile={chooseFile} />}
       {toast && <div className="toast"><span><Sparkles size={13} /></span>{toast}</div>}

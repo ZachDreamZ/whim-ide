@@ -207,6 +207,87 @@ export function ShipHub({ workspace }: ShipHubProps) {
     "No Git release history was reported.",
   );
 
+  // ─── Operations monitor: live previews, health, and rollback ──────────────
+  type HealthState = "unknown" | "checking" | "healthy" | "unhealthy";
+  type Endpoint = {
+    id: string;
+    label: string;
+    url: string;
+    health: HealthState;
+    detail?: string;
+  };
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [healthUrl, setHealthUrl] = useState("http://127.0.0.1:3000");
+  const [rollingBack, setRollingBack] = useState(false);
+
+  const addEndpoint = (label: string, url: string) => {
+    setEndpoints((current) =>
+      current.some((entry) => entry.url === url)
+        ? current
+        : [...current, { id: crypto.randomUUID(), label, url, health: "unknown" }],
+    );
+  };
+
+  const startPreview = async () => {
+    if (busy || !native) return;
+    appendLogs([{ level: "info", text: "Starting local preview on port 3000." }]);
+    try {
+      const result = await bridge.startLocalPreview(3000);
+      appendResult(result, "Local preview started on http://127.0.0.1:3000.", "Local preview failed to start.");
+      if (result.success) addEndpoint("Local preview", "http://127.0.0.1:3000");
+    } catch (error) {
+      appendLogs([{ level: "error", text: error instanceof Error ? error.message : "Local preview failed to start." }]);
+    }
+  };
+
+  const startTunnel = async () => {
+    if (busy || !native) return;
+    appendLogs([{ level: "info", text: "Opening a public tunnel on port 3000." }]);
+    try {
+      const result = await bridge.startTunnel(3000);
+      appendResult(result, "Tunnel process started. Copy the public URL from the readiness stream to monitor it.", "Tunnel failed to start.");
+    } catch (error) {
+      appendLogs([{ level: "error", text: error instanceof Error ? error.message : "Tunnel failed to start." }]);
+    }
+  };
+
+  const checkHealth = async (url: string) => {
+    const id = endpoints.find((entry) => entry.url === url)?.id;
+    if (id) setEndpoints((current) => current.map((entry) => entry.url === url ? { ...entry, health: "checking" } : entry));
+    try {
+      const report = await bridge.deploymentHealth(url);
+      const health: HealthState = report.reachable ? "healthy" : "unhealthy";
+      const detail = report.status ? `HTTP ${report.status} · ${report.latencyMs ?? 0}ms` : (report.error ?? "Unreachable");
+      setEndpoints((current) => current.map((entry) => entry.url === url ? { ...entry, health, detail } : entry));
+    } catch (error) {
+      setEndpoints((current) => current.map((entry) => entry.url === url ? { ...entry, health: "unhealthy", detail: error instanceof Error ? error.message : "Check failed" } : entry));
+    }
+  };
+
+  const rollback = async () => {
+    if (rollingBack || !native) return;
+    const confirmed = window.confirm(
+      `Roll back ${projectName} to the last Whim checkpoint?\n\nTracked changes since the checkpoint are stashed and the workspace is restored to the checkpoint commit.`,
+    );
+    if (!confirmed) {
+      appendLogs([{ level: "info", text: "Rollback cancelled." }]);
+      return;
+    }
+    setRollingBack(true);
+    appendLogs([{ level: "info", text: "Rolling back to the last checkpoint." }]);
+    try {
+      const result = await bridge.workspaceRollback(workspace);
+      appendLogs([
+        { level: "info", text: `Restored commit: ${result.restoredCommit || "checkpoint"}` },
+        { level: result.stashCreated ? "warning" : "info", text: result.stashCreated ? "Working changes stashed as whim-rollback-tracked." : "No working changes were stashed." },
+      ]);
+    } catch (error) {
+      appendLogs([{ level: "error", text: error instanceof Error ? error.message : "Rollback failed." }]);
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   const preflightLabel = preflightStatus === "idle"
     ? "Not checked"
     : preflightStatus === "checking"
@@ -332,6 +413,47 @@ export function ShipHub({ workspace }: ShipHubProps) {
           </div>
         </aside>
       </div>
+
+      <section className="ops-monitor">
+        <div className="section-heading-row">
+          <div><span className="section-kicker">Operations</span><h2>Monitor, health, and rollback</h2></div>
+          <span className="portable-badge"><ShieldCheck size={12} /> native runtime required</span>
+        </div>
+        <div className="ops-actions">
+          <button type="button" className="secondary-action" onClick={startPreview} disabled={busy || !native}><Rocket size={13} /> Start local preview</button>
+          <button type="button" className="secondary-action" onClick={startTunnel} disabled={busy || !native}><ArrowRight size={13} /> Open tunnel</button>
+          <button type="button" className="secondary-action" onClick={rollback} disabled={rollingBack || !native}><RotateCcw size={13} /> Rollback to checkpoint</button>
+        </div>
+        <div className="ops-health-row">
+          <input
+            type="text"
+            className="ops-health-input"
+            value={healthUrl}
+            onChange={(event) => setHealthUrl(event.target.value)}
+            placeholder="http://127.0.0.1:3000"
+            aria-label="Endpoint URL to health check"
+          />
+          <button type="button" className="secondary-action" onClick={() => void checkHealth(healthUrl)} disabled={!native || !/^https?:\/\//.test(healthUrl.trim())}>{checking ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />} Check health</button>
+          <button type="button" className="secondary-action" onClick={() => addEndpoint("Custom endpoint", healthUrl.trim())} disabled={!native || !/^https?:\/\//.test(healthUrl.trim())}><Check size={13} /> Monitor</button>
+        </div>
+        {endpoints.length > 0 && (
+          <ul className="ops-endpoint-list">
+            {endpoints.map((endpoint) => (
+              <li key={endpoint.id} className={`ops-endpoint ops-${endpoint.health}`}>
+                <span className="ops-endpoint-dot" aria-hidden="true" />
+                <div className="ops-endpoint-meta">
+                  <strong>{endpoint.label}</strong>
+                  <code>{endpoint.url}</code>
+                  <small>{endpoint.health === "unknown" ? "Not checked" : endpoint.detail ?? ""}</small>
+                </div>
+                <div className="ops-endpoint-actions">
+                  <button type="button" onClick={() => void checkHealth(endpoint.url)} disabled={!native}><RefreshCw size={12} /> Health</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="production-guard">
         <span className="guard-icon"><ShieldCheck size={18} /></span>

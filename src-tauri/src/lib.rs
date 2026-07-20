@@ -76,6 +76,7 @@ pub fn run() {
             backend::deployment::install_dependencies,
             backend::deployment::start_local_preview,
             backend::deployment::start_tunnel,
+            backend::deployment::deployment_health,
             backend::whim_route::credentials::save_credential,
             backend::whim_route::credentials::get_credential,
             backend::whim_route::credentials::delete_credential,

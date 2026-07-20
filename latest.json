@@ -1,0 +1,11 @@
+{
+  "version": "0.4.8",
+  "notes": "Whim IDE v0.4.8",
+  "pub_date": "2026-07-20T14:49:44.433Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROTVRdVB4QVplcGF0b2tMeEFrdDlVRGdrcThJV29BNHlmZXZpbUYySTBmQVhGUWdsM1JFWTdMOGdHZE1RWFhwWmRNQmVRSGpTVGx6TGJJdURMSnY5LzRuZUx1YmViTlFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0NTU4OTY5CWZpbGU6V2hpbSBJREVfMC40LjhfeDY0LXNldHVwLmV4ZQpKRGo3YjhNS1RpMTRGZWJOUXRKMnB0M096ZDNDc1VpNS9lLy94UlVWV1VhYnd2SUVsUy84NFVzR2wrbHFqTFZ0M0p4RlhmNk4xdWpxdklMSFE0THpEUT09Cg==",
+      "url": "https://github.com/ZachDreamZ/whim-ide/releases/download/v0.4.8/Whim-IDE_0.4.8_x64-setup.exe"
+    }
+  }
+}

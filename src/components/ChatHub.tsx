@@ -257,6 +257,7 @@ export function ChatHub({
       const finished: ChatThread = { ...thread, updatedAtMs: assistantStored.createdAtMs, messages: [...thread.messages, assistantStored] };
       setMessages((current) => [...current, { id: assistantStored.id, role: "assistant", parts: parts.length ? parts : [{ type: "text", text: assistantContent }] } as UIMessage]);
       await remember(finished);
+      bridge.emitAssistantText(assistantContent);
     } catch (cause) {
       const message = errorMessage(cause);
       setError(message);
@@ -266,6 +267,13 @@ export function ChatHub({
       setStatus("ready");
     }
   }, [apiKey, attachments, baseUrl, hasProvider, messages, model, native, provider, remember, status]);
+
+  useEffect(() => {
+    const off = bridge.onAmbientCommand((text) => {
+      if (status === "ready") void send({ role: "user", content: text });
+    });
+    return off;
+  }, [send, status]);
 
   return <main ref={rootRef} className="chat-hub" aria-label="Chat">
     {voiceOpen && <VoiceOrb provider={provider} apiKey={apiKey} baseUrl={baseUrl} voice={voice} language={voiceLanguage} dictionary={voiceDictionary} onTranscript={(text) => { setVoiceOpen(false); void send({ role: "user", content: text }); }} onClose={() => setVoiceOpen(false)} />}

@@ -208,6 +208,9 @@ export type AppSettings = {
     voice: "alloy" | "ash" | "ballad" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer" | "verse";
     language: "auto" | "en" | "es" | "fr" | "de" | "ja" | "zh";
     dictionary: string;
+    ambient: boolean;
+    autoSpeak: boolean;
+    wakePhrase: string;
   };
   computerUse: { enabled: boolean; screenCapture: boolean; appContext: boolean };
   agent: {
@@ -236,7 +239,7 @@ export const defaultAppSettings: AppSettings = {
   personalization: { enabled: true, customInstructions: "", responseStyle: "normal", projectMemory: true },
   chat: { enterToSend: true, showCopyActions: true, persistHistory: true },
   appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60, reduceMotion: "system", pointerCursors: true, uiFontSize: 14, codeFontSize: 13 },
-  voice: { voice: "alloy", language: "auto", dictionary: "" },
+  voice: { voice: "alloy", language: "auto", dictionary: "", ambient: false, autoSpeak: false, wakePhrase: "" },
   computerUse: { enabled: false, screenCapture: true, appContext: true },
   agent: {
     speed: "balanced",
@@ -641,6 +644,35 @@ function fromCommand(command: BackendCommand): NativeResult {
   };
 }
 
+// Shape returned by Rust commands that wrap a spawned OS process
+// (start_local_preview / start_tunnel). Field names follow serde camelCase.
+type CommandResultShape = {
+  operationId: string;
+  command: string;
+  cwd: string;
+  success: boolean;
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutTruncated?: boolean;
+  stderrTruncated?: boolean;
+  timedOut?: boolean;
+  cancelled?: boolean;
+  durationMs?: number;
+};
+function nativeResultFromCommandResult(result: CommandResultShape): NativeResult {
+  return {
+    success: result.success,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+    operationId: result.operationId,
+    durationMs: result.durationMs,
+    cancelled: result.cancelled,
+    timedOut: result.timedOut,
+  };
+}
+
 export const bridge = {
   isNative: inTauri,
 
@@ -774,6 +806,50 @@ export const bridge = {
 
   async synthesizeVoice(input: { text: string; provider?: string; apiKey?: string; baseUrl?: string; model?: string; voice?: string }): Promise<number[]> {
     return call<number[]>("synthesize_voice", { request: input });
+  },
+
+  /** Speak text in the current runtime. Native uses the configured TTS endpoint;
+   *  the browser uses the Web Speech API. Returns once playback begins. */
+  async speakText(input: { text: string; provider?: string; apiKey?: string; baseUrl?: string; voice?: string }): Promise<void> {
+    const text = input.text.trim();
+    if (!text) return;
+    if (!inTauri()) {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 4_096));
+      if (input.voice) utterance.voice = window.speechSynthesis.getVoices().find((entry) => entry.name === input.voice) ?? null;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+    try {
+      const bytes = await bridge.synthesizeVoice({ text: text.slice(0, 4_096), provider: input.provider, apiKey: input.apiKey, baseUrl: input.baseUrl, voice: input.voice });
+      const objectUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "audio/mpeg" }));
+      const audio = new Audio(objectUrl);
+      audio.onended = () => URL.revokeObjectURL(objectUrl);
+      audio.onerror = () => URL.revokeObjectURL(objectUrl);
+      await audio.play();
+    } catch {
+      // Speech is a non-blocking enhancement; ignore failures.
+    }
+  },
+
+  /** Ambient voice emits finalized transcripts as window events so any active
+   *  chat surface can route them to its agent, without a direct dependency. */
+  emitAmbientCommand(text: string): void {
+    window.dispatchEvent(new CustomEvent("whim:ambient-command", { detail: text }));
+  },
+  onAmbientCommand(handler: (text: string) => void): () => void {
+    const listener = (event: Event) => handler((event as CustomEvent<string>).detail);
+    window.addEventListener("whim:ambient-command", listener);
+    return () => window.removeEventListener("whim:ambient-command", listener);
+  },
+  emitAssistantText(text: string): void {
+    if (text.trim()) window.dispatchEvent(new CustomEvent("whim:assistant-text", { detail: text }));
+  },
+  onAssistantText(handler: (text: string) => void): () => void {
+    const listener = (event: Event) => handler((event as CustomEvent<string>).detail);
+    window.addEventListener("whim:assistant-text", listener);
+    return () => window.removeEventListener("whim:assistant-text", listener);
   },
 
   async runCommand(workspace: string, command: string, options?: { operationId?: string; timeoutMs?: number; confirmed?: boolean }): Promise<NativeResult> {
@@ -1175,6 +1251,18 @@ export const bridge = {
       workspace,
       request: { commit: commit ?? null, operationId }
     });
+  },
+
+  async startLocalPreview(port = 3000): Promise<NativeResult> {
+    const result = await call<CommandResultShape>("start_local_preview", { request: { port, operationId: crypto.randomUUID() } });
+    return nativeResultFromCommandResult(result);
+  },
+  async startTunnel(port = 3000): Promise<NativeResult> {
+    const result = await call<CommandResultShape>("start_tunnel", { request: { port, operationId: crypto.randomUUID() } });
+    return nativeResultFromCommandResult(result);
+  },
+  async deploymentHealth(url: string): Promise<{ url: string; reachable: boolean; status: number | null; latencyMs: number | null; error: string | null }> {
+    return await call<{ url: string; reachable: boolean; status: number | null; latencyMs: number | null; error: string | null }>("deployment_health", { request: { url } });
   },
 
   async reveal(path: string): Promise<void> {
