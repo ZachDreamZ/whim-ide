@@ -1,7 +1,7 @@
 # Handoff — Whim IDE
 
-> For a fresh agent session. Read this + `AGENTS.md` (repo root) before doing anything.
-> Last updated: 2026-07-18. Repo version: `0.4.7`.
+> For a fresh agent session. Read this + `AGENTS.md` (repo root) + `.whim/HANDOFF.md` before doing anything.
+> Last updated: 2026-07-20. Repo version: `0.4.7`.
 
 ## Repo location (IMPORTANT)
 
@@ -80,39 +80,31 @@ All six items landed and verified:
 6. **OAuth CSRF state check** — `ExchangeRequest.state: Option<String>` added;
    `oauth_build_auth_url` registers the generated `state` in a new `PENDING_STATES`
    registry (`oauth.rs`); `oauth_exchange` rejects any request whose echoed `state`
-   is missing/absent. Note: `oauth_exchange`/`oauth_build_auth_url` are NOT yet wired
-   to the frontend — no UI caller exists, so the new required field doesn't break
-   anything. `oauth_authorize` (the wired full-flow command) generates its own state
-   and calls `exchange_code` directly, so it is unaffected.
+   is missing/absent. `oauth_authorize` (the wired full-flow command used by
+   `ProviderHub.tsx`) generates its own state and calls `exchange_code` directly.
+   The raw `oauth_exchange`/`oauth_build_auth_url` are exposed as Tauri commands
+   and bridge methods for manual OAuth flows.
 
-### Files touched (Phase 0)
-- `src-tauri/src/backend/mod.rs` — `atomic_write_json`, `MAX_LEDGER_BYTES`,
-  `auto_provider` async + `probe_local_providers`.
-- `src-tauri/src/orchestrator.rs` — atomic save; removed `io::Write` import.
-- `src-tauri/src/backend/orchestration.rs` — removed dead worker; `Ok(mut store)` fix;
-  cancellation-poll error logging.
-- `src-tauri/src/lib.rs` — removed dead worker call.
-- `src/App.tsx` — removed dead `_entries`/`setEntries`.
-- `src-tauri/src/backend/reflector.rs` — poisoned-mutex error logging.
-- `src-tauri/src/memory.rs` — `get_observational_memory` via `spawn_blocking`.
-- `src-tauri/src/agent.rs` — `auto_provider().await` call site.
-- `src-tauri/src/backend/oauth.rs` — `state` field, `PENDING_STATES`, registry +
-  verification; callback via `spawn_blocking`.
+### Phase 4 (Application Platform) — completed and pushed to main
 
-These changes are **uncommitted** on `main` (working tree). `package-lock.json` also
-shows a 2-line drift from the D: `npm install` (harmless). `AGENTS.md` is a new
-untracked file at repo root.
+See `.whim/HANDOFF.md` for full details. Covers:
+- MCP Runtime client (Stdio + SSE) with agent integration
+- Canvas Deployments (7 adapters: Vercel/Netlify/Cloudflare/Render/Railway/Fly.io/Docker)
+- GitHub Integrations (create/merge/comment PR + frontend hub)
+- Service Provisioning (PostgreSQL/Redis via Docker Compose)
+- Codebase index `query_codebase_symbol` Tauri command added
+- 0 dead-code warnings (MCP SSE types cleaned up)
 
 ## Next steps (proposed roadmap)
 
-- **Phase 1 (recommended next):** convert `BackendState`'s `std::sync::Mutex` →
+- **Recommended next:** convert `BackendState`'s `std::sync::Mutex` →
   `tokio::sync::Mutex` for true async-safety. This is the largest remaining correctness
-  item; it is an API-internal change (affects every `lock(...)` call site in
-  `backend/mod.rs` and callers). Plan: grep `backend::mod::lock` usages, convert to
-  `.lock().await`, fix `Send`/lifetime issues, verify with `cargo check` + `cargo test`.
-- Later phases (from the architecture blueprint at
-  `C:\Users\Vendex\.local\share\opencode\plans\whim-ide-architecture.md`): capability
-  hardening, IPC permission tightening, frontend/agent-runtime cleanups.
+  item (affects every `lock(...)` call site in `backend/mod.rs` and callers).
+- **Standalone harness cleanup**: Remove external runtime dispatch (Pi, Codex, Claude)
+  per approved spec at `docs/superpowers/specs/2026-07-17-standalone-harness-design.md`.
+- **Codebase index caching**: Add incremental rebuild or caching layer.
+- **Native agent context**: Make codebase index a first-class resource in the agent run
+  loop (not just frontend-prompt injection).
 
 ## Gotchas for the next session
 
@@ -120,7 +112,6 @@ untracked file at repo root.
   an open handle there. Use `D:\whim-ide`.
 - `cargo test` needs the D: target dir (see env setup) or C: runs out of space.
 - The `checkpoint_and_rollback_scripts_...` test failure is environmental — ignore it.
-- `oauth_exchange`'s new `state` requirement is intentionally un-wired; if you later add
-  a frontend OAuth flow, build the auth URL via `oauth_build_auth_url` and echo the
-  returned `state` into `oauth_exchange`.
+- OAuth is already wired through `ProviderHub.tsx` using `bridge.oauthAuthorize()`.
+  Manual flow also available via `bridge.oauthBuildAuthUrl()` + `bridge.oauthExchange()`.
 - Keep `dompurify` pinned (`3.4.12`) and never `npx eslint` (use `npm run lint`).
