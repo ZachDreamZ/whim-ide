@@ -20,6 +20,8 @@ use crate::backend::{
     ReadFileRequest, RollbackRequest, TunnelRequest, WorkspaceTreeRequest, WriteFileRequest,
     DEFAULT_COMMAND_TIMEOUT_MS,
 };
+use crate::backend::mcp::manager::is_mcp_tool;
+use crate::backend::mcp::types::ToolResultContent;
 use crate::harness::{HarnessProfile, HARNESS_PROFILE_PATH};
 
 const MAX_TOOL_OUTPUT_CHARS: usize = 8_000;
@@ -448,6 +450,24 @@ pub(crate) async fn run_tool(
                     }
                 }
                 _ => Err(format!("Unknown computer action {}", action)),
+            }
+        }
+        other if is_mcp_tool(other) => {
+            let args = arguments.clone();
+            match state.inner().mcp_manager.call_tool(other, args).await {
+                Ok(mcp_result) => {
+                    let mut output = String::new();
+                    for content in mcp_result.content {
+                        match &content {
+                            ToolResultContent::Text { text, .. } => {
+                                output.push_str(text);
+                            }
+                            _ => output.push_str(&format!("[MCP: {:?}]", content)),
+                        }
+                    }
+                    Ok(output)
+                }
+                Err(e) => Err(e),
             }
         }
         other => Err(format!("Unknown tool '{other}'")),

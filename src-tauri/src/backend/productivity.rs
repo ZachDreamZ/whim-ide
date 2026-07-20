@@ -509,6 +509,34 @@ async fn search_pull_requests(
     parse_pull_requests(&result.stdout, relationship)
 }
 
+/// Search PRs via `gh search prs <query>` with raw query syntax (supports `reviewed-by:` etc.).
+async fn search_pull_requests_via_gh(
+    workspace: &Path,
+    query: &str,
+    state: &str,
+    relationship: &str,
+) -> Result<Vec<PullRequestItem>, String> {
+    let result = output(
+        workspace,
+        "gh",
+        &[
+            "search", "prs",
+            query,
+            "--state", state,
+            "--limit", "20",
+            "--sort", "updated",
+            "--order", "desc",
+            "--json",
+            "number,title,state,isDraft,url,repository,author,updatedAt",
+        ],
+    )
+    .await?;
+    if !result.status.success() {
+        return Err(String::from_utf8_lossy(&result.stderr).trim().to_string());
+    }
+    parse_pull_requests(&result.stdout, relationship)
+}
+
 /// Make an authenticated GET request to the GitHub REST API.
 async fn github_api_get(token: &str, path: &str) -> Result<Vec<Value>, String> {
     let client = reqwest::Client::builder()
@@ -544,7 +572,13 @@ async fn search_pull_requests_via_api(
     filter_query: &str,
     relationship: &str,
 ) -> Result<Vec<PullRequestItem>, String> {
-    let query = urlencoding(&format!("{filter_query}@me is:pr is:open sort:updated-desc"));
+    let state_filter = if filter_query == "reviewed-by" { "is:merged" } else { "is:open" };
+    let qualifier = if filter_query == "reviewed-by" {
+        "reviewed-by:@me"
+    } else {
+        &format!("{filter_query}:@me")
+    };
+    let query = urlencoding(&format!("{qualifier} is:pr {state_filter} sort:updated-desc"));
     let path = format!("/search/issues?q={query}&per_page=50");
     let items = github_api_get(token, &path).await?;
 
@@ -648,7 +682,7 @@ pub async fn inspect_pull_requests(
         let (a, r, rev) = tokio::join!(
             search_pull_requests_via_api(&api_token, "author", "authored"),
             search_pull_requests_via_api(&api_token, "review-requested", "reviewing"),
-            search_pull_requests_via_api(&api_token, "reviewed-by", "reviewed"),
+            search_pull_requests_via_api(&api_token, "reviewed-by", "previously-reviewed"),
         );
         (true, account, a, r, rev)
     } else {
@@ -673,7 +707,7 @@ pub async fn inspect_pull_requests(
         let (a, r, rev) = tokio::join!(
             search_pull_requests(&root, "--author", "open", "authored"),
             search_pull_requests(&root, "--review-requested", "open", "reviewing"),
-            search_pull_requests(&root, "--reviewed-by", "closed", "reviewed"),
+            search_pull_requests_via_gh(&root, "reviewed-by:@me", "merged", "previously-reviewed"),
         );
         let account = output(&root, "gh", &["api", "user", "--jq", ".login"])
             .await
@@ -747,6 +781,189 @@ pub async fn github_connect() -> Result<String, String> {
 #[tauri::command]
 pub async fn github_disconnect() -> Result<(), String> {
     std::future::ready(crate::backend::oauth::oauth_clear_token("github".into())).await
+}
+
+// ─── PR mutation commands ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePullRequestRequest {
+    pub title: String,
+    pub body: Option<String>,
+    pub head: String,
+    pub base: String,
+    pub draft: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePullRequestResult {
+    pub number: u64,
+    pub url: String,
+}
+
+/// Create a pull request on the current repository.
+#[tauri::command]
+pub async fn create_pull_request(
+    state: State<'_, BackendState>,
+    workspace: String,
+    request: CreatePullRequestRequest,
+) -> Result<CreatePullRequestResult, String> {
+    let root = resolve_agent_workspace(state.inner(), Some(&workspace)).await?;
+    let token = crate::backend::oauth::get_stored_token("github").await
+        .ok_or_else(|| "GitHub not connected. Use \"Connect GitHub\" first.".to_string())?;
+    let api_token = token.access_token.clone();
+
+    // Get the repo name from the remote
+    let remote_output = output(&root, "git", &["remote", "get-url", "origin"]).await?;
+    let remote = String::from_utf8_lossy(&remote_output.stdout).trim().to_string();
+    let repo = parse_github_repo(&remote)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let body = serde_json::json!({
+        "title": request.title,
+        "body": request.body,
+        "head": request.head,
+        "base": request.base,
+        "draft": request.draft.unwrap_or(false),
+    });
+
+    let response = client
+        .post(format!("https://api.github.com/repos/{repo}/pulls"))
+        .header("Authorization", format!("Bearer {api_token}"))
+        .header("User-Agent", "Whim-IDE/0.4.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("GitHub API error {status}: {text}"));
+    }
+
+    let json: Value = response.json().await
+        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    let number = json["number"].as_u64()
+        .ok_or_else(|| "GitHub response missing 'number'".to_string())?;
+    let url = json["html_url"].as_str()
+        .unwrap_or("")
+        .to_string();
+
+    Ok(CreatePullRequestResult { number, url })
+}
+
+/// Merge a pull request.
+#[tauri::command]
+pub async fn merge_pull_request(
+    state: State<'_, BackendState>,
+    workspace: String,
+    pr_number: u64,
+    merge_method: Option<String>,
+) -> Result<String, String> {
+    let root = resolve_agent_workspace(state.inner(), Some(&workspace)).await?;
+    let token = crate::backend::oauth::get_stored_token("github").await
+        .ok_or_else(|| "GitHub not connected. Use \"Connect GitHub\" first.".to_string())?;
+    let api_token = token.access_token.clone();
+
+    let remote_output = output(&root, "git", &["remote", "get-url", "origin"]).await?;
+    let remote = String::from_utf8_lossy(&remote_output.stdout).trim().to_string();
+    let repo = parse_github_repo(&remote)?;
+
+    let method = merge_method.as_deref().unwrap_or("merge");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let body = serde_json::json!({ "merge_method": method });
+    let response = client
+        .put(format!("https://api.github.com/repos/{repo}/pulls/{pr_number}/merge"))
+        .header("Authorization", format!("Bearer {api_token}"))
+        .header("User-Agent", "Whim-IDE/0.4.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("GitHub merge failed ({status}): {text}"));
+    }
+
+    Ok(format!("Pull request #{pr_number} merged ({method})"))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentPullRequestRequest {
+    pub pr_number: u64,
+    pub body: String,
+}
+
+/// Comment on a pull request.
+#[tauri::command]
+pub async fn comment_on_pull_request(
+    state: State<'_, BackendState>,
+    workspace: String,
+    request: CommentPullRequestRequest,
+) -> Result<String, String> {
+    let root = resolve_agent_workspace(state.inner(), Some(&workspace)).await?;
+    let token = crate::backend::oauth::get_stored_token("github").await
+        .ok_or_else(|| "GitHub not connected. Use \"Connect GitHub\" first.".to_string())?;
+    let api_token = token.access_token.clone();
+
+    let remote_output = output(&root, "git", &["remote", "get-url", "origin"]).await?;
+    let remote = String::from_utf8_lossy(&remote_output.stdout).trim().to_string();
+    let repo = parse_github_repo(&remote)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let body = serde_json::json!({ "body": request.body });
+    let response = client
+        .post(format!("https://api.github.com/repos/{repo}/issues/{pr_number}/comments", pr_number = request.pr_number))
+        .header("Authorization", format!("Bearer {api_token}"))
+        .header("User-Agent", "Whim-IDE/0.4.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("GitHub API error {status}: {text}"));
+    }
+
+    Ok(format!("Comment posted on pull request #{pr_number}", pr_number = request.pr_number))
+}
+
+/// Parse a GitHub repo from a git remote URL.
+fn parse_github_repo(remote: &str) -> Result<String, String> {
+    let remote = remote.trim();
+    // Handle git@github.com:owner/repo.git
+    if let Some(path) = remote.strip_prefix("git@github.com:") {
+        let repo = path.strip_suffix(".git").unwrap_or(path);
+        return Ok(repo.to_string());
+    }
+    // Handle https://github.com/owner/repo.git
+    if let Some(path) = remote.strip_prefix("https://github.com/") {
+        let repo = path.strip_suffix(".git").unwrap_or(path);
+        return Ok(repo.to_string());
+    }
+    Err(format!("Not a GitHub remote: {remote}"))
 }
 
 #[cfg(test)]
@@ -846,5 +1063,95 @@ mod tests {
         assert_eq!(loaded[0].title, updated.title);
         assert!(schedules_path(&root).is_file());
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn parse_github_repo_ssh_format() {
+        let repo = parse_github_repo("git@github.com:owner/my-repo.git").unwrap();
+        assert_eq!(repo, "owner/my-repo");
+    }
+
+    #[test]
+    fn parse_github_repo_ssh_no_dot_git() {
+        let repo = parse_github_repo("git@github.com:org/project").unwrap();
+        assert_eq!(repo, "org/project");
+    }
+
+    #[test]
+    fn parse_github_repo_https_format() {
+        let repo = parse_github_repo("https://github.com/owner/repo.git").unwrap();
+        assert_eq!(repo, "owner/repo");
+    }
+
+    #[test]
+    fn parse_github_repo_https_no_dot_git() {
+        let repo = parse_github_repo("https://github.com/team/app").unwrap();
+        assert_eq!(repo, "team/app");
+    }
+
+    #[test]
+    fn parse_github_repo_rejects_non_github() {
+        let result = parse_github_repo("https://gitlab.com/owner/project.git");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a GitHub remote"));
+    }
+
+    #[test]
+    fn parse_github_repo_rejects_generic_url() {
+        let result = parse_github_repo("https://example.com/repo.git");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_github_repo_trims_whitespace() {
+        let repo = parse_github_repo("  git@github.com:user/repo.git  ").unwrap();
+        assert_eq!(repo, "user/repo");
+    }
+
+    #[test]
+    fn parse_pull_requests_rejects_empty_input() {
+        let result = parse_pull_requests(b"null", "authored");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_pull_requests_handles_empty_array() {
+        let items = parse_pull_requests(b"[]", "authored").unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn create_pull_request_request_serialization() {
+        let req = CreatePullRequestRequest {
+            title: "My PR".into(),
+            body: Some("Description".into()),
+            head: "feature".into(),
+            base: "main".into(),
+            draft: Some(true),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("My PR"));
+        assert!(json.contains("feature"));
+        assert!(json.contains("main"));
+        assert!(json.contains("true"));
+
+        let back: CreatePullRequestRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.title, "My PR");
+        assert_eq!(back.draft, Some(true));
+    }
+
+    #[test]
+    fn comment_pull_request_request_serialization() {
+        let req = CommentPullRequestRequest {
+            pr_number: 42,
+            body: "Looks good!".into(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("42"));
+        assert!(json.contains("Looks good!"));
+
+        let back: CommentPullRequestRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.pr_number, 42);
+        assert_eq!(back.body, "Looks good!");
     }
 }

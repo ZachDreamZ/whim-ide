@@ -3,6 +3,7 @@ import {
   Bot,
   Boxes,
   Clapperboard,
+  Database,
   GitBranch,
   LayoutDashboard,
   ListChecks,
@@ -15,11 +16,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type ViewId = "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "browser" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
+export type ViewId = "services" | "build" | "scheduled" | "plugins" | "eve" | "sites" | "pullRequests" | "chat" | "browser" | "creative" | "providers" | "ecosystem" | "orchestrate" | "ship" | "autopilot" | "settings";
 
 const items: { id: ViewId; label: string; icon: LucideIcon; accent?: boolean }[] = [
   { id: "build", label: "New chat", icon: LayoutDashboard },
   { id: "scheduled", label: "Scheduled", icon: ListChecks },
+  { id: "services", label: "Services", icon: Database },
   { id: "plugins", label: "Plugins", icon: Blocks },
   { id: "eve", label: "Eve Agents", icon: Orbit, accent: true },
   { id: "sites", label: "Sites", icon: Rocket, accent: true },

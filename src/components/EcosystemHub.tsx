@@ -303,6 +303,9 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
       const latest = await bridge.readWhimConfig(workspace);
       const next = configWithIntegration(latest, integration, install);
       await bridge.writeWhimConfig(workspace, next);
+      if (integration.kind === "MCP") {
+        await bridge.mcpReload(workspace);
+      }
       setConfig(next);
       setNotice(`${integration.name} ${install ? "added to" : "removed from"} .whim/config.json.`);
     } catch (actionError) {
@@ -379,6 +382,9 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
       }
       const next = configWithIntegration(latest, integration, true);
       await bridge.writeWhimConfig(workspace, next);
+      if (customKind === "mcp") {
+        await bridge.mcpReload(workspace);
+      }
       setConfig(next);
       setNotice(`${integration.name} added to .whim/config.json.`);
       setCustomOpen(false);

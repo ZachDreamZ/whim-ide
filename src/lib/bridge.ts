@@ -245,7 +245,7 @@ export const defaultAppSettings: AppSettings = {
     autonomousJanitor: true,
     deferCapabilities: true,
     maxParallelAgents: 4,
-    enabledCapabilities: ["workspace", "research", "coding", "verification"],
+    enabledCapabilities: ["workspace", "research", "coding", "verification", "github"],
   },
 };
 
@@ -534,6 +534,18 @@ export type LocalProviderStatus = {
 };
 
 
+
+export type ServiceStatus = "Running" | "Stopped" | "Error" | "Unknown";
+
+export type ServiceResource = {
+  id: string;
+  kind: "Postgres" | "Redis";
+  name: string;
+  status: ServiceStatus;
+  port: number;
+  connectionString: string;
+  createdAtMs: number;
+};
 
 export type MediaRuntimeStatus = {
   codexAvailable: boolean;
@@ -1016,6 +1028,24 @@ export const bridge = {
     return call<void>("github_disconnect");
   },
 
+  async createPullRequest(workspace: string, request: {
+    title: string;
+    body?: string;
+    head: string;
+    base: string;
+    draft?: boolean;
+  }): Promise<{ number: number; url: string }> {
+    return call<{ number: number; url: string }>("create_pull_request", { workspace, request });
+  },
+
+  async mergePullRequest(workspace: string, prNumber: number, mergeMethod?: string): Promise<string> {
+    return call<string>("merge_pull_request", { workspace, prNumber, mergeMethod });
+  },
+
+  async commentOnPullRequest(workspace: string, prNumber: number, body: string): Promise<string> {
+    return call<string>("comment_on_pull_request", { workspace, request: { prNumber, body } });
+  },
+
   async getOrchestrationJob(workspace: string, jobId: string): Promise<OrchestrationJobDetail> {
     return call<OrchestrationJobDetail>("get_orchestration_job", {
       request: { workspace, jobId },
@@ -1213,6 +1243,38 @@ export const bridge = {
 
   async writeWhimConfig(workspace: string, config: Record<string, unknown>): Promise<void> {
     await bridge.writeFile(workspace, ".whim/config.json", `${JSON.stringify(config, null, 2)}\n`, true);
+  },
+
+  async mcpReload(workspace: string): Promise<string[]> {
+    if (!inTauri()) return [];
+    return call<string[]>("mcp_reload", { workspace });
+  },
+
+  // ─── Service Provisioning ─────────────────────────────────────────────────
+
+  async listServices(): Promise<ServiceResource[]> {
+    if (!inTauri()) return [];
+    return call<ServiceResource[]>("list_services");
+  },
+
+  async provisionService(request: { kind: "Postgres" | "Redis"; name?: string }): Promise<ServiceResource> {
+    return call<ServiceResource>("provision_service", { request });
+  },
+
+  async stopService(serviceId: string): Promise<ServiceResource> {
+    return call<ServiceResource>("stop_service", { serviceId });
+  },
+
+  async startService(serviceId: string): Promise<ServiceResource> {
+    return call<ServiceResource>("start_service", { serviceId });
+  },
+
+  async removeService(serviceId: string): Promise<void> {
+    return call<void>("remove_service", { serviceId });
+  },
+
+  async serviceStatus(serviceId: string): Promise<ServiceResource> {
+    return call<ServiceResource>("service_status", { serviceId });
   },
 
   // Zero-config provider discovery for the autonomous (vibecoding) flow.

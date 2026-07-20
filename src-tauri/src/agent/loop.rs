@@ -28,6 +28,7 @@ use crate::agent::background::{
 use crate::agent::loop_detector::LoopDetector;
 use crate::agent::tools::{read_only_tool_defs, tool_defs_for_profile, tool_display};
 use crate::agent::execution::{cap_output, run_tool};
+use crate::backend::mcp::manager::mcp_sync_tools;
 use crate::agent::prompt::{build_system_prompt, project_memory_for_run};
 
 const RESEARCH_MAX_ITERS: usize = 6;
@@ -283,7 +284,18 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
     let start = Instant::now();
     let root_display = root.to_string_lossy().into_owned();
     crate::backend::workspace::ensure_project_agent_context_at(&root)?;
-    let tools = tool_defs_for_profile(profile, mode, settings);
+    let mut tools = tool_defs_for_profile(profile, mode, settings);
+    if settings.agent.enabled_capabilities.iter().any(|c| c == "mcp") {
+        let _ = mcp_sync_tools(state.inner(), &root).await;
+        let mcp_tools = state.inner().mcp_manager.list_all_tools().await;
+        for mt in mcp_tools {
+            tools.push(crate::agent::tools::ToolDef {
+                name: mt.qualified_name,
+                description: mt.tool.description,
+                parameters: mt.tool.input_schema,
+            });
+        }
+    }
     let memory = project_memory_for_run(&root, settings);
     let system = build_system_prompt(
         &root_display,

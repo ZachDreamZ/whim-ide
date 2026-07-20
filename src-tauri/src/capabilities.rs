@@ -79,6 +79,22 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
         defer_loading: true,
         enabled: true,
     },
+    AgentCapabilitySpec {
+        id: "mcp",
+        description: "Load tools from remote MCP servers and stdio MCP plugins.",
+        instructions: "MCP tools extend the agent with domain-specific capabilities from connected servers.",
+        tools: &[],
+        defer_loading: false,
+        enabled: true,
+    },
+    AgentCapabilitySpec {
+        id: "github",
+        description: "Query, create, merge, and comment on GitHub pull requests.",
+        instructions: "Use the connected GitHub account for PR operations. Git operations stay local until you explicitly create or merge a PR.",
+        tools: &["github"],
+        defer_loading: true,
+        enabled: true,
+    },
 ];
 
 fn mode_needs(mode: &str, id: &str) -> bool {
@@ -107,6 +123,7 @@ fn mode_needs(mode: &str, id: &str) -> bool {
                 | "reviewer"
                 | "securityreviewer"
         ),
+        "github" => matches!(mode, "review" | "reviewer" | "build" | "ship" | "auto"),
         _ => false,
     }
 }

@@ -299,11 +299,11 @@ mod tests {
             "delegate_task",
         ] {
             assert!(
-                vibe_tools.contains(&required),
+                vibe_tools.iter().any(|n| n == required),
                 "Vibe must expose {required} without a manual mode change"
             );
         }
-        assert!(!vibe_tools.contains(&"tunnel"));
+        assert!(!vibe_tools.iter().any(|n| n == "tunnel"));
         assert_eq!(tool_iteration_budget(AgentRole::Auto, "balanced"), None);
         assert_eq!(tool_iteration_budget(AgentRole::Auto, "fast"), None);
         assert_eq!(
@@ -550,16 +550,15 @@ mod tests {
         let mut always = AppSettings::default();
         always.agent.approval_policy = "always".into();
 
-        let risky_names = tool_defs_for_profile(&profile, AgentRole::Implementer, &risky)
-            .iter()
+        let risky_names: Vec<String> = tool_defs_for_profile(&profile, AgentRole::Implementer, &risky)
+            .into_iter()
             .map(|tool| tool.name)
-            .collect::<Vec<_>>();
-        let always_names = tool_defs_for_profile(&profile, AgentRole::Implementer, &always)
-            .iter()
+            .collect();
+        let always_names: Vec<String> = tool_defs_for_profile(&profile, AgentRole::Implementer, &always)
+            .into_iter()
             .map(|tool| tool.name)
-            .collect::<Vec<_>>();
+            .collect();
 
-        // Risky policy exposes mutation tools to the agent.
         for allowed in [
             "write_file",
             "edit_file",
@@ -570,12 +569,11 @@ mod tests {
             "tunnel",
         ] {
             assert!(
-                risky_names.contains(&allowed),
+                risky_names.iter().any(|n| n == allowed),
                 "risky policy should expose {allowed}"
             );
         }
 
-        // Always policy withholds every mutation/external-effect tool.
         for blocked in [
             "write_file",
             "edit_file",
@@ -586,14 +584,13 @@ mod tests {
             "tunnel",
         ] {
             assert!(
-                !always_names.contains(&blocked),
+                !always_names.iter().any(|n| n == blocked),
                 "always policy must withhold {blocked}"
             );
         }
 
-        // Read-only capabilities remain available under the strict policy.
-        assert!(always_names.contains(&"read_file"));
-        assert!(always_names.contains(&"plan"));
+        assert!(always_names.iter().any(|n| n == "read_file"));
+        assert!(always_names.iter().any(|n| n == "plan"));
     }
 
     #[test]
@@ -602,11 +599,11 @@ mod tests {
         let mut settings = AppSettings::default();
         settings.agent.approval_policy = "always".into();
         let tools = tool_defs_for_profile(&profile, AgentRole::Implementer, &settings);
-        let names = tools.iter().map(|tool| tool.name).collect::<Vec<_>>();
-        assert!(names.contains(&"read_file"));
-        assert!(names.contains(&"plan"));
-        assert!(!names.contains(&"write_file"));
-        assert!(!names.contains(&"run_command"));
+        let names: Vec<String> = tools.into_iter().map(|tool| tool.name).collect();
+        assert!(names.iter().any(|n| n == "read_file"));
+        assert!(names.iter().any(|n| n == "plan"));
+        assert!(!names.iter().any(|n| n == "write_file"));
+        assert!(!names.iter().any(|n| n == "run_command"));
     }
 
     #[test]
@@ -625,10 +622,7 @@ mod tests {
 
     #[test]
     fn all_tools_have_display_names() {
-        let internal_names: Vec<&str> = tool_defs().iter().map(|tool| tool.name).collect();
-        // tool_display handles: read_file, write_file, edit_file,
-        // list_directory, grep_files, run_command, plan, research,
-        // checkpoint, rollback, preview, tunnel
+        let internal_names: Vec<String> = tool_defs().into_iter().map(|tool| tool.name).collect();
         let display_names: Vec<String> = internal_names
             .iter()
             .map(|name| tool_display(name))

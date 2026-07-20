@@ -22,6 +22,7 @@ const ScheduledTasksHub = lazy(() => import("./components/ScheduledTasksHub").th
 const PluginsHub = lazy(() => import("./components/PluginsHub").then(m => ({ default: m.PluginsHub })));
 const SitesHub = lazy(() => import("./components/SitesHub").then(m => ({ default: m.SitesHub })));
 const PullRequestsHub = lazy(() => import("./components/PullRequestsHub").then(m => ({ default: m.PullRequestsHub })));
+const ServiceProvisioningHub = lazy(() => import("./components/ServiceProvisioningHub").then(m => ({ default: m.ServiceProvisioningHub })));
 const NativeBrowserHub = lazy(() => import("./components/NativeBrowserHub").then(m => ({ default: m.NativeBrowserHub })));
 const ShipHub = lazy(() => import("./components/ShipHub").then(m => ({ default: m.ShipHub })));
 const AutopilotHub = lazy(() => import("./components/AutopilotHub").then(m => ({ default: m.AutopilotHub })));
@@ -605,6 +606,10 @@ function App() {
                 ) : view === "sites" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                   {workspacePath ? <SitesHub workspace={workspacePath} /> : workspaceGate("Sites needs a workspace")}
+                  </motion.div>
+                ) : view === "services" ? (
+                  <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                  <ServiceProvisioningHub />
                   </motion.div>
                 ) : view === "pullRequests" ? (
                   <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>

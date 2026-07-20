@@ -15,8 +15,8 @@ use crate::harness::HarnessProfile;
 use crate::capabilities::{capability_allows_tool, resolved_capabilities};
 
 pub(crate) struct ToolDef {
-    pub(crate) name: &'static str,
-    pub(crate) description: &'static str,
+    pub(crate) name: String,
+    pub(crate) description: String,
     pub(crate) parameters: serde_json::Value,
 }
 
@@ -36,8 +36,8 @@ const MUTATION_TOOLS: &[&str] = &[
 pub(crate) fn tool_defs() -> Vec<ToolDef> {
     vec![
         ToolDef {
-            name: "read_file",
-            description: "Read a UTF-8 text file from the workspace. Path is relative to the workspace root.",
+            name: "read_file".into(),
+            description: "Read a UTF-8 text file from the workspace. Path is relative to the workspace root.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path": { "type": "string", "description": "Relative file path" } },
@@ -45,8 +45,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "write_file",
-            description: "Create or overwrite a workspace file with the given content.",
+            name: "write_file".into(),
+            description: "Create or overwrite a workspace file with the given content.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -57,8 +57,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "edit_file",
-            description: "Replace the first occurrence of old_text with new_text in a workspace file. Prefer targeted edits over full rewrites.",
+            name: "edit_file".into(),
+            description: "Replace the first occurrence of old_text with new_text in a workspace file. Prefer targeted edits over full rewrites.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -70,8 +70,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "list_directory",
-            description: "List immediate children of a workspace directory. Use '.' for the root.",
+            name: "list_directory".into(),
+            description: "List immediate children of a workspace directory. Use '.' for the root.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path": { "type": "string", "description": "Relative directory path" } },
@@ -79,8 +79,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "grep_files",
-            description: "Case-insensitive text search across workspace text files. Optional path scopes the search.",
+            name: "grep_files".into(),
+            description: "Case-insensitive text search across workspace text files. Optional path scopes the search.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -91,8 +91,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "run_command",
-            description: "Run a PowerShell command in the workspace. Prefer project scripts, tests, builds, and linters. Use for verification.",
+            name: "run_command".into(),
+            description: "Run a PowerShell command in the workspace. Prefer project scripts, tests, builds, and linters. Use for verification.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": { "command": { "type": "string" } },
@@ -100,8 +100,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "verify",
-            description: "Run a build/test/lint command and report PASS/FAIL with a short tail of output. Call this after edits to confirm the change works before finishing. Never destructive.",
+            name: "verify".into(),
+            description: "Run a build/test/lint command and report PASS/FAIL with a short tail of output. Call this after edits to confirm the change works before finishing. Never destructive.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -112,8 +112,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "delegate_task",
-            description: "Delegate a task to a specialized sub-agent. This recursively triggers the selected agent role.",
+            name: "delegate_task".into(),
+            description: "Delegate a task to a specialized sub-agent. This recursively triggers the selected agent role.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -124,8 +124,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "plan",
-            description: "Record an ordered checklist of concrete steps for the current task. Call this before non-trivial implementation so the user can follow progress. Re-call to revise the plan.",
+            name: "plan".into(),
+            description: "Record an ordered checklist of concrete steps for the current task. Call this before non-trivial implementation so the user can follow progress. Re-call to revise the plan.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -139,8 +139,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "research",
-            description: "Spawn one or more parallel READ-ONLY research sub-agents. Give independent questions in `questions` for deep research; each can read/list/grep but never writes or runs commands.",
+            name: "research".into(),
+            description: "Spawn one or more parallel READ-ONLY research sub-agents. Give independent questions in `questions` for deep research; each can read/list/grep but never writes or runs commands.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -151,28 +151,28 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "checkpoint",
-            description: "Save a tracked-files-only checkpoint in an existing Git worktree BEFORE risky or large changes. It never initializes Git, changes the user's branch/config, or captures untracked files. No arguments.",
+            name: "checkpoint".into(),
+            description: "Save a tracked-files-only checkpoint in an existing Git worktree BEFORE risky or large changes. It never initializes Git, changes the user's branch/config, or captures untracked files. No arguments.".into(),
             parameters: json!({ "type": "object", "properties": {} }),
         },
         ToolDef {
-            name: "rollback",
-            description: "Restore tracked files from the last Whim checkpoint. Current tracked work is preserved in a local Git stash; untracked files remain untouched. Only use if the build or app breaks and you need to return to the last checkpoint. No arguments.",
+            name: "rollback".into(),
+            description: "Restore tracked files from the last Whim checkpoint. Current tracked work is preserved in a local Git stash; untracked files remain untouched. Only use if the build or app breaks and you need to return to the last checkpoint. No arguments.".into(),
             parameters: json!({ "type": "object", "properties": {} }),
         },
         ToolDef {
-            name: "preview",
-            description: "Start the project's local dev server to verify the app actually runs. Returns once the server is launching. No arguments.",
+            name: "preview".into(),
+            description: "Start the project's local dev server to verify the app actually runs. Returns once the server is launching. No arguments.".into(),
             parameters: json!({ "type": "object", "properties": {} }),
         },
         ToolDef {
-            name: "tunnel",
-            description: "Expose the local preview over a public tunnel. ONLY call this when the USER explicitly asks to share the app publicly; never use it unprompted. No arguments.",
+            name: "tunnel".into(),
+            description: "Expose the local preview over a public tunnel. ONLY call this when the USER explicitly asks to share the app publicly; never use it unprompted. No arguments.".into(),
             parameters: json!({ "type": "object", "properties": {} }),
         },
         ToolDef {
-            name: "browser_action",
-            description: "Interact with a Playwright browser session.",
+            name: "browser_action".into(),
+            description: "Interact with a Playwright browser session.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -183,8 +183,8 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             })
         },
         ToolDef {
-            name: "computer_action",
-            description: "Interact with Windows UI Automation.",
+            name: "computer_action".into(),
+            description: "Interact with Windows UI Automation.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -209,10 +209,10 @@ pub(crate) fn tool_defs_for_profile(
     tool_defs()
         .into_iter()
         .filter(|tool| {
-            profile.permits_tool(tool.name)
-                && mode.permits_tool(tool.name)
-                && capability_allows_tool(&capabilities, tool.name)
-                && !(approval_blocks_mutation && MUTATION_TOOLS.contains(&tool.name))
+            profile.permits_tool(&tool.name)
+                && mode.permits_tool(&tool.name)
+                && capability_allows_tool(&capabilities, &tool.name)
+                && !(approval_blocks_mutation && MUTATION_TOOLS.contains(&tool.name.as_str()))
         })
         .collect()
 }
@@ -221,8 +221,9 @@ pub(crate) fn read_only_tool_defs(profile: &HarnessProfile) -> Vec<ToolDef> {
     tool_defs()
         .into_iter()
         .filter(|tool| {
-            matches!(tool.name, "read_file" | "list_directory" | "grep_files")
-                && profile.permits_tool(tool.name)
+            let name = tool.name.as_str();
+            matches!(name, "read_file" | "list_directory" | "grep_files")
+                && profile.permits_tool(name)
         })
         .collect()
 }

@@ -35,7 +35,9 @@ pub mod whim_route;
 pub mod workflows;
 pub mod workspace;
 pub mod fs_watcher;
+pub mod mcp;
 pub mod search;
+pub mod service_provisioning;
 pub mod update_state;
 
 #[cfg(test)]
@@ -83,6 +85,7 @@ pub struct BackendState {
     pub(crate) settings: RwLock<settings::AppSettings>,
     pub(crate) janitor_workspaces: Mutex<HashSet<PathBuf>>,
     pub(crate) codebase_watcher: Mutex<Option<crate::backend::fs_watcher::FileWatcher>>,
+    pub(crate) mcp_manager: Arc<mcp::manager::McpManager>,
 }
 
 impl Default for BackendState {
@@ -94,6 +97,7 @@ impl Default for BackendState {
             settings: RwLock::new(settings::load_settings_from_disk()),
             janitor_workspaces: Mutex::new(HashSet::new()),
             codebase_watcher: Mutex::new(None),
+            mcp_manager: mcp::manager::McpManager::new(),
         }
     }
 }
