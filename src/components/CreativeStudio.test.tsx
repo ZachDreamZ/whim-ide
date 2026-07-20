@@ -36,10 +36,10 @@ describe("CreativeStudio", () => {
     });
   });
 
-  it("sends a subscription-backed image request to the native media boundary", async () => {
+  it("sends an image request to the native media boundary", async () => {
     render(<CreativeStudio workspace={"C:\\workspace"} />);
 
-    await waitFor(() => expect(screen.getByText("ChatGPT subscription")).toBeVisible());
+    await waitFor(() => expect(screen.getByText("Codex CLI")).toBeVisible());
     fireEvent.change(screen.getByPlaceholderText(/Describe the subject/), {
       target: { value: "Original creator-style product photo" },
     });

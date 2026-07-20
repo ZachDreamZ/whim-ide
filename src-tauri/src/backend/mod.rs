@@ -15,7 +15,6 @@ pub mod chat;
 pub mod computer;
 pub mod context;
 pub mod deployment;
-pub mod eve;
 pub mod execution;
 pub mod external_harness;
 pub mod media;

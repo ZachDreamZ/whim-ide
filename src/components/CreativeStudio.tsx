@@ -20,8 +20,6 @@ type Mode = "image" | "ugc-video";
 
 const unavailableRuntime: MediaRuntimeStatus = {
   codexAvailable: false,
-  codexAuthenticated: false,
-  codexAuthKind: "unavailable",
   ffmpegAvailable: false,
   windowsVoiceAvailable: false,
 };
@@ -86,10 +84,10 @@ export function CreativeStudio({ workspace, onOpenConfiguration }: { workspace: 
     };
   }, [result, workspace]);
 
-  const ready = runtime.codexAuthenticated
+  const ready = runtime.codexAvailable
     && (mode === "image" || (runtime.ffmpegAvailable && runtime.windowsVoiceAvailable));
   const requirements = useMemo(() => [
-    { label: "Codex subscription", ready: runtime.codexAuthenticated, detail: runtime.codexAuthenticated ? runtime.codexAuthKind : runtime.codexAvailable ? "Sign in required" : "Codex not installed" },
+    { label: "Codex CLI", ready: runtime.codexAvailable, detail: runtime.codexAvailable ? "Available" : "Not installed" },
     ...(mode === "ugc-video" ? [
       { label: "FFmpeg renderer", ready: runtime.ffmpegAvailable, detail: runtime.ffmpegAvailable ? "Available" : "Not installed" },
       { label: "Windows voice", ready: runtime.windowsVoiceAvailable, detail: runtime.windowsVoiceAvailable ? "Local" : "Unavailable" },

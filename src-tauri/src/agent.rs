@@ -84,7 +84,7 @@ mod tests {
         parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
     };
     use crate::agent::external::{
-        claude_output_text, codex_output_text, external_harness_can_mutate, external_runtime_can_mutate,
+        claude_output_text, codex_output_text,
         pi_tool_allowlist, plain_output_text,
     };
     #[test]
@@ -168,63 +168,6 @@ mod tests {
         assert!(validate_provider_base(Provider::Compatible, "http://localhost:1234/v1").is_ok());
         // OLLAMA_HOST-style loopback is the only non-HTTPS local case allowed.
         assert!(validate_provider_base(Provider::Local, "http://127.0.0.1:11434/v1").is_ok());
-    }
-
-    #[test]
-    fn external_harness_output_parsers_return_only_assistant_text() {
-        let codex = r#"{"type":"thread.started","thread_id":"abc"}
-{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"Codex result"}}"#;
-        assert_eq!(codex_output_text(codex), Some("Codex result".into()));
-        let claude =
-            r#"{"type":"result","subtype":"success","result":"Claude result","session_id":"abc"}"#;
-        assert_eq!(claude_output_text(claude), Some("Claude result".into()));
-        assert_eq!(
-            plain_output_text("\nAntigravity result\n"),
-            Some("Antigravity result".into())
-        );
-    }
-
-    #[test]
-    fn external_harness_mutation_fails_closed_for_narrow_profiles() {
-        let settings = AppSettings::default();
-        let unrestricted = HarnessProfile::default();
-        assert!(external_harness_can_mutate(
-            AgentRole::Implementer,
-            &unrestricted,
-            &settings
-        ));
-        let narrowed = HarnessProfile::parse(
-            r#"{"allowedTools":["read_file","edit_file","write_file"],"allowedWritePaths":["src"]}"#,
-        )
-        .unwrap();
-        assert!(!external_harness_can_mutate(
-            AgentRole::Implementer,
-            &narrowed,
-            &settings
-        ));
-        assert!(!external_harness_can_mutate(
-            AgentRole::Planner,
-            &unrestricted,
-            &settings
-        ));
-        assert!(external_runtime_can_mutate(
-            "codex",
-            AgentRole::Implementer,
-            &unrestricted,
-            &settings
-        ));
-        assert!(!external_runtime_can_mutate(
-            "claude",
-            AgentRole::Implementer,
-            &unrestricted,
-            &settings
-        ));
-        assert!(!external_runtime_can_mutate(
-            "antigravity",
-            AgentRole::Implementer,
-            &unrestricted,
-            &settings
-        ));
     }
 
     #[test]

@@ -22,8 +22,6 @@ const MEDIA_PROCESS_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 #[serde(rename_all = "camelCase")]
 pub struct MediaRuntimeStatus {
     pub codex_available: bool,
-    pub codex_authenticated: bool,
-    pub codex_auth_kind: String,
     pub ffmpeg_available: bool,
     pub windows_voice_available: bool,
 }
@@ -143,24 +141,10 @@ fn relative_path(path: &Path, root: &Path) -> Result<String, String> {
         .map_err(|_| "Generated artifact escaped the workspace".to_string())
 }
 
-async fn codex_logged_in(launcher: &Path) -> (bool, String) {
-    match external_harness::ensure_subscription_auth("codex", launcher).await {
-        Ok(kind) => (true, kind),
-        Err(_) => (false, "signed-out-or-non-subscription".into()),
-    }
-}
-
 #[tauri::command]
 pub async fn media_runtime_status() -> Result<MediaRuntimeStatus, String> {
-    let codex = external_harness::find_launcher("codex");
-    let (codex_authenticated, codex_auth_kind) = match &codex {
-        Some(launcher) => codex_logged_in(launcher).await,
-        None => (false, "unavailable".into()),
-    };
     Ok(MediaRuntimeStatus {
-        codex_available: codex.is_some(),
-        codex_authenticated,
-        codex_auth_kind,
+        codex_available: external_harness::find_launcher("codex").is_some(),
         ffmpeg_available: external_harness::find_launcher("ffmpeg").is_some(),
         windows_voice_available: cfg!(windows),
     })
@@ -220,7 +204,7 @@ async fn generate_image_with_codex(
     );
     let mut args = codex_base_args(directory, "workspace-write");
     args.push("-".into());
-    let result = external_harness::capture_subscription_process(
+    let result = external_harness::capture_process(
         codex,
         &args,
         Some(&image_prompt),
@@ -327,7 +311,7 @@ async fn create_ugc_plan(
         output_path.to_string_lossy().into_owned(),
         "-".into(),
     ]);
-    let result = external_harness::capture_subscription_process(
+    let result = external_harness::capture_process(
         codex,
         &args,
         Some(&prompt),
@@ -641,12 +625,6 @@ pub async fn generate_media<R: tauri::Runtime>(
     let root = super::resolve_agent_workspace(state.inner(), Some(&request.workspace)).await?;
     let codex = external_harness::find_launcher("codex")
         .ok_or_else(|| "Creative Studio requires the installed Codex CLI".to_string())?;
-    let (authenticated, auth_kind) = codex_logged_in(&codex).await;
-    if !authenticated {
-        return Err(
-            "Creative Studio requires `codex login` with ChatGPT subscription access".into(),
-        );
-    }
     let title = request
         .title
         .as_deref()
@@ -684,7 +662,7 @@ pub async fn generate_media<R: tauri::Runtime>(
         &window,
         &request.operation_id,
         "prepare",
-        &format!("Using Codex {auth_kind} in an isolated media directory."),
+        "Using Codex in an isolated media directory.",
     );
     let mut artifacts = Vec::new();
     let summary;

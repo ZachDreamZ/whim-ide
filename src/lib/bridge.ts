@@ -549,8 +549,6 @@ export type ServiceResource = {
 
 export type MediaRuntimeStatus = {
   codexAvailable: boolean;
-  codexAuthenticated: boolean;
-  codexAuthKind: string;
   ffmpegAvailable: boolean;
   windowsVoiceAvailable: boolean;
 };
@@ -807,7 +805,7 @@ export const bridge = {
 
 
   async mediaRuntimeStatus(): Promise<MediaRuntimeStatus> {
-    if (!inTauri()) return { codexAvailable: false, codexAuthenticated: false, codexAuthKind: "unavailable", ffmpegAvailable: false, windowsVoiceAvailable: false };
+    if (!inTauri()) return { codexAvailable: false, ffmpegAvailable: false, windowsVoiceAvailable: false };
     return call<MediaRuntimeStatus>("media_runtime_status");
   },
 
