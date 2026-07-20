@@ -188,7 +188,7 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "action": { "type": "string", "enum": ["launch", "inspect", "invoke"] },
+                    "action": { "type": "string", "enum": ["launch", "inspect", "invoke", "set"] },
                     "args": { "type": "object" }
                 },
                 "required": ["action"]

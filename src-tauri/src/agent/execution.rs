@@ -451,6 +451,14 @@ pub(crate) async fn run_tool(
                             Err(e) => Err(e),
                         }
                     }
+                    "set" => {
+                        let ref_id = arguments["args"]["ref_id"].as_str().unwrap_or("");
+                        let value = arguments["args"]["value"].as_str().unwrap_or("");
+                        match crate::backend::computer::computer_set_value(ref_id, value) {
+                            Ok(_) => Ok(format!("Set value of {} to \"{}\"", ref_id, value)),
+                            Err(e) => Err(e),
+                        }
+                    }
                     _ => Err(format!("Unknown computer action {}", action)),
                 }
             }

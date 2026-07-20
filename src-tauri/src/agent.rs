@@ -84,8 +84,7 @@ mod tests {
         parse_stored_opencode_api_key, resolve_key_with, validate_omniroute_base,
     };
     use crate::agent::external::{
-        claude_output_text, codex_output_text,
-        pi_tool_allowlist, plain_output_text,
+        pi_tool_allowlist,
     };
     #[test]
     fn provider_parsing_is_strict() {
