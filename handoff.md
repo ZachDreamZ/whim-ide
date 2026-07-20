@@ -1,7 +1,7 @@
 # Handoff — Whim IDE
 
 > For a fresh agent session. Read this + `AGENTS.md` (repo root) + `.whim/HANDOFF.md` before doing anything.
-> Last updated: 2026-07-20. Repo version: `0.4.7`.
+> Last updated: 2026-07-20. Repo version: `0.4.7`. Standalone harness cleanup complete.
 
 ## Repo location (IMPORTANT)
 
@@ -100,8 +100,7 @@ See `.whim/HANDOFF.md` for full details. Covers:
 - **Recommended next:** convert `BackendState`'s `std::sync::Mutex` →
   `tokio::sync::Mutex` for true async-safety. This is the largest remaining correctness
   item (affects every `lock(...)` call site in `backend/mod.rs` and callers).
-- **Standalone harness cleanup**: Remove external runtime dispatch (Pi, Codex, Claude)
-  per approved spec at `docs/superpowers/specs/2026-07-17-standalone-harness-design.md`.
+- **Standalone harness cleanup**: Done — removed eve.rs, stripped subscription auth, removed agent dispatch code.
 - **Codebase index caching**: Add incremental rebuild or caching layer.
 - **Native agent context**: Make codebase index a first-class resource in the agent run
   loop (not just frontend-prompt injection).
