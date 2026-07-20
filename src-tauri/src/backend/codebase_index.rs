@@ -13,12 +13,20 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
     time::SystemTime,
 };
 
 const INDEX_VERSION: u32 = 1;
 const MAX_FILE_SIZE: u64 = 512 * 1024; // skip files over 512KB
 const MAX_WALK_FILES: usize = 5_000;
+
+/// Cache of built indexes keyed by workspace path.
+/// Invalidated by dropping entries; the file watcher calls `invalidate_index_cache`.
+fn index_cache() -> &'static Mutex<HashMap<String, CodebaseIndex>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, CodebaseIndex>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// Per-file index entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -606,13 +614,36 @@ pub fn render_manifest(index: &CodebaseIndex) -> String {
     out
 }
 
+/// Invalidate the cached index for a workspace path.
+/// Called by the file watcher when files change.
+pub(crate) fn invalidate_index_cache(path: &str) {
+    if let Ok(mut cache) = index_cache().lock() {
+        cache.remove(path);
+    }
+}
+
+fn cached_build(path: &str) -> Result<CodebaseIndex, String> {
+    if let Ok(cache) = index_cache().lock() {
+        if let Some(cached) = cache.get(path) {
+            return Ok(cached.clone());
+        }
+    }
+    let index = build_index(path)?;
+    if let Ok(mut cache) = index_cache().lock() {
+        cache.insert(path.to_string(), index.clone());
+    }
+    Ok(index)
+}
+
 /// Tauri command: build or refresh the codebase index and return the manifest text.
 #[tauri::command]
 pub fn index_codebase(path: String) -> Result<String, String> {
-    index_codebase_impl(&path)
+    let index = cached_build(&path)?;
+    Ok(render_manifest(&index))
 }
 
 /// Non-Tauri version for internal use (e.g. file watcher).
+/// Bypasses the cache and always re-indexes.
 pub(crate) fn index_codebase_impl(path: &str) -> Result<String, String> {
     let index = build_index(path)?;
     Ok(render_manifest(&index))
@@ -632,7 +663,7 @@ pub struct SymbolQueryResult {
 /// Returns only the matched symbols and their file paths — not the full index.
 #[tauri::command]
 pub fn query_codebase_symbol(path: String, query: String) -> Result<Vec<SymbolQueryResult>, String> {
-    let index = build_index(&path)?;
+    let index = cached_build(&path)?;
     let query_lower = query.to_lowercase();
     let results: Vec<SymbolQueryResult> = index
         .symbol_index
@@ -646,7 +677,7 @@ pub fn query_codebase_symbol(path: String, query: String) -> Result<Vec<SymbolQu
 /// Tauri command: get the structured index (JSON) for UI consumption.
 #[tauri::command]
 pub fn get_codebase_index_structured(path: String) -> Result<CodebaseIndex, String> {
-    build_index(&path)
+    cached_build(&path)
 }
 
 fn chrono_or_epoch(ms: u64) -> String {

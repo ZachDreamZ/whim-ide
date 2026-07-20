@@ -102,7 +102,8 @@ impl FileWatcher {
                                 .count();
                             let _ = _source_file_count;
 
-                            // Rebuild index and emit event
+                            // Invalidate cache, rebuild index, and emit event
+                            crate::backend::codebase_index::invalidate_index_cache(&ws);
                             let manifest = crate::backend::codebase_index::index_codebase_impl(&ws);
                             match manifest {
                                 Ok(text) => {
