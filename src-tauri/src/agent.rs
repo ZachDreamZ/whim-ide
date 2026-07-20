@@ -51,7 +51,6 @@ pub(crate) mod loop_detector;
 
 
 pub(crate) mod transport;
-pub(crate) use transport::chat;
 
 pub(crate) mod background;
 
@@ -62,14 +61,13 @@ pub(crate) mod execution;
 pub(crate) mod prompt;
 
 pub(crate) mod r#loop;
-pub(crate) use r#loop::{run_native_agent, MAX_PROVIDER_RETRIES};
+pub(crate) use r#loop::MAX_PROVIDER_RETRIES;
 #[cfg(test)]
 pub(crate) use r#loop::{tool_iteration_budget, remaining_agent_budget};
 
 pub(crate) mod api;
 pub(crate) use api::{
-    AgentRunRequest, fetch_provider_models, list_provider_models, load_harness_profile,
-    run_agent_prompt, run_model_chat,
+    AgentRunRequest, load_harness_profile, run_agent_prompt,
 };
 
 

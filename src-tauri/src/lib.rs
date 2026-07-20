@@ -104,8 +104,8 @@ pub fn run() {
             backend::productivity::inspect_pull_requests,
             backend::productivity::github_connect,
             backend::productivity::github_disconnect,
-            agent::run_agent_prompt,
-            agent::list_provider_models,
+            agent::api::run_agent_prompt,
+            agent::api::list_provider_models,
             memory::get_observational_memory,
         ])
         .run(tauri::generate_context!())
