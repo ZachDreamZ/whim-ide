@@ -47,9 +47,9 @@ export function Titlebar({ projectName, native, onCommand, onProjectClick }: Tit
       </div>
       <div className="titlebar-right">
         <div className="window-controls" aria-label="Window controls">
-          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("minimize")} aria-label="Minimize" title="Minimize"><Minus size={15} /></button>
-          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("maximize")} aria-label="Maximize" title="Maximize"><Square size={12} /></button>
-          <button className="window-close" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("close")} aria-label="Close" title="Close"><X size={15} /></button>
+          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("minimize")} aria-label="Minimize" title="Minimize" className="focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"><Minus size={15} /></button>
+          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("maximize")} aria-label="Maximize" title="Maximize" className="focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"><Square size={12} /></button>
+          <button className="window-close focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void windowAction("close")} aria-label="Close" title="Close"><X size={15} /></button>
         </div>
         {!native && <PanelTopClose className="browser-indicator" size={13} aria-label="Browser preview" />}
       </div>
