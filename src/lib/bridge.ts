@@ -1119,6 +1119,11 @@ export const bridge = {
     return call<unknown>("get_codebase_index_structured", { path });
   },
 
+  async queryCodebaseSymbol(path: string, query: string): Promise<{ symbol: string; files: string[] }[]> {
+    if (!inTauri()) return [];
+    return call<{ symbol: string; files: string[] }[]>("query_codebase_symbol", { path, query });
+  },
+
   async startCodebaseWatcher(path: string): Promise<void> {
     if (!inTauri()) return;
     return call<void>("start_codebase_watcher", { path });

@@ -76,14 +76,6 @@ impl McpManager {
         Ok(connected)
     }
 
-    pub async fn disconnect(self: &Arc<Self>, id: &str) -> Result<(), String> {
-        let mut servers = self.servers.lock().await;
-        if let Some(client) = servers.remove(id) {
-            client.close().await?;
-        }
-        Ok(())
-    }
-
     pub async fn disconnect_all(self: &Arc<Self>) -> Result<(), String> {
         let mut servers = self.servers.lock().await;
         for (_, client) in servers.drain() {
@@ -137,16 +129,6 @@ pub struct McpToolDescriptor {
     pub server_id: String,
     pub tool: Tool,
     pub qualified_name: String,
-}
-
-impl McpToolDescriptor {
-    pub fn to_tool_def(&self) -> crate::agent::tools::ToolDef {
-        crate::agent::tools::ToolDef {
-            name: self.qualified_name.clone(),
-            description: self.tool.description.clone(),
-            parameters: self.tool.input_schema.clone(),
-        }
-    }
 }
 
 pub fn parse_mcp_tool_name(qualified_name: &str) -> Option<(String, String)> {

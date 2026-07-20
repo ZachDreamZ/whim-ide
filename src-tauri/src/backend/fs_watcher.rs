@@ -108,8 +108,8 @@ impl FileWatcher {
                                 Ok(text) => {
                                     let _ = app_clone.emit("codebase-index-refreshed", text);
                                 }
-                                Err(_) => {
-                                    // Silently skip on error; index will retry next change
+                                Err(e) => {
+                                    eprintln!("WHIM: codebase index refresh failed: {e}");
                                 }
                             }
 

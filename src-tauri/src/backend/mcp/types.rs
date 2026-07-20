@@ -143,13 +143,6 @@ pub struct Tool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ToolCall {
-    pub name: String,
-    pub arguments: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ToolCallResult {
     pub content: Vec<ToolResultContent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -175,31 +168,6 @@ pub struct ListToolsResult {
 pub struct CallToolRequest {
     pub name: String,
     pub arguments: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Resource {
-    pub uri: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub mime_type: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Prompt {
-    pub name: String,
-    pub description: Option<String>,
-    pub arguments: Option<Vec<PromptArgument>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PromptArgument {
-    pub name: String,
-    pub description: Option<String>,
-    pub required: Option<bool>,
 }
 
 pub const PROTOCOL_VERSION: &str = "2024-11-05";

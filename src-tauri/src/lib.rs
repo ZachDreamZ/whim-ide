@@ -41,6 +41,7 @@ pub fn run() {
             backend::voice::transcribe_voice,
             backend::voice::synthesize_voice,
             backend::codebase_index::index_codebase,
+            backend::codebase_index::query_codebase_symbol,
             backend::codebase_index::get_codebase_index_structured,
             backend::fs_watcher::start_codebase_watcher,
             backend::fs_watcher::stop_codebase_watcher,

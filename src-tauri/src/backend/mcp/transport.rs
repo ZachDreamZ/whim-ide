@@ -94,7 +94,7 @@ impl SseTransport {
         }
     }
 
-    pub async fn connect(&self) -> Result<SseEventStream, String> {
+    pub async fn connect(&self) -> Result<(), String> {
         let response = self.client.get(&self.base_url)
             .header("Accept", "text/event-stream")
             .send()
@@ -105,86 +105,8 @@ impl SseTransport {
             return Err(format!("MCP SSE connection failed with status: {}", response.status()));
         }
 
-        Ok(SseEventStream {
-            response: Some(response),
-            buffer: String::new(),
-        })
+        Ok(())
     }
-}
-
-pub struct SseEventStream {
-    response: Option<reqwest::Response>,
-    buffer: String,
-}
-
-impl SseEventStream {
-    pub async fn next_event(&mut self) -> Option<Result<SseEvent, String>> {
-        let response = self.response.as_mut()?;
-        let mut chunk = vec![0u8; 4096];
-        loop {
-            let n = match response.chunk().await {
-                Ok(Some(chunk_data)) => {
-                    let len = chunk_data.len();
-                    chunk[..len].copy_from_slice(&chunk_data);
-                    len
-                }
-                Ok(None) => {
-                    if self.buffer.is_empty() {
-                        return None;
-                    }
-                    let remaining = std::mem::take(&mut self.buffer);
-                    return Some(Ok(parse_sse_line(&remaining)));
-                }
-                Err(e) => return Some(Err(format!("SSE read error: {e}"))),
-            };
-
-            self.buffer.push_str(
-                &String::from_utf8_lossy(&chunk[..n])
-            );
-
-            if let Some(event) = extract_sse_event(&mut self.buffer) {
-                return Some(Ok(event));
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SseEvent {
-    pub event: Option<String>,
-    pub data: String,
-}
-
-fn extract_sse_event(buffer: &mut String) -> Option<SseEvent> {
-    if let Some(double_newline) = buffer.find("\n\n") {
-        let block = buffer[..double_newline].to_string();
-        buffer.drain(..double_newline + 2);
-        let event = parse_sse_line(&block);
-        return Some(event);
-    }
-    if let Some(double_rn) = buffer.find("\r\n\r\n") {
-        let block = buffer[..double_rn].to_string();
-        buffer.drain(..double_rn + 4);
-        let event = parse_sse_line(&block);
-        return Some(event);
-    }
-    None
-}
-
-fn parse_sse_line(block: &str) -> SseEvent {
-    let mut event = None;
-    let mut data = String::new();
-    for line in block.lines() {
-        if let Some(value) = line.strip_prefix("event:") {
-            event = Some(value.trim().to_string());
-        } else if let Some(value) = line.strip_prefix("data:") {
-            if !data.is_empty() {
-                data.push('\n');
-            }
-            data.push_str(value.trim());
-        }
-    }
-    SseEvent { event, data }
 }
 
 #[async_trait]

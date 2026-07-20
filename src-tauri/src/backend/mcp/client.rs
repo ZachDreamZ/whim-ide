@@ -34,7 +34,7 @@ impl McpClient {
             McpServerKind::Sse { url } => {
                 let transport = SseTransport::new(&url);
                 transport.connect().await?;
-                Arc::new(transport)
+                Arc::new(transport) as Arc<dyn McpTransport>
             }
         };
 

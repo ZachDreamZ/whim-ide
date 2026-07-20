@@ -618,6 +618,31 @@ pub(crate) fn index_codebase_impl(path: &str) -> Result<String, String> {
     Ok(render_manifest(&index))
 }
 
+/// Result of a symbol query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolQueryResult {
+    pub symbol: String,
+    pub files: Vec<String>,
+}
+
+/// Tauri command: query the symbol index for files matching a symbol/export name.
+///
+/// Matches symbols that contain `query` as a substring (case-insensitive).
+/// Returns only the matched symbols and their file paths — not the full index.
+#[tauri::command]
+pub fn query_codebase_symbol(path: String, query: String) -> Result<Vec<SymbolQueryResult>, String> {
+    let index = build_index(&path)?;
+    let query_lower = query.to_lowercase();
+    let results: Vec<SymbolQueryResult> = index
+        .symbol_index
+        .into_iter()
+        .filter(|(symbol, _)| symbol.to_lowercase().contains(&query_lower))
+        .map(|(symbol, files)| SymbolQueryResult { symbol, files })
+        .collect();
+    Ok(results)
+}
+
 /// Tauri command: get the structured index (JSON) for UI consumption.
 #[tauri::command]
 pub fn get_codebase_index_structured(path: String) -> Result<CodebaseIndex, String> {
