@@ -101,7 +101,7 @@ See `.whim/HANDOFF.md` for full details. Covers:
   `tokio::sync::Mutex` for true async-safety. This is the largest remaining correctness
   item (affects every `lock(...)` call site in `backend/mod.rs` and callers).
 - **Standalone harness cleanup**: Done — removed eve.rs, stripped subscription auth, removed agent dispatch code.
-- **Codebase index caching**: Add incremental rebuild or caching layer.
+- **Codebase index caching**: Done — OnceLock-backed `Mutex<HashMap<workspace, CodebaseIndex>>` cache. `cached_build()` skips rebuild if cache hit. File watcher calls `invalidate_index_cache()` on changes.
 - **Native agent context**: Make codebase index a first-class resource in the agent run
   loop (not just frontend-prompt injection).
 
