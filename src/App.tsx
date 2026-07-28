@@ -359,7 +359,7 @@ function App() {
     };
     window.addEventListener("keydown", commandShortcut);
     return () => window.removeEventListener("keydown", commandShortcut);
-  }, [appSettings, updateAppSettings]);
+  }, [appSettings, updateAppSettings, handleNewChat]);
 
   useEffect(() => {
     if (booted.current) return;

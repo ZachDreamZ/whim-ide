@@ -447,7 +447,7 @@ export const MessageList = memo(function MessageList({
         window.clearTimeout(newContentTimerRef.current);
       }
     };
-  }, []);
+  }, [initialScrollBehavior]);
 
   const normalizedMessages = useMemo(
     () => normalizeMessages(messages),

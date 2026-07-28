@@ -606,7 +606,7 @@ export function MissionControl({
     return () => window.clearInterval(interval);
   }, [refreshTaskLedger, taskJobs]);
 
-  const send = async ({ content }: { role: "user"; content: string }) => {
+  const send = useCallback(async ({ content }: { role: "user"; content: string }) => {
     if (!workspace) {
       setMessages((current) => [...current, {
         id: crypto.randomUUID(),
@@ -906,7 +906,7 @@ ${messageContent}`;
       setStatus("ready");
       onActivityChange?.(false);
     }
-  };
+  }, [workspace, executionTarget, mode, provider, model, apiKey, baseUrl, sessionId, refreshTaskLedger, intentBrief, contextIndex, codebaseIndexRef, isolatedExecution, capturedContexts, attachedFiles, onActivityChange, onRunComplete]);
 
   useEffect(() => {
     const off = bridge.onAmbientCommand((text) => {

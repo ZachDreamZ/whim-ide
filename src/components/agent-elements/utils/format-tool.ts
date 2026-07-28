@@ -6,7 +6,18 @@ type CachedToolState = {
 
 const toolStateCache = new Map<string, CachedToolState>();
 
-function getToolStateSnapshot(part: any): CachedToolState {
+export type ToolPartBase = {
+  type: string;
+  id?: string;
+  toolCallId?: string;
+  state?: string;
+  input?: any;
+  output?: any;
+  args?: any;
+  result?: any;
+};
+
+function getToolStateSnapshot(part: ToolPartBase): CachedToolState {
   return {
     state: part.state,
     inputJson: JSON.stringify(part.input || {}),
@@ -14,7 +25,7 @@ function getToolStateSnapshot(part: any): CachedToolState {
   };
 }
 
-function hasToolStateChanged(toolCallId: string, part: any): boolean {
+function hasToolStateChanged(toolCallId: string, part: ToolPartBase): boolean {
   const cached = toolStateCache.get(toolCallId);
   const current = getToolStateSnapshot(part);
 
@@ -35,7 +46,7 @@ function hasToolStateChanged(toolCallId: string, part: any): boolean {
   return changed;
 }
 
-function arePartsEqual(prev: any, next: any): boolean {
+function arePartsEqual(prev: ToolPartBase & { toolCallId?: string; type: string }, next: ToolPartBase & { toolCallId?: string; type: string }): boolean {
   if (prev.toolCallId !== next.toolCallId) return false;
   if (prev.type !== next.type) return false;
 
@@ -48,7 +59,7 @@ function arePartsEqual(prev: any, next: any): boolean {
   return !changed;
 }
 
-function isToolCompleted(part: any): boolean {
+function isToolCompleted(part: ToolPartBase): boolean {
   if (part.output !== undefined && part.output !== null) return true;
   if (part.state === "error") return true;
   if (part.state === "result") return true;
@@ -57,8 +68,8 @@ function isToolCompleted(part: any): boolean {
 
 /** Deep compare function for tool part props. Used with React.memo(). */
 export function areToolPropsEqual(
-  prevProps: { part: any; chatStatus?: string },
-  nextProps: { part: any; chatStatus?: string },
+  prevProps: { part: ToolPartBase & { toolCallId?: string; type: string }; chatStatus?: string },
+  nextProps: { part: ToolPartBase & { toolCallId?: string; type: string }; chatStatus?: string },
 ): boolean {
   const partsEqual = arePartsEqual(prevProps.part, nextProps.part);
   if (!partsEqual) return false;
@@ -68,7 +79,7 @@ export function areToolPropsEqual(
 }
 
 /** Get tool status from part state */
-export function getToolStatus(part: any, chatStatus?: string) {
+export function getToolStatus(part: ToolPartBase & { output?: { success?: boolean } }, chatStatus?: string) {
   const basePending =
     part.state !== "output-available" && part.state !== "output-error";
   const isError =

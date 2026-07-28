@@ -23,7 +23,10 @@ export function Titlebar({ projectName, native, onCommand, onProjectClick }: Tit
       if (action === "maximize") await current.toggleMaximize();
       if (action === "close") await current.close();
     } catch (error) {
-      console.error(`Could not ${action} Whim window`, error);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error(`Could not ${action} Whim window`, error);
+      }
     }
   };
 

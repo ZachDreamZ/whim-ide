@@ -105,12 +105,11 @@ export function QuestionPrompt({
     setCustomText(nextCustomText);
     setTextValue("");
   }, [
-    activeQuestion?.kind,
+    activeQuestion,
     clampedIndex,
     customEnabled,
-    initialAnswer?.kind,
-    initialAnswer?.text,
-    initialAnswer?.selectedIds?.join("|"),
+    initialAnswer,
+    onSubmit,
   ]);
 
   const canSubmit = useMemo(() => {

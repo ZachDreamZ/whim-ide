@@ -20,7 +20,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("[ErrorBoundary]", error, info.componentStack);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error("[ErrorBoundary]", error, info.componentStack);
+    }
   }
 
   render(): ReactNode {

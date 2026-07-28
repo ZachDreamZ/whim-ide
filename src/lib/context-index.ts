@@ -79,7 +79,7 @@ function emptyRecord<T>(create: () => T): Record<ContextCategory, T> {
 
 function safePath(path: string) {
   return normalizeWorkspacePath(path)
-    .replace(/[\u0000-\u001f]/g, "")
+    .replace(/[\u0000-\u001f]/g, "") // eslint-disable-line no-control-regex
     .slice(0, 240);
 }
 

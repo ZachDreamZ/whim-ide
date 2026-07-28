@@ -185,7 +185,7 @@ export function AgentChatView({
         // Thread not found, start fresh
       })
       .finally(() => setIsLoading(false));
-  }, [initialThreadId]);
+  }, [initialThreadId, onTitleChange]);
 
   // Reset conversation when resetKey changes
   useEffect(() => {
@@ -199,7 +199,7 @@ export function AgentChatView({
       window.dispatchEvent(new Event("whim:focus-agent"));
     }, 100);
     return () => clearTimeout(timer);
-  }, [resetKey]);
+  }, [resetKey, onTitleChange]);
 
   // Persist conversation accumulating ALL messages
   const persistThread = useCallback(
@@ -270,7 +270,7 @@ export function AgentChatView({
         // Persistence is best-effort
       }
     },
-    [messages.length, conversationTitle, model, workspace, branch]
+    [messages.length, conversationTitle, model, workspace, branch, onTitleChange]
   );
 
   const handleSend = useCallback(

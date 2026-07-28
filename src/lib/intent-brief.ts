@@ -40,7 +40,7 @@ function redactSecrets(value: string) {
 function text(value: unknown, maxLength: number, multiline = false) {
   if (typeof value !== "string") return "";
   const cleaned = value
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "") // eslint-disable-line no-control-regex
     .replace(/\r\n?/g, "\n")
     .replace(multiline ? /[ \t]{2,}/g : /\s+/g, " ")
     .trim();

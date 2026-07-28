@@ -893,6 +893,11 @@ mod e2e {
     /// Tauri runtime (WebView2Loader.dll) and provider credentials; it is
     /// exercised on a WebView2-capable machine. This test covers the
     /// deterministic orchestration surface that the dispatch control plane drives.
+    ///
+    /// To run this test:
+    /// ```bash
+    /// WHIM_E2E_PROVIDER=openai WHIM_E2E_MODEL=gpt-4 WHIM_E2E_WORKSPACE=/path/to/workspace cargo test orchestration_lifecycle_reaches_terminal_with_evidence
+    /// ```
     #[test]
     fn orchestration_lifecycle_reaches_terminal_with_evidence() {
         if std::env::var("WHIM_E2E_PROVIDER")

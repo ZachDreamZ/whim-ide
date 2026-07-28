@@ -7,6 +7,7 @@ import {
   mapToolStateToStepState,
 } from "../utils/tool-adapters";
 import { ToolApprovalFooter, type ToolApproval } from "./tool-approval-footer";
+import { type ToolPartBase } from "../utils/format-tool";
 
 function extractCommandSummary(cmd: string): string {
   return cmd
@@ -91,7 +92,7 @@ export function BashToolTerminalCard({
 }
 
 export type BashToolProps = {
-  part: any;
+  part: ToolPartBase;
 };
 
 export const BashTool = memo(function BashTool({ part }: BashToolProps) {

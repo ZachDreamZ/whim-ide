@@ -177,7 +177,7 @@ export function Markdown({ content, className }: MarkdownProps) {
       }
       return <cite {...props} />;
     },
-  };
+  } as Components;
 
   return (
     <div

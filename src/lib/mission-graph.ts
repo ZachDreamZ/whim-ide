@@ -174,7 +174,10 @@ export async function runMissionGraph(
         const finalError = error instanceof Error ? error.message : String(error);
         // Even if finalization fails, the Rust ledger has the execution state
         // Log this but don't fail the entire operation
-        console.error(`Mission finalization failed: ${finalError}`);
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.error(`Mission finalization failed: ${finalError}`);
+        }
         return { finalizationError: finalError };
       }
     })
@@ -199,7 +202,10 @@ export async function runMissionGraph(
     // If we have a finalization error but a job, the Rust ledger has the state
     // This is recoverable, so we return success with a warning
     if (result.finalizationError && job) {
-      console.warn(`Mission completed with finalization warning: ${result.finalizationError}`);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`Mission completed with finalization warning: ${result.finalizationError}`);
+      }
     }
     
     return result;
@@ -216,7 +222,10 @@ export async function runMissionGraph(
           executionError: error instanceof Error ? error : new Error(String(error)),
         });
       } catch (finalizeError) {
-        console.error(`Failed to record catastrophic failure in ledger: ${finalizeError}`);
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.error(`Failed to record catastrophic failure in ledger: ${finalizeError}`);
+        }
       }
     }
     throw error;

@@ -1,12 +1,12 @@
 import { memo, useMemo } from "react";
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
-import { getToolStatus, areToolPropsEqual } from "../utils/format-tool";
+import { getToolStatus, areToolPropsEqual, type ToolPartBase } from "../utils/format-tool";
 import type { McpToolInfo } from "./tool-registry";
 import { ToolRowBase } from "./tool-row-base";
 
 export type McpToolProps = {
-  part: any;
+  part: ToolPartBase;
   mcpInfo: McpToolInfo;
   chatStatus?: string;
   defaultOpen?: boolean;
@@ -93,7 +93,7 @@ function getCompletedTitle(info: McpToolInfo): string {
     : info.displayName;
 }
 
-function formatMcpArgs(input: any): string {
+function formatMcpArgs(input: Record<string, unknown>): string {
   if (!input || typeof input !== "object") return "";
   const entries = Object.entries(input).filter(
     ([, v]) => v !== undefined && v !== null && v !== "",
@@ -119,12 +119,12 @@ function formatMcpArgs(input: any): string {
   return parts.join("  ");
 }
 
-export function unwrapMcpOutput(output: any): any {
+export function unwrapMcpOutput(output: unknown): unknown {
   if (!output) return output;
   if (Array.isArray(output)) {
     const textParts: string[] = [];
     for (const block of output) {
-      if (block?.type === "text" && typeof block?.text === "string") {
+      if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block && typeof block.text === "string") {
         textParts.push(block.text);
       }
     }
@@ -138,7 +138,7 @@ export function unwrapMcpOutput(output: any): any {
     }
     return output;
   }
-  if (output?.type === "text" && typeof output?.text === "string") {
+  if (output && typeof output === "object" && "type" in output && output.type === "text" && "text" in output && typeof output.text === "string") {
     try {
       return JSON.parse(output.text);
     } catch {
@@ -155,7 +155,7 @@ export function unwrapMcpOutput(output: any): any {
   return output;
 }
 
-function formatOutputForDisplay(output: any): string {
+function formatOutputForDisplay(output: unknown): string {
   const unwrapped = unwrapMcpOutput(output);
   if (typeof unwrapped === "string") {
     return unwrapped.length > 3000

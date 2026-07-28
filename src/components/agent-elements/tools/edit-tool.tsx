@@ -10,6 +10,7 @@ import {
   mapToolStateToStepState,
 } from "../utils/tool-adapters";
 import { ToolApprovalFooter, type ToolApproval } from "./tool-approval-footer";
+import { type ToolPartBase } from "../utils/format-tool";
 
 export type EditToolDiffCardProps = {
   step: Extract<TimelineStep, { type: "tool-call" }>;
@@ -247,7 +248,7 @@ export function EditToolDiffCard({
 }
 
 export type EditToolProps = {
-  part: any;
+  part: ToolPartBase;
   isCollapsible?: boolean;
 };
 

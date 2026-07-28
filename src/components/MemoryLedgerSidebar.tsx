@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Database, X, BrainCircuit, RefreshCw } from "lucide-react";
 import { bridge, Observation } from "../lib/bridge";
 
@@ -12,7 +12,7 @@ export function MemoryLedgerSidebar({ workspace, onClose }: MemoryLedgerSidebarP
   const [observations, setObservations] = useState<Observation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadObservations = async () => {
+  const loadObservations = useCallback(async () => {
     setLoading(true);
     try {
       const data = await bridge.getObservationalMemory(workspace);
@@ -20,15 +20,18 @@ export function MemoryLedgerSidebar({ workspace, onClose }: MemoryLedgerSidebarP
       data.sort((a, b) => b.timestamp - a.timestamp);
       setObservations(data);
     } catch (e) {
-      console.error("Failed to load observational memory", e);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error("Failed to load observational memory", e);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspace]);
 
   useEffect(() => {
     loadObservations();
-  }, [workspace]);
+  }, [loadObservations]);
 
   return (
     <div className="w-[380px] h-full bg-[#111111] border-l border-white/5 flex flex-col animate-in slide-in-from-right-8 fade-in duration-300">

@@ -66,7 +66,7 @@ export function QuestionTool({ part }: QuestionToolProps) {
   useEffect(() => {
     setLocalAnswers({});
     setLocalIndex(part.input?.questionIndex ?? 1);
-  }, [part.toolCallId]);
+  }, [part.toolCallId, part.input?.questionIndex]);
 
   if (!question) return null;
 

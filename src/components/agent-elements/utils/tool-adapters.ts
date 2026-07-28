@@ -68,7 +68,7 @@ export function mapToolNameToVariant(
 
 function extractToolDetail(
   toolName: string,
-  args: Record<string, any>,
+  args: Record<string, unknown>,
 ): string {
   switch (toolName) {
     case "Bash":
@@ -98,9 +98,9 @@ export function mapToolInvocationToStep(
   toolCallId: string,
   toolInvocation: {
     toolName: string;
-    args?: Record<string, any>;
+    args?: Record<string, unknown>;
     state: "partial-call" | "call" | "result";
-    result?: any;
+    result?: unknown;
   },
 ): Extract<TimelineStep, { type: "tool-call" }> {
   const { toolName, args = {}, result } = toolInvocation;
@@ -127,18 +127,19 @@ export function mapToolInvocationToStep(
       if (typeof result === "string") {
         step.bashOutput = result;
         step.bashSuccess = true;
-      } else if (typeof result === "object") {
+      } else if (typeof result === "object" && result !== null) {
+        const resultObj = result as Record<string, unknown>;
         const stdout =
-          typeof result?.stdout === "string"
-            ? result.stdout
-            : typeof result?.output === "string"
-              ? result.output
+          typeof resultObj.stdout === "string"
+            ? resultObj.stdout
+            : typeof resultObj.output === "string"
+              ? resultObj.output
               : "";
-        const stderr = typeof result?.stderr === "string" ? result.stderr : "";
+        const stderr = typeof resultObj.stderr === "string" ? resultObj.stderr : "";
         step.bashOutput = [stdout, stderr]
           .filter(Boolean)
           .join(stdout && stderr ? "\n" : "");
-        const exitCode = result?.exitCode ?? result?.exit_code;
+        const exitCode = resultObj.exitCode ?? resultObj.exit_code;
         step.bashSuccess = exitCode === undefined ? true : exitCode === 0;
       } else {
         step.bashOutput = JSON.stringify(result);
@@ -153,9 +154,9 @@ export function mapToolInvocationToStep(
 
   if (toolName === "Write") {
     const content =
-      typeof result?.content === "string"
+      typeof result === "object" && result !== null && "content" in result && typeof result.content === "string"
         ? result.content
-        : typeof args?.content === "string"
+        : typeof args === "object" && args !== null && "content" in args && typeof args.content === "string"
           ? args.content
           : "";
 
@@ -169,7 +170,7 @@ export function mapToolInvocationToStep(
     }
   }
 
-  if (toolName === "Edit" && Array.isArray(result?.structuredPatch)) {
+  if (toolName === "Edit" && typeof result === "object" && result !== null && "structuredPatch" in result && Array.isArray(result.structuredPatch)) {
     step.diffStats = calculateDiffStatsFromPatch(result.structuredPatch);
     step.diffLines = getDiffLinesFromPatch(result.structuredPatch);
   }

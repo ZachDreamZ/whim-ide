@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { Code2, Globe, LoaderCircle, Redo2, RefreshCw, Save, Undo2, X, GitCompare, Rocket } from "lucide-react";
 import { MultiFileDiff, type FileContents } from "@pierre/diffs/react";
 import { bridge, errorMessage } from "../lib/bridge";
@@ -32,9 +32,9 @@ export function CanvasWorkspace({ workspace, entries, initialPath, onClose, onSa
   const [deployModalOpen, setDeployModalOpen] = useState(false);
   const dirty = document.content !== document.saved;
 
-  useEffect(() => { const preferred = initialPath && files.some((file) => file.path === initialPath) ? initialPath : files[0]?.path ?? ""; setPath(preferred); dispatch({ type: "load", content: "", modifiedMs: null }); }, [workspace, initialPath, fileKey]);
-  const load = async (selectedPath: string) => { if (!selectedPath) return; setBusy(true); setMessage(""); try { const file = await bridge.readFileContent(workspace, selectedPath); dispatch({ type: "load", content: file.content, modifiedMs: file.modifiedMs ?? null }); } catch (cause) { setMessage(errorMessage(cause)); } finally { setBusy(false); } };
-  useEffect(() => { void load(path); }, [path, workspace]);
+  useEffect(() => { const preferred = initialPath && files.some((file) => file.path === initialPath) ? initialPath : files[0]?.path ?? ""; setPath(preferred); dispatch({ type: "load", content: "", modifiedMs: null }); }, [workspace, initialPath, fileKey, files]);
+  const load = useCallback(async (selectedPath: string) => { if (!selectedPath) return; setBusy(true); setMessage(""); try { const file = await bridge.readFileContent(workspace, selectedPath); dispatch({ type: "load", content: file.content, modifiedMs: file.modifiedMs ?? null }); } catch (cause) { setMessage(errorMessage(cause)); } finally { setBusy(false); } }, [workspace]);
+  useEffect(() => { void load(path); }, [path, workspace, load]);
   useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [dirty]);
   const save = async () => { setBusy(true); setMessage(""); try { const result = await bridge.writeFile(workspace, path, document.content, false, document.modifiedMs); dispatch({ type: "saved", modifiedMs: result.modifiedMs ?? null }); setMessage("Saved"); onSaved?.(); } catch (cause) { setMessage(errorMessage(cause)); } finally { setBusy(false); } };
   const selectPath = (next: string) => { if (!dirty || window.confirm("Discard unsaved Canvas changes?")) setPath(next); };

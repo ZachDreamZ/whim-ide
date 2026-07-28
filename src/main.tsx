@@ -5,7 +5,10 @@ import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 window.addEventListener("unhandledrejection", (event) => {
-  console.error("[Unhandled Rejection]", event.reason);
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.error("[Unhandled Rejection]", event.reason);
+  }
 });
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -30,7 +30,10 @@ export class VibePipelineTracker {
 
   public transitionTo(nextState: PipelineState): void {
     if (nextState !== "FAILED" && !PIPELINE_STAGES.includes(nextState)) {
-      console.warn(`Ignoring invalid pipeline state: ${nextState}`);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`Ignoring invalid pipeline state: ${nextState}`);
+      }
       return;
     }
     if (this.currentState === nextState) return;

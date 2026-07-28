@@ -13,13 +13,14 @@ import {
   IconChecklist as ListTodo,
   IconLogout as LogOut,
 } from "@tabler/icons-react";
+import { type ToolPartBase } from "../utils/format-tool";
 
 export type ToolVariant = "simple" | "collapsible";
 
 export type ToolMeta = {
   icon: React.ComponentType<{ className?: string }>;
-  title: (part: any) => string;
-  subtitle?: (part: any) => string;
+  title: (part: ToolPartBase) => string;
+  subtitle?: (part: ToolPartBase) => string;
   variant: ToolVariant;
 };
 

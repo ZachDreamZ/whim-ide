@@ -1466,7 +1466,7 @@ const KNOWN_EVENT_TYPES = ["text", "reasoning", "tool_use", "error", "warning"] 
  */
 function sanitizeText(value: string): string {
   return value
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, "") // eslint-disable-line no-control-regex
     .replace(/\s{3,}/g, "   ")
     .trim()
     .slice(0, 64_000);

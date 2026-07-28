@@ -16,7 +16,7 @@ type ActiveCheck = { id: string; operationId: string };
 function trimOutput(result: NativeResult) {
   const output = result.success ? result.stdout : result.stderr || result.stdout;
   return String(output ?? "")
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, "") // eslint-disable-line no-control-regex
     .slice(0, 1_800)
     .trim();
 }

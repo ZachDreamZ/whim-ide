@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { CheckIcon, IconArrowRight } from "../icons";
 import { TextShimmer } from "../text-shimmer";
-import { getToolStatus, areToolPropsEqual } from "../utils/format-tool";
+import { getToolStatus, areToolPropsEqual, type ToolPartBase } from "../utils/format-tool";
 import { cn } from "../utils/cn";
 
 export type TodoItem = {
@@ -11,7 +11,7 @@ export type TodoItem = {
 };
 
 export type TodoToolProps = {
-  part: any;
+  part: ToolPartBase & { output?: { oldTodos?: TodoItem[]; newTodos?: TodoItem[] } };
   chatStatus?: string;
 };
 
@@ -130,8 +130,8 @@ export const TodoTool = memo(function TodoTool({
   const { isPending } = getToolStatus(part, chatStatus);
 
   const isStreaming = part.state === "input-streaming";
-  const oldTodos: TodoItem[] = part.output?.oldTodos || [];
-  const newTodos: TodoItem[] = part.input?.todos || part.output?.newTodos || [];
+  const oldTodos: TodoItem[] = useMemo(() => part.output?.oldTodos || [], [part.output?.oldTodos]);
+  const newTodos: TodoItem[] = useMemo(() => part.input?.todos || part.output?.newTodos || [], [part.input?.todos, part.output?.newTodos]);
 
   const isCreation = oldTodos.length === 0;
   const changes = useMemo(

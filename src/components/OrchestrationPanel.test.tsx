@@ -86,7 +86,7 @@ describe("OrchestrationPanel", () => {
       title: "New Job",
       status: "queued",
       operationIds: [],
-    } as any);
+    } as Partial<OrchestrationJob> as OrchestrationJob);
 
     render(<OrchestrationPanel workspace="C:/workspace" />);
 
@@ -109,7 +109,7 @@ describe("OrchestrationPanel", () => {
   it("handles dispatching and transitions in native mode", async () => {
     vi.mocked(bridge.isNative).mockReturnValue(true);
     vi.mocked(bridge.listProjectOrchestrationJobs).mockResolvedValue(mockJobs);
-    const dispatchMock = vi.mocked(bridge.dispatchOrchestrationJob).mockResolvedValue(null as any);
+    const dispatchMock = vi.mocked(bridge.dispatchOrchestrationJob).mockResolvedValue({} as OrchestrationJob);
 
     render(<OrchestrationPanel workspace="C:/workspace" />);
 

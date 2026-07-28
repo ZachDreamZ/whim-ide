@@ -6,6 +6,7 @@ import {
   mapToolInvocationToStep,
   mapToolStateToStepState,
 } from "../utils/tool-adapters";
+import { type ToolPartBase } from "../utils/format-tool";
 
 export type ThinkingCollapsedProps = {
   step: Extract<TimelineStep, { type: "tool-call" }>;
@@ -46,7 +47,7 @@ export function ThinkingCollapsed({
 }
 
 export type ThinkingToolProps = {
-  part?: any;
+  part?: ToolPartBase;
   step?: Extract<TimelineStep, { type: "tool-call" }>;
   state?: StepState;
   onComplete?: () => void;

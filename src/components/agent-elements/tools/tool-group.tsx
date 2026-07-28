@@ -1,13 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toolRegistry } from "./tool-registry";
 import { GenericTool } from "./generic-tool";
-import { getToolStatus } from "../utils/format-tool";
+import { getToolStatus, type ToolPartBase } from "../utils/format-tool";
 import { cn } from "../utils/cn";
 import { ToolRowBase } from "./tool-row-base";
 
 export type ToolGroupProps = {
-  part: any;
-  nestedTools?: any[];
+  part: ToolPartBase;
+  nestedTools?: ToolPartBase[];
   chatStatus?: string;
   completeLabel: string;
   shimmerLabel?: string;
@@ -31,7 +31,7 @@ function formatCount(value: number, label: string): string {
   return `${value} ${value === 1 ? label : `${label}s`}`;
 }
 
-function summarizeNestedTools(nestedTools: any[]): string {
+function summarizeNestedTools(nestedTools: ToolPartBase[]): string {
   if (nestedTools.length === 0) return "";
   const fileTypes = new Set(["tool-Read", "tool-Edit", "tool-Write"]);
   const searchTypes = new Set([
@@ -64,7 +64,7 @@ function summarizeNestedTools(nestedTools: any[]): string {
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 }
 
-function getNestedCounts(nestedTools: any[]) {
+function getNestedCounts(nestedTools: ToolPartBase[]) {
   const fileTypes = new Set(["tool-Read", "tool-Edit", "tool-Write"]);
   const searchTypes = new Set([
     "tool-Search",
@@ -103,19 +103,19 @@ export const ToolGroup = memo(function ToolGroup({
   showElapsed = true,
 }: ToolGroupProps) {
   const { isPending, isInterrupted } = getToolStatus(part, chatStatus);
-  const description = part.input?.description || "";
+  const description = (part.input as any)?.description || "";
   const [elapsedMs, setElapsedMs] = useState(0);
   const [expanded, setExpanded] = useState(defaultOpen ?? false);
   const [visibleCount, setVisibleCount] = useState(0);
   const startedAt =
-    (part.callProviderMetadata?.custom?.startedAt as number | undefined) ??
-    (part.startedAt as number | undefined);
+    ((part as any).callProviderMetadata?.custom?.startedAt as number | undefined) ??
+    ((part as any).startedAt as number | undefined);
   const hasNestedTools = nestedTools.length > 0;
   const streamKey = part.toolCallId ?? part.id ?? "";
   const outputDuration =
-    part.output?.totalDurationMs ||
-    part.output?.duration ||
-    part.output?.duration_ms;
+    (part.output as any)?.totalDurationMs ||
+    (part.output as any)?.duration ||
+    (part.output as any)?.duration_ms;
   const maskThreshold = 4;
   const streamHeight = Math.max(1, maxVisibleTools) * 28;
   const visibleToolCount = isPending

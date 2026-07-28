@@ -12,16 +12,17 @@ import { SearchTool } from "./search-tool";
 import { QuestionTool } from "../question/question-tool";
 import { DataAnalysisBlock } from "../../DataAnalysisBlock";
 import type { CustomToolRendererProps } from "../types";
+import { type ToolPartBase } from "../utils/format-tool";
 
 export type ToolRendererProps = {
-  part: any;
-  nestedTools?: any[];
+  part: ToolPartBase;
+  nestedTools?: ToolPartBase[];
   chatStatus?: string;
   toolRenderers?: Record<string, React.ComponentType<CustomToolRendererProps>>;
 };
 
 function deriveToolStatus(
-  part: any,
+  part: ToolPartBase,
   chatStatus?: string,
 ): CustomToolRendererProps["status"] {
   if (part.state === "input-streaming") return "streaming";
