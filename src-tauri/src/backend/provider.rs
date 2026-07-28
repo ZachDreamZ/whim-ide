@@ -4,6 +4,7 @@ use std::{
     collections::BTreeSet,
     fs::{self},
     path::{Path, PathBuf},
+    time::Instant,
 };
 use tauri::State;
 
@@ -330,6 +331,155 @@ async fn fetch_local_json(endpoint: &str, timeout_ms: u64) -> (Option<Value>, St
     }
 }
 
+/// Enhanced health check result with latency measurement
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderHealthStatus {
+    pub id: String,
+    pub name: String,
+    pub healthy: bool,
+    pub latency_ms: Option<u64>,
+    pub last_check: String,
+    pub error_message: Option<String>,
+    pub models_available: usize,
+}
+
+/// Perform enhanced health check on a provider endpoint
+async fn check_provider_health(
+    provider_id: &str,
+    provider_name: &str,
+    endpoint: &str,
+    timeout_ms: u64,
+) -> ProviderHealthStatus {
+    let start = Instant::now();
+    let (json, detail) = fetch_local_json(endpoint, timeout_ms).await;
+    let latency_ms = start.elapsed().as_millis() as u64;
+    let models_available = json
+        .as_ref()
+        .and_then(|value| {
+            if provider_id == "ollama" {
+                value.get("models").and_then(Value::as_array).map(|arr| arr.len())
+            } else {
+                value.get("data").and_then(Value::as_array).map(|arr| arr.len())
+            }
+        })
+        .unwrap_or(0);
+
+    ProviderHealthStatus {
+        id: provider_id.to_string(),
+        name: provider_name.to_string(),
+        healthy: json.is_some(),
+        latency_ms: Some(latency_ms),
+        last_check: format!("{:?}", std::time::SystemTime::now()),
+        error_message: if json.is_none() { Some(detail) } else { None },
+        models_available,
+    }
+}
+
+/// Automatic provider discovery with health checking and fallback
+#[tauri::command]
+pub async fn discover_providers_with_health(
+    state: State<'_, BackendState>,
+    timeout_ms: Option<u64>,
+) -> Result<Vec<ProviderHealthStatus>, String> {
+    let timeout_ms = timeout_ms.unwrap_or(5_000);
+    let selected = super::workspace::optional_selected_workspace_path(state.inner()).await?;
+    
+    // Discover local providers
+    let _ollama_tool = resolve_tool("ollama", selected.as_deref())
+        .await
+        .unwrap_or_else(|_| unavailable_tool("ollama"));
+    let _lm_studio_tool = resolve_tool("lms", selected.as_deref())
+        .await
+        .unwrap_or_else(|_| unavailable_tool("lms"));
+    let _omniroute_tool = resolve_tool("omniroute", selected.as_deref())
+        .await
+        .unwrap_or_else(|_| unavailable_tool("omniroute"));
+
+    // Get configured endpoints
+    let configured_ollama_host = std::env::var("OLLAMA_HOST").ok();
+    let valid_ollama_host = configured_ollama_host
+        .as_deref()
+        .and_then(normalized_loopback_url);
+    let ollama_base = valid_ollama_host.unwrap_or_else(|| "http://127.0.0.1:11434".to_string());
+    let ollama_endpoint = format!("{}/api/tags", ollama_base.trim_end_matches('/'));
+    
+    let lm_studio_endpoint = "http://127.0.0.1:1234/v1/models".to_string();
+    let omniroute_endpoint = "http://127.0.0.1:20128/v1/models".to_string();
+
+    // Perform health checks in parallel
+    let (ollama_health, lm_studio_health, omniroute_health) = tokio::join!(
+        check_provider_health("ollama", "Ollama", &ollama_endpoint, timeout_ms),
+        check_provider_health("lmstudio", "LM Studio", &lm_studio_endpoint, timeout_ms),
+        check_provider_health("omniroute", "OmniRoute", &omniroute_endpoint, timeout_ms),
+    );
+
+    let mut health_statuses = vec![ollama_health, lm_studio_health, omniroute_health];
+    
+    // Sort by health and latency (healthy first, then by latency)
+    health_statuses.sort_by(|a, b| {
+        match (a.healthy, b.healthy) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            (true, true) => match (a.latency_ms, b.latency_ms) {
+                (Some(a_lat), Some(b_lat)) => a_lat.cmp(&b_lat),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            },
+            (false, false) => std::cmp::Ordering::Equal,
+        }
+    });
+
+    Ok(health_statuses)
+}
+
+/// Get the best available provider based on health and latency
+#[tauri::command]
+pub async fn get_best_provider(
+    state: State<'_, BackendState>,
+    preferred_provider: Option<String>,
+) -> Result<Option<String>, String> {
+    let health_statuses = discover_providers_with_health(state, Some(3_000)).await?;
+    
+    // If user has a preference, check if it's healthy
+    if let Some(preferred) = preferred_provider {
+        if let Some(preferred_health) = health_statuses.iter().find(|h| h.id == preferred) {
+            if preferred_health.healthy {
+                return Ok(Some(preferred_health.id.clone()));
+            }
+        }
+    }
+    
+    // Return the first healthy provider
+    let best_provider = health_statuses.iter().find(|h| h.healthy);
+    Ok(best_provider.map(|h| h.id.clone()))
+}
+
+/// Fallback provider selection with provider health awareness
+#[tauri::command]
+pub async fn select_provider_with_fallback(
+    state: State<'_, BackendState>,
+    requested_provider: Option<String>,
+    _role: Option<String>,
+) -> Result<String, String> {
+    // First check if the requested provider is available and healthy
+    if let Some(requested) = requested_provider {
+        let health_statuses = discover_providers_with_health(state.clone(), Some(2_000)).await?;
+        if let Some(requested_health) = health_statuses.iter().find(|h| h.id == requested) {
+            if requested_health.healthy {
+                return Ok(requested_health.id.clone());
+            }
+        }
+    }
+    
+    // Fall back to best available provider
+    match get_best_provider(state, None).await? {
+        Some(best) => Ok(best),
+        None => Err("No healthy providers available".to_string()),
+    }
+}
+
 #[tauri::command]
 pub async fn discover_environment(
     state: State<'_, BackendState>,
@@ -577,4 +727,98 @@ pub async fn discover_local_ai_providers(
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_health_status_serialization() {
+        let status = ProviderHealthStatus {
+            id: "test-provider".to_string(),
+            name: "Test Provider".to_string(),
+            healthy: true,
+            latency_ms: Some(100),
+            last_check: "2025-01-01T00:00:00Z".to_string(),
+            error_message: None,
+            models_available: 5,
+        };
+        
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("test-provider"));
+        assert!(json.contains("healthy"));
+    }
+
+    #[test]
+    fn provider_health_status_unhealthy() {
+        let status = ProviderHealthStatus {
+            id: "test-provider".to_string(),
+            name: "Test Provider".to_string(),
+            healthy: false,
+            latency_ms: None,
+            last_check: "2025-01-01T00:00:00Z".to_string(),
+            error_message: Some("Connection failed".to_string()),
+            models_available: 0,
+        };
+        
+        assert!(!status.healthy);
+        assert!(status.error_message.is_some());
+        assert_eq!(status.models_available, 0);
+    }
+
+    #[test]
+    fn provider_health_sorting() {
+        let mut statuses = vec![
+            ProviderHealthStatus {
+                id: "provider-a".to_string(),
+                name: "Provider A".to_string(),
+                healthy: true,
+                latency_ms: Some(200),
+                last_check: "2025-01-01T00:00:00Z".to_string(),
+                error_message: None,
+                models_available: 10,
+            },
+            ProviderHealthStatus {
+                id: "provider-b".to_string(),
+                name: "Provider B".to_string(),
+                healthy: true,
+                latency_ms: Some(100),
+                last_check: "2025-01-01T00:00:00Z".to_string(),
+                error_message: None,
+                models_available: 8,
+            },
+            ProviderHealthStatus {
+                id: "provider-c".to_string(),
+                name: "Provider C".to_string(),
+                healthy: false,
+                latency_ms: None,
+                last_check: "2025-01-01T00:00:00Z".to_string(),
+                error_message: Some("Unreachable".to_string()),
+                models_available: 0,
+            },
+        ];
+        
+        // Sort by health and latency
+        statuses.sort_by(|a, b| {
+            match (a.healthy, b.healthy) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                (true, true) => match (a.latency_ms, b.latency_ms) {
+                    (Some(a_lat), Some(b_lat)) => a_lat.cmp(&b_lat),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                },
+                (false, false) => std::cmp::Ordering::Equal,
+            }
+        });
+        
+        // Healthy providers should come first, sorted by latency
+        assert!(statuses[0].healthy);
+        assert!(statuses[1].healthy);
+        assert!(!statuses[2].healthy);
+        assert_eq!(statuses[0].id, "provider-b"); // Lower latency
+        assert_eq!(statuses[1].id, "provider-a");
+    }
 }
