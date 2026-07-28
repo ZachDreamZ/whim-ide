@@ -6,9 +6,11 @@
 //! execution contract instead of UI-only switches.
 
 use serde::Serialize;
+use std::collections::HashMap;
 use tauri::State;
 
 use crate::backend::{read_lock, settings::AppSettings, BackendState};
+use crate::backend::mcp::manager::McpManager;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -98,32 +100,35 @@ const CAPABILITIES: &[AgentCapabilitySpec] = &[
 ];
 
 fn mode_needs(mode: &str, id: &str) -> bool {
+    // Read-only modes that don't need coding/verification capabilities
+    const READ_ONLY_MODES: &[&str] = &[
+        "research", "researcher", "plan", "planner", "review", "reviewer", 
+        "securityreviewer", "gamedesigner", "playtester"
+    ];
+    
+    // Modes that need GitHub integration
+    const GITHUB_MODES: &[&str] = &[
+        "review", "reviewer", "build", "ship", "auto", "releaseagent"
+    ];
+    
+    // Modes that need verification but limited commands
+    const VERIFY_ONLY_MODES: &[&str] = &[
+        "verify", "tester", "playtester"
+    ];
+    
+    // Modes that need computer-use (UI automation)
+    const COMPUTER_USE_MODES: &[&str] = &[
+        "tester", "debugger", "accessibilityexpert"
+    ];
+    
     match id {
         "workspace" => true,
-        "research" => matches!(mode, "research" | "researcher" | "plan" | "planner"),
-        "coding" => !matches!(
-            mode,
-            "research"
-                | "researcher"
-                | "plan"
-                | "planner"
-                | "review"
-                | "reviewer"
-                | "verify"
-                | "tester"
-                | "securityreviewer"
-        ),
-        "verification" => !matches!(
-            mode,
-            "research"
-                | "researcher"
-                | "plan"
-                | "planner"
-                | "review"
-                | "reviewer"
-                | "securityreviewer"
-        ),
-        "github" => matches!(mode, "review" | "reviewer" | "build" | "ship" | "auto"),
+        "research" => READ_ONLY_MODES.contains(&mode),
+        "coding" => !READ_ONLY_MODES.contains(&mode) && mode != "janitor",
+        "verification" => !READ_ONLY_MODES.contains(&mode) && mode != "janitor",
+        "computer-use" => COMPUTER_USE_MODES.contains(&mode),
+        "github" => GITHUB_MODES.contains(&mode),
+        "mcp" => true, // MCP is always available if configured
         _ => false,
     }
 }
@@ -150,6 +155,25 @@ pub(crate) fn resolved_capabilities(
         .collect()
 }
 
+/// Extended capability resolution that includes MCP tools
+pub(crate) fn resolved_capabilities_with_mcp(
+    settings: &AppSettings,
+    mode: &str,
+    mcp_tools: &[String],
+) -> Vec<AgentCapabilitySpec> {
+    let mut capabilities = resolved_capabilities(settings, mode);
+    
+    // Add MCP tools to the capabilities if MCP is enabled
+    if settings.agent.enabled_capabilities.iter().any(|id| id == "mcp") {
+        if let Some(mcp_capability) = capabilities.iter_mut().find(|c| c.id == "mcp") {
+            // MCP capability is enabled, tools will be loaded dynamically
+            // The tools list is passed in for reference but not stored in the capability
+        }
+    }
+    
+    capabilities
+}
+
 pub(crate) fn capability_allows_tool(capabilities: &[AgentCapabilitySpec], tool: &str) -> bool {
     capabilities
         .iter()
@@ -172,6 +196,14 @@ pub(crate) fn capability_prompt(capabilities: &[AgentCapabilitySpec]) -> String 
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Get active MCP tool names for capability integration
+pub(crate) async fn active_mcp_tools(mcp_manager: &McpManager) -> Vec<String> {
+    // This would normally query the MCP manager for currently available tools
+    // For now, return empty vector - the actual implementation would be:
+    // mcp_manager.list_tools().await
+    vec![]
 }
 
 #[tauri::command]

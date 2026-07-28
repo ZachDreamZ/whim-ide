@@ -10,8 +10,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { bridge, type DiscoveredProvider, type OAuthProviderStatus } from "../lib/bridge";
+import { 
+  OMNIROUTE_ROUTES, 
+  isOmniRouteProvider,
+  OMNIROUTE_DEFAULT_BASE 
+} from "../lib/omniroute-config";
 
-const OMNIROUTE_ROUTES = ["auto", "auto/coding", "auto/fast", "auto/cheap", "auto/offline", "auto/smart"];
 const MODEL_DISCOVERY_DELAY_MS = 350;
 
 export function displayModelChoice(value: string) {
@@ -127,7 +131,7 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
     const request = ++modelRequest.current;
     const active = discovered.find((provider) => provider.provider === agentProvider);
     const canLoad = Boolean(active) && (
-      agentProvider === "omniroute"
+      isOmniRouteProvider(agentProvider)
       || (active?.kind === "local" && active.available)
       || (active?.kind === "cloud" && (active.hasKey || agentApiKey.trim().length > 0))
     );
@@ -143,13 +147,13 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
       bridge.listProviderModels(agentProvider, agentApiKey, agentBaseUrl || active.baseUrl || "")
         .then((ids) => {
           if (request !== modelRequest.current || !Array.isArray(ids)) return;
-          const routes = agentProvider === "omniroute" ? OMNIROUTE_ROUTES : [];
+          const routes = isOmniRouteProvider(agentProvider) ? [...OMNIROUTE_ROUTES] : [];
           setModelOptions([...new Set([...routes, ...ids])]);
         })
         .catch(() => {
           if (request !== modelRequest.current) return;
-          if (agentProvider === "omniroute") {
-            setModelOptions(OMNIROUTE_ROUTES);
+          if (isOmniRouteProvider(agentProvider)) {
+            setModelOptions([...OMNIROUTE_ROUTES]);
           } else {
             setNotice(`Could not load ${active.label} models. You can enter a model ID manually.`);
           }
@@ -186,7 +190,7 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
       if (agentProvider !== "auto" && agentProvider !== provider.provider && !provider.hasKey) {
         patch.apiKey = "";
       }
-      if (provider.provider === "omniroute") patch.model = "";
+      if (isOmniRouteProvider(provider.provider)) patch.model = "";
       onAgentProfileChange(patch);
     }
     setModelOptions([]);
@@ -298,7 +302,7 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
                       <label htmlFor={`base-${provider.provider}`}>Base URL</label>
                     )}
                     {(provider.provider === "compatible" || provider.provider === "qwen" || provider.provider === "omniroute") && (
-                      <input id={`base-${provider.provider}`} value={agentBaseUrl} placeholder={provider.provider === "qwen" ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : provider.provider === "omniroute" ? "http://127.0.0.1:20128/v1" : "https://api.your-host/v1"} autoComplete="off" spellCheck={false} onChange={(event) => onAgentProfileChange({ provider: agentProvider, baseUrl: event.target.value })} />
+                      <input id={`base-${provider.provider}`} value={agentBaseUrl} placeholder={provider.provider === "qwen" ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : isOmniRouteProvider(provider.provider) ? OMNIROUTE_DEFAULT_BASE : "https://api.your-host/v1"} autoComplete="off" spellCheck={false} onChange={(event) => onAgentProfileChange({ provider: agentProvider, baseUrl: event.target.value })} />
                     )}
                   </div>
                 )}

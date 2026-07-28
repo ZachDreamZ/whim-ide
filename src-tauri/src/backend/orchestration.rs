@@ -137,12 +137,12 @@ async fn orchestration_workspace(
 fn agent_mode_string(mode: JobMode) -> String {
     match mode {
         JobMode::Auto | JobMode::Vibe => "auto",
-        JobMode::Plan => "plan",
+        JobMode::Plan => "planner",
         JobMode::Research => "researcher",
-        JobMode::Build => "build",
-        JobMode::Verify => "verify",
-        JobMode::Review => "review",
-        JobMode::Ship => "ship",
+        JobMode::Build => "implementer",
+        JobMode::Verify => "tester",
+        JobMode::Review => "reviewer",
+        JobMode::Ship => "releaseagent",
         JobMode::Operate => "janitor",
     }
     .to_string()
@@ -870,6 +870,17 @@ mod e2e {
         assert_eq!(serde_json::to_value(JobMode::Auto).unwrap(), json!("auto"));
         assert_eq!(agent_mode_string(JobMode::Auto), "auto");
         assert_eq!(agent_mode_string(JobMode::Vibe), "auto");
+    }
+    
+    #[test]
+    fn mode_strings_match_agent_role_conventions() {
+        assert_eq!(agent_mode_string(JobMode::Plan), "planner");
+        assert_eq!(agent_mode_string(JobMode::Research), "researcher");
+        assert_eq!(agent_mode_string(JobMode::Build), "implementer");
+        assert_eq!(agent_mode_string(JobMode::Verify), "tester");
+        assert_eq!(agent_mode_string(JobMode::Review), "reviewer");
+        assert_eq!(agent_mode_string(JobMode::Ship), "releaseagent");
+        assert_eq!(agent_mode_string(JobMode::Operate), "janitor");
     }
 
     /// Runtime-free integration test of the orchestration lifecycle through the

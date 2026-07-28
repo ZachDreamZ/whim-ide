@@ -60,6 +60,7 @@ import {
   resolveMissionRequest,
   type MissionAgentMode,
 } from "../lib/agent-workflow";
+import { isOmniRouteProvider } from "../lib/omniroute-config";
 import type { WorkspaceEntry } from "../types/workbench";
 
 type MissionControlProps = {
@@ -631,7 +632,7 @@ export function MissionControl({
 
     let policyContext = "";
     let policyAuditContext = "";
-    if (provider !== "local" && provider !== "auto" && provider !== "omniroute" && (!model || model === "auto")) {
+    if (provider !== "local" && provider !== "auto" && !isOmniRouteProvider(provider) && (!model || model === "auto")) {
       setMessages((current) => [...current, {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -641,7 +642,7 @@ export function MissionControl({
     }
     try {
       const policy = JSON.parse(await bridge.readFile(executionTarget ?? workspace, ".whim/automation.json")) as { enabled?: Record<string, boolean> };
-      if (policy.enabled?.route === false && provider !== "auto" && provider !== "omniroute" && model === "auto") {
+      if (policy.enabled?.route === false && provider !== "auto" && !isOmniRouteProvider(provider) && model === "auto") {
         setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "error", title: "Explicit model required", message: "Project routing is disabled. Select a concrete provider/model before running." }] } as unknown as UIMessage]);
         return;
       }

@@ -180,15 +180,20 @@ impl AgentRole {
                 name,
                 "read_file" | "list_directory" | "grep_files" | "plan" | "edit_file" | "verify"
             ),
+            // Debugger and AccessibilityExpert get computer_action for UI testing
+            Self::Debugger | Self::AccessibilityExpert => {
+                matches!(name, "computer_action") || matches!(
+                    name,
+                    "read_file" | "list_directory" | "grep_files" | "plan" | "edit_file" | "verify" | "write_file" | "run_command"
+                )
+            }
             Self::Implementer
             | Self::Designer
-            | Self::Debugger
             | Self::ReleaseAgent
             | Self::TechArtist
             | Self::AssetGenerator
             | Self::Refactorer
             | Self::DataScientist
-            | Self::AccessibilityExpert
             | Self::Localizer => true,
         }
     }

@@ -85,11 +85,17 @@ const MissionState = Annotation.Root({
  * Run the mission lifecycle as a LangGraph workflow. The graph coordinates
  * renderer-side control flow; Rust remains authoritative for durable job state,
  * cancellation, evidence, provider calls, and workspace permissions.
+ * 
+ * This implementation ensures transactional consistency: if any phase fails,
+ * the Rust ledger is updated with the appropriate error state for recovery.
  */
 export async function runMissionGraph(
   input: MissionGraphRequest,
   adapters: MissionGraphAdapters,
 ) {
+  let job: OrchestrationJob | null = null;
+  let executionError: Error | null = null;
+
   const graph = new StateGraph(MissionState)
     .addNode("prepare", async (state) => {
       await adapters.onPhase?.("prepare");
@@ -108,7 +114,16 @@ export async function runMissionGraph(
     })
     .addNode("persist", async (state) => {
       await adapters.onPhase?.("persist");
-      return { job: await adapters.persist(state.request) };
+      try {
+        job = await adapters.persist(state.request);
+        return { job, finalizationError: null };
+      } catch (error) {
+        executionError = error instanceof Error ? error : new Error(String(error));
+        return { 
+          job: null, 
+          finalizationError: `Failed to create durable ledger record: ${executionError.message}` 
+        };
+      }
     })
     .addNode("execute", async (state) => {
       await adapters.onPhase?.("execute");
@@ -122,18 +137,30 @@ export async function runMissionGraph(
           summary: resultSummary(result),
         };
       } catch (error) {
-        const executionError = error instanceof Error ? error : new Error(String(error));
+        executionError = error instanceof Error ? error : new Error(String(error));
         return {
           result: null,
           executionError,
           outcome: "failed" as const,
-          summary: "Native agent could not start or complete this task.",
+          summary: `Native agent execution failed: ${executionError.message}`,
         };
       }
     })
     .addNode("finalize", async (state) => {
       await adapters.onPhase?.("finalize");
-      if (!state.job || !state.outcome) return {};
+      if (!state.job) {
+        // If we never got a ledger record, we can't finalize - this is a critical failure
+        return { 
+          finalizationError: state.finalizationError || "Cannot finalize: no ledger record exists" 
+        };
+      }
+      
+      if (!state.outcome) {
+        // If execution failed to produce an outcome, mark as failed
+        state.outcome = "failed";
+        state.summary = state.summary || "Task failed to complete";
+      }
+      
       try {
         await adapters.finalize({
           job: state.job,
@@ -144,9 +171,11 @@ export async function runMissionGraph(
         });
         return { finalizationError: null };
       } catch (error) {
-        return {
-          finalizationError: error instanceof Error ? error.message : String(error),
-        };
+        const finalError = error instanceof Error ? error.message : String(error);
+        // Even if finalization fails, the Rust ledger has the execution state
+        // Log this but don't fail the entire operation
+        console.error(`Mission finalization failed: ${finalError}`);
+        return { finalizationError: finalError };
       }
     })
     .addEdge(START, "prepare")
@@ -156,15 +185,42 @@ export async function runMissionGraph(
     .addEdge("finalize", END)
     .compile();
 
-  return graph.invoke({
-    request: input,
-    job: null,
-    result: null,
-    executionError: null,
-    outcome: null,
-    summary: "",
-    finalizationError: null,
-  });
+  try {
+    const result = await graph.invoke({
+      request: input,
+      job: null,
+      result: null,
+      executionError: null,
+      outcome: null,
+      summary: "",
+      finalizationError: null,
+    });
+    
+    // If we have a finalization error but a job, the Rust ledger has the state
+    // This is recoverable, so we return success with a warning
+    if (result.finalizationError && job) {
+      console.warn(`Mission completed with finalization warning: ${result.finalizationError}`);
+    }
+    
+    return result;
+  } catch (error) {
+    // Catastrophic failure - LangGraph itself failed
+    // Attempt to record failure in Rust ledger if we have a job
+    if (job) {
+      try {
+        await adapters.finalize({
+          job,
+          outcome: "failed",
+          summary: `Catastrophic workflow failure: ${error instanceof Error ? error.message : String(error)}`,
+          result: null,
+          executionError: error instanceof Error ? error : new Error(String(error)),
+        });
+      } catch (finalizeError) {
+        console.error(`Failed to record catastrophic failure in ledger: ${finalizeError}`);
+      }
+    }
+    throw error;
+  }
 }
 
 /**

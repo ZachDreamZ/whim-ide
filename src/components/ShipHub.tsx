@@ -26,9 +26,7 @@ type AuxiliaryAction = "diff" | "history" | null;
 type LogLevel = "info" | "success" | "warning" | "error";
 type LogEntry = { id: number; level: LogLevel; text: string };
 
-const supportedAdapters = deployAdapters.filter(
-  (adapter) => adapter.id !== "azure" && adapter.id !== "windows",
-);
+const supportedAdapters = deployAdapters;
 const previewTargets = new Set(["vercel", "netlify", "cloudflare", "railway"]);
 
 function workspaceName(workspace: string) {

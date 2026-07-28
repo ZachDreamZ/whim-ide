@@ -11,6 +11,7 @@ export type MissionAgentMode =
   | "designer"
   | "debugger"
   | "releaseAgent"
+  | "janitor"
   | "gameDesigner"
   | "techArtist"
   | "playtester"
@@ -79,6 +80,11 @@ const WORKFLOWS: Record<MissionAgentMode, MissionWorkflow> = {
     jobMode: "ship",
     instruction: "Prepare the requested outcome for release. Inspect the project, make only necessary changes, run relevant readiness checks, and do not perform a public or production deployment.",
   },
+  janitor: {
+    agent: "janitor",
+    jobMode: "operate",
+    instruction: "Perform safe, bounded background maintenance tasks. Edit at most 3 files, run only verification commands, and never auto-merge changes.",
+  },
   gameDesigner: {
     agent: "gameDesigner",
     jobMode: "plan",
@@ -136,6 +142,8 @@ const SLASH_ROUTES: Record<string, MissionAgentMode> = {
   deploy: "releaseAgent",
   design: "designer",
   refactor: "refactorer",
+  janitor: "janitor",
+  maintain: "janitor",
 };
 
 export function missionWorkflow(mode: MissionAgentMode): MissionWorkflow {
@@ -176,10 +184,16 @@ export function agentForJobMode(mode: OrchestrationJobMode): string {
     case "review":
       return "reviewer";
     case "ship":
-      return "releaseAgent";
+      return "releaseagent";
     case "operate":
       return "janitor";
   }
+}
+
+// Bidirectional mapping for specialized agents to job modes
+export function jobModeForAgent(agent: MissionAgentMode): OrchestrationJobMode {
+  const workflow = WORKFLOWS[agent];
+  return workflow.jobMode;
 }
 
 export function displayWorkflowMode(mode: OrchestrationJobMode): string {

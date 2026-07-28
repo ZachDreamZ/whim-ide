@@ -284,9 +284,15 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
     let start = Instant::now();
     let root_display = root.to_string_lossy().into_owned();
     crate::backend::workspace::ensure_project_agent_context_at(&root)?;
-    let mut tools = tool_defs_for_profile(profile, mode, settings);
-    if settings.agent.enabled_capabilities.iter().any(|c| c == "mcp") {
+    
+    // Sync MCP tools before capability resolution if MCP is enabled
+    let mcp_capability_enabled = settings.agent.enabled_capabilities.iter().any(|c| c == "mcp");
+    if mcp_capability_enabled {
         let _ = mcp_sync_tools(state.inner(), &root).await;
+    }
+    
+    let mut tools = tool_defs_for_profile(profile, mode, settings);
+    if mcp_capability_enabled {
         let mcp_tools = state.inner().mcp_manager.list_all_tools().await;
         for mt in mcp_tools {
             tools.push(crate::agent::tools::ToolDef {

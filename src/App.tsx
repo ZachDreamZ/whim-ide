@@ -45,12 +45,13 @@ import {
   bridge,
   defaultAppSettings,
   type AppSettings,
+  type ChatThreadSummary,
   type CredentialReport,
   type EnvironmentReport,
   type OrchestrationJob,
-  type ChatThreadSummary,
   type WorkspaceInfo,
 } from "./lib/bridge";
+import { isOmniRouteProvider } from "./lib/omniroute-config";
 import { updateStore, useUpdate } from "./lib/updateService";
 import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
@@ -232,7 +233,7 @@ function App() {
   const onRunModelChange = setAgentModel;
   const agentReady = agentProvider === "auto"
     || agentProvider === "local"
-    || agentProvider === "omniroute"
+    || isOmniRouteProvider(agentProvider)
     || agentApiKey.trim().length > 0
     || providerHasEnvironmentCredential(agentProvider, credentials.environmentNames);
 

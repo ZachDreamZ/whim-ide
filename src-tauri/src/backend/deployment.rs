@@ -1518,8 +1518,6 @@ pub(crate) fn deploy_args(
             args.push("-f".to_string());
             args.push(compose_file);
             args.push("up".to_string());
-            args.push("-d".to_string());
-            args.push("--build".to_string());
         }
     }
     Ok(args)
