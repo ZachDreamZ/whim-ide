@@ -182,7 +182,6 @@ impl Default for AgentSettings {
             max_parallel_agents: 4,
             enabled_capabilities: vec![
                 "workspace".into(),
-                "research".into(),
                 "coding".into(),
                 "verification".into(),
             ],

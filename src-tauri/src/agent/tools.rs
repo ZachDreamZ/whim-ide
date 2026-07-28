@@ -208,7 +208,10 @@ pub(crate) fn tool_defs_for_profile(
     mode: AgentRole,
     settings: &AppSettings,
 ) -> Vec<ToolDef> {
-    let capabilities = resolved_capabilities(settings, mode.as_str());
+    let capabilities = resolved_capabilities(settings, mode.as_str()).unwrap_or_else(|_| {
+        // Fallback to empty capabilities if validation fails
+        Vec::new()
+    });
     let approval_blocks_mutation = settings.agent.approval_policy == "always";
     tool_defs()
         .into_iter()

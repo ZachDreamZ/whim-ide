@@ -26,7 +26,10 @@ pub(crate) fn pi_tool_allowlist(mode: AgentRole, profile: &HarnessProfile, setti
     if mode == AgentRole::Chat {
         return String::new();
     }
-    let capabilities = resolved_capabilities(settings, mode.as_str());
+    let capabilities = resolved_capabilities(settings, mode.as_str()).unwrap_or_else(|_| {
+        // Fallback to empty capabilities if validation fails
+        Vec::new()
+    });
     // Pi's built-in edit/write tools cannot enforce Whim's per-path prefixes.
     // Fail closed whenever a profile narrows write paths instead of granting
     // broader workspace authority than the native harness would have.
@@ -68,7 +71,7 @@ pub(crate) fn external_harness_can_mutate(
         && settings.agent.approval_policy == "risky"
         && mode.permits_tool("edit_file")
         && mode.permits_tool("write_file")
-        && capability_allows_tool(&resolved_capabilities(settings, mode.as_str()), "edit_file")
+        && capability_allows_tool(&resolved_capabilities(settings, mode.as_str()).unwrap_or_else(|_| Vec::new()), "edit_file")
 }
 
 pub(crate) fn external_runtime_can_mutate(
