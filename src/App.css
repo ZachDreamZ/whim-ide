@@ -888,7 +888,13 @@ a:focus-visible {
 .provider-detected { border-color: rgba(246,198,111,.14); }
 .provider-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .provider-card-top > div { display: flex; align-items: center; gap: 5px; }
+.provider-card-status-row { display: flex; align-items: center; gap: 8px; }
 .provider-card-top em { padding: 3px 5px; border-radius: 4px; color: #cbbeff; background: rgba(156,140,255,.1); font-size: 10.5px; font-style: normal; }
+.provider-health-indicator { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.03); font-size: 10px; }
+.provider-health-indicator .health-healthy { color: #62d59b; }
+.provider-health-indicator .health-unhealthy { color: #ee8b89; }
+.provider-health-indicator .health-latency { color: #7c8799; font-weight: 500; }
+.provider-health-indicator .health-error { color: #ee8b89; font-weight: 500; }
 .provider-logo { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--provider-color) 22%, transparent); border-radius: 9px; color: var(--provider-color); background: color-mix(in srgb, var(--provider-color) 8%, transparent); font-family: var(--font-display); font-size: 13px; font-weight: 650; }
 .provider-status { height: 17px; padding: 0 5px; display: flex; align-items: center; gap: 3px; border-radius: 5px; color: #5e6979; background: rgba(255,255,255,.035); font-size: 11px; text-transform: capitalize; }
 .provider-status.connected { color: #7fba9f; background: rgba(115,217,174,.07); }

@@ -135,6 +135,16 @@ export type PullRequestStatus = {
   message?: string | null;
 };
 
+export type ProviderHealthStatus = {
+  id: string;
+  name: string;
+  healthy: boolean;
+  latencyMs: number | null;
+  lastCheck: string;
+  errorMessage: string | null;
+  modelsAvailable: number;
+};
+
 export type AppContextResult = { source: "vscode" | "terminal" | "screenshot"; available: boolean; message: string; content?: string | null; path?: string | null; contentKind?: "text" | "image" };
 
 export type ChatThreadMessage = {
@@ -1373,6 +1383,19 @@ export const bridge = {
   // show what is available and let the user pick a manual override.
   async discoverProviders(): Promise<DiscoveredProvider[]> {
     return call<DiscoveredProvider[]>("discover_providers");
+  },
+
+  // Provider health checking and automatic selection
+  async discoverProvidersWithHealth(timeoutMs?: number): Promise<ProviderHealthStatus[]> {
+    return call<ProviderHealthStatus[]>("discover_providers_with_health", { timeoutMs });
+  },
+
+  async getBestProvider(preferredProvider?: string): Promise<string | null> {
+    return call<string | null>("get_best_provider", { preferredProvider });
+  },
+
+  async selectProviderWithFallback(requestedProvider?: string, role?: string): Promise<string> {
+    return call<string>("select_provider_with_fallback", { requestedProvider, role });
   },
 
   // ─── OAuth ───────────────────────────────────────────────────────────────

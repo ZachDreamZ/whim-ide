@@ -8,8 +8,10 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Activity,
+  AlertCircle,
 } from "lucide-react";
-import { bridge, type DiscoveredProvider, type OAuthProviderStatus } from "../lib/bridge";
+import { bridge, type DiscoveredProvider, type OAuthProviderStatus, type ProviderHealthStatus } from "../lib/bridge";
 import { 
   OMNIROUTE_ROUTES, 
   isOmniRouteProvider,
@@ -102,6 +104,8 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
   const [notice, setNotice] = useState<string | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<ProviderHealthStatus[]>([]);
+  const [healthLoading, setHealthLoading] = useState(false);
   const scanRequest = useRef(0);
   const modelRequest = useRef(0);
 
@@ -122,10 +126,25 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
     }
   }, []);
 
+  const checkHealth = useCallback(async () => {
+    if (!bridge.isNative()) return;
+    setHealthLoading(true);
+    try {
+      const health = await bridge.discoverProvidersWithHealth(5000);
+      setHealthStatus(health);
+    } catch {
+      // Health check is optional, don't show error
+      setHealthStatus([]);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void rescan();
+    void checkHealth();
     return () => { scanRequest.current += 1; };
-  }, [rescan]);
+  }, [rescan, checkHealth]);
 
   useEffect(() => {
     const request = ++modelRequest.current;
@@ -170,8 +189,8 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
   }, [agentApiKey, agentBaseUrl, agentProvider, discovered]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.allSettled([Promise.resolve().then(onRefresh), rescan()]);
-  }, [onRefresh, rescan]);
+    await Promise.allSettled([Promise.resolve().then(onRefresh), rescan(), checkHealth()]);
+  }, [onRefresh, rescan, checkHealth]);
 
   const onKeyChange = (value: string) => {
     onAgentProfileChange({ provider: agentProvider, apiKey: value });
@@ -241,6 +260,31 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
   };
 
   const connectedCount = discovered.filter(isProviderReady).length;
+  
+  const getProviderHealth = (providerId: string) => {
+    return healthStatus.find(h => h.id === providerId);
+  };
+
+  const renderHealthIndicator = (providerId: string) => {
+    const health = getProviderHealth(providerId);
+    if (!health || healthLoading) return null;
+    
+    if (health.healthy) {
+      return (
+        <div className="provider-health-indicator" title={`Healthy • ${health.latencyMs}ms latency • ${health.modelsAvailable} models`}>
+          <Activity size={12} className="health-healthy" />
+          <span className="health-latency">{health.latencyMs}ms</span>
+        </div>
+      );
+    } else {
+      return (
+        <div className="provider-health-indicator" title={health.errorMessage || "Unavailable"}>
+          <AlertCircle size={12} className="health-unhealthy" />
+          <span className="health-error">Unavailable</span>
+        </div>
+      );
+    }
+  };
 
   return (
     <main className="hub-page provider-page">
@@ -268,7 +312,10 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
               >
                 <div className="provider-card-top">
                   <span className={`provider-logo provider-logo-${provider.kind}`}>{provider.kind === "local" || provider.kind === "gateway" ? <Cpu size={18} /> : <span>{provider.label[0]}</span>}</span>
-                  <div><span className={`provider-status ${status}`}>{status === "connected" && <Check size={10} />}{status}</span></div>
+                  <div className="provider-card-status-row">
+                    <span className={`provider-status ${status}`}>{status === "connected" && <Check size={10} />}{status}</span>
+                    {renderHealthIndicator(provider.provider)}
+                  </div>
                 </div>
                 <h3>{provider.label}</h3>
                 <p>{provider.note ?? ""}</p>
