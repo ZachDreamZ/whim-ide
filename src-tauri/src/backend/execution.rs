@@ -329,11 +329,122 @@ fn command_for_spec(spec: &ProcessSpec) -> Command {
         crate::harness::ExecutionAdapter::Remote { host } => {
             let mut command = Command::new("ssh");
             command
+                .arg("-o")
+                .arg("BatchMode=yes")
+                .arg("-o")
+                .arg("ConnectTimeout=10")
                 .arg(host)
                 .arg("--")
                 .arg(&spec.program)
                 .args(&spec.args);
             command
+        }
+    }
+}
+
+/// Validate that an adapter is available and properly configured
+pub(crate) fn validate_adapter(adapter: &crate::harness::ExecutionAdapter) -> Result<(), String> {
+    match adapter {
+        crate::harness::ExecutionAdapter::NativeWindows => {
+            // Native Windows is always available on Windows systems
+            #[cfg(windows)]
+            return Ok(());
+            #[cfg(not(windows))]
+            return Err("NativeWindows adapter is only available on Windows systems".to_string());
+        }
+        crate::harness::ExecutionAdapter::Wsl { distro } => {
+            // Check if WSL is available
+            let wsl_check = std::process::Command::new("wsl.exe")
+                .arg("--version")
+                .output();
+            
+            match wsl_check {
+                Ok(_) => {
+                    // If a specific distro is requested, validate it exists
+                    if let Some(distro_name) = distro {
+                        let distro_check = std::process::Command::new("wsl.exe")
+                            .arg("-l")
+                            .arg("-v")
+                            .output();
+                        
+                        match distro_check {
+                            Ok(output) => {
+                                let output_str = String::from_utf8_lossy(&output.stdout);
+                                if !output_str.contains(distro_name) {
+                                    return Err(format!("WSL distro '{}' not found. Available distros: {}", 
+                                        distro_name, 
+                                        output_str.lines().collect::<Vec<_>>().join(", ")));
+                                }
+                            }
+                            Err(error) => {
+                                return Err(format!("Could not list WSL distros: {error}"));
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                Err(error) => {
+                    Err(format!("WSL is not available: {error}. Please install WSL or use a different adapter."))
+                }
+            }
+        }
+        crate::harness::ExecutionAdapter::Container { image } => {
+            // Check if Docker is available
+            let docker_check = std::process::Command::new("docker")
+                .arg("--version")
+                .output();
+            
+            match docker_check {
+                Ok(_) => {
+                    // Validate image name format
+                    if image.is_empty() {
+                        return Err("Container image name cannot be empty".to_string());
+                    }
+                    
+                    // Basic image name validation
+                    if !image.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_' || c == '.' || c == ':') {
+                        return Err(format!("Invalid container image name: '{}'", image));
+                    }
+                    
+                    Ok(())
+                }
+                Err(error) => {
+                    Err(format!("Docker is not available: {error}. Please install Docker or use a different adapter."))
+                }
+            }
+        }
+        crate::harness::ExecutionAdapter::Remote { host } => {
+            // Check if SSH is available
+            let ssh_check = std::process::Command::new("ssh")
+                .arg("-V")
+                .output();
+            
+            match ssh_check {
+                Ok(_) => {
+                    // Validate host format
+                    if host.is_empty() {
+                        return Err("Remote host cannot be empty".to_string());
+                    }
+                    
+                    // Basic host validation (user@host or host format)
+                    // Allow alphanumeric, hyphens, underscores, dots, and @ for user@host format
+                    let valid_chars = host.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '@');
+                    if !valid_chars {
+                        return Err(format!("Invalid remote host format: '{}'. Expected 'user@host' or 'host'", host));
+                    }
+                    
+                    // Ensure only one @ for user@host format
+                    let at_count = host.chars().filter(|&c| c == '@').count();
+                    if at_count > 1 {
+                        return Err(format!("Invalid remote host format: '{}'. Only one '@' allowed for user@host format", host));
+                    }
+                    
+                    Ok(())
+                }
+                Err(error) => {
+                    Err(format!("SSH is not available: {error}. Please install SSH or use a different adapter."))
+                }
+            }
         }
     }
 }
@@ -353,6 +464,12 @@ pub(crate) async fn execute_tracked(
     spec: ProcessSpec,
 ) -> Result<CommandResult, String> {
     let operation_id = validated_operation_id(operation_id)?;
+    
+    // Validate adapter availability before execution
+    validate_adapter(&spec.adapter).map_err(|error| 
+        format!("Adapter validation failed for '{}': {}", spec.display_command, error)
+    )?;
+    
     if lock(&state.operations, "operations").await?.contains_key(&operation_id) {
         return Err(format!("Operation '{operation_id}' is already running"));
     }
@@ -858,5 +975,212 @@ impl ExecutionAdapter for WslAdapter {
     async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String> {
         std::fs::write(path, content).map_err(|e| format!("WSL Write failed: {e}"))?;
         Ok(content.len())
+    }
+}
+
+#[allow(dead_code)]
+pub struct ContainerAdapter {
+    pub image: String,
+}
+
+impl ExecutionAdapter for ContainerAdapter {
+    async fn spawn_process(
+        &self,
+        state: &BackendState,
+        operation_id: Option<String>,
+        kind: &str,
+        mut spec: ProcessSpec,
+    ) -> Result<CommandResult, String> {
+        let cwd = spec.cwd.to_string_lossy().replace('\\', "/");
+        let mut docker_args = vec![
+            "run".to_string(),
+            "--rm".to_string(),
+            "-v".to_string(),
+            format!("{cwd}:{cwd}"),
+            "-w".to_string(),
+            cwd.clone(),
+            self.image.clone(),
+            spec.program,
+        ];
+        docker_args.extend(spec.args);
+
+        spec.program = "docker".to_string();
+        spec.args = docker_args;
+
+        execute_tracked(state, operation_id, kind, spec).await
+    }
+
+    async fn read_file(
+        &self,
+        path: &Path,
+        max_bytes: Option<usize>,
+    ) -> Result<(String, bool), String> {
+        // For container adapter, we assume the file is accessible on the host
+        // In a real implementation, this might use docker exec to read files inside containers
+        let content = std::fs::read_to_string(path).map_err(|e| format!("Container Read failed: {e}"))?;
+        let max = max_bytes.unwrap_or(super::MAX_READ_BYTES);
+        let truncated = content.len() > max;
+        let mut text = content;
+        if truncated {
+            text.truncate(max);
+        }
+        Ok((text, truncated))
+    }
+
+    async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String> {
+        // For container adapter, we assume the file is accessible on the host
+        // In a real implementation, this might use docker exec to write files inside containers
+        std::fs::write(path, content).map_err(|e| format!("Container Write failed: {e}"))?;
+        Ok(content.len())
+    }
+}
+
+#[allow(dead_code)]
+pub struct RemoteAdapter {
+    pub host: String,
+}
+
+impl ExecutionAdapter for RemoteAdapter {
+    async fn spawn_process(
+        &self,
+        state: &BackendState,
+        operation_id: Option<String>,
+        kind: &str,
+        mut spec: ProcessSpec,
+    ) -> Result<CommandResult, String> {
+        let mut ssh_args = vec![
+            "-o".to_string(),
+            "BatchMode=yes".to_string(),
+            "-o".to_string(),
+            "ConnectTimeout=10".to_string(),
+            self.host.clone(),
+            "--".to_string(),
+            spec.program,
+        ];
+        ssh_args.extend(spec.args);
+
+        spec.program = "ssh".to_string();
+        spec.args = ssh_args;
+
+        execute_tracked(state, operation_id, kind, spec).await
+    }
+
+    async fn read_file(
+        &self,
+        path: &Path,
+        max_bytes: Option<usize>,
+    ) -> Result<(String, bool), String> {
+        // For remote adapter, we would need to use scp or ssh cat
+        // This is a simplified implementation that assumes SSH fs mounting
+        let content = std::fs::read_to_string(path).map_err(|e| format!("Remote Read failed: {e}"))?;
+        let max = max_bytes.unwrap_or(super::MAX_READ_BYTES);
+        let truncated = content.len() > max;
+        let mut text = content;
+        if truncated {
+            text.truncate(max);
+        }
+        Ok((text, truncated))
+    }
+
+    async fn write_file(&self, path: &Path, content: &str) -> Result<usize, String> {
+        // For remote adapter, we would need to use scp or ssh cat
+        // This is a simplified implementation that assumes SSH fs mounting
+        std::fs::write(path, content).map_err(|e| format!("Remote Write failed: {e}"))?;
+        Ok(content.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_adapter_native_windows() {
+        #[cfg(windows)]
+        {
+            let result = validate_adapter(&crate::harness::ExecutionAdapter::NativeWindows);
+            assert!(result.is_ok());
+        }
+        #[cfg(not(windows))]
+        {
+            let result = validate_adapter(&crate::harness::ExecutionAdapter::NativeWindows);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("only available on Windows"));
+        }
+    }
+
+    #[test]
+    fn test_validate_adapter_wsl() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Wsl { 
+            distro: Some("Ubuntu".to_string()) 
+        });
+        // Test passes if WSL is available or properly reports unavailable
+        if result.is_err() {
+            let error = result.unwrap_err();
+            assert!(error.contains("WSL is not available") || error.contains("distro"));
+        }
+    }
+
+    #[test]
+    fn test_validate_adapter_container() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Container { 
+            image: "ubuntu:latest".to_string() 
+        });
+        // Test passes if Docker is available or properly reports unavailable
+        if result.is_err() {
+            let error = result.unwrap_err();
+            assert!(error.contains("Docker is not available"));
+        }
+    }
+
+    #[test]
+    fn test_validate_adapter_container_invalid_image() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Container { 
+            image: "".to_string() 
+        });
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_adapter_container_invalid_name() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Container { 
+            image: "ubuntu@latest".to_string() 
+        });
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid container image name"));
+    }
+
+    #[test]
+    fn test_validate_adapter_remote() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Remote { 
+            host: "user@192.168.1.1".to_string() 
+        });
+        // Test passes if SSH is available or properly reports unavailable
+        if result.is_err() {
+            let error = result.unwrap_err();
+            assert!(error.contains("SSH is not available"));
+        }
+    }
+
+    #[test]
+    fn test_validate_adapter_remote_invalid_host() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Remote { 
+            host: "".to_string() 
+        });
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_adapter_remote_invalid_format() {
+        let result = validate_adapter(&crate::harness::ExecutionAdapter::Remote { 
+            host: "user@host@invalid".to_string() 
+        });
+        // Should fail for invalid format (multiple @ symbols) or SSH not available
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        // Accept either format error or SSH not available error
+        assert!(error.contains("Invalid remote host format") || error.contains("SSH is not available"));
     }
 }
