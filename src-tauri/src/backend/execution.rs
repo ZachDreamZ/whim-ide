@@ -1115,8 +1115,7 @@ mod tests {
             distro: Some("Ubuntu".to_string()) 
         });
         // Test passes if WSL is available or properly reports unavailable
-        if result.is_err() {
-            let error = result.unwrap_err();
+        if let Err(error) = result {
             assert!(error.contains("WSL is not available") || error.contains("distro"));
         }
     }
@@ -1127,8 +1126,7 @@ mod tests {
             image: "ubuntu:latest".to_string() 
         });
         // Test passes if Docker is available or properly reports unavailable
-        if result.is_err() {
-            let error = result.unwrap_err();
+        if let Err(error) = result {
             assert!(error.contains("Docker is not available"));
         }
     }
@@ -1157,8 +1155,7 @@ mod tests {
             host: "user@192.168.1.1".to_string() 
         });
         // Test passes if SSH is available or properly reports unavailable
-        if result.is_err() {
-            let error = result.unwrap_err();
+        if let Err(error) = result {
             assert!(error.contains("SSH is not available"));
         }
     }
@@ -1169,7 +1166,8 @@ mod tests {
             host: "".to_string() 
         });
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("cannot be empty"));
+        let error = result.unwrap_err();
+        assert!(error.contains("cannot be empty"));
     }
 
     #[test]

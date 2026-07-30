@@ -769,7 +769,7 @@ mod tests {
 
     #[test]
     fn provider_health_sorting() {
-        let mut statuses = vec![
+        let mut statuses = [
             ProviderHealthStatus {
                 id: "provider-a".to_string(),
                 name: "Provider A".to_string(),
@@ -796,7 +796,7 @@ mod tests {
                 last_check: "2025-01-01T00:00:00Z".to_string(),
                 error_message: Some("Unreachable".to_string()),
                 models_available: 0,
-            },
+            }
         ];
         
         // Sort by health and latency

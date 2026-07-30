@@ -202,10 +202,8 @@ pub(crate) fn get_conflicting_capabilities(
     for capability in CAPABILITIES {
         if requested_set.contains(capability.id) {
             for conflict_id in capability.conflicts {
-                if requested_set.contains(conflict_id) {
-                    if !conflicting.contains(conflict_id) {
-                        conflicting.push(conflict_id);
-                    }
+                if requested_set.contains(conflict_id) && !conflicting.contains(conflict_id) {
+                    conflicting.push(conflict_id);
                 }
             }
         }
@@ -294,6 +292,7 @@ pub(crate) fn resolved_capabilities(
 }
 
 /// Extended capability resolution that includes MCP tools
+#[allow(dead_code)]
 pub(crate) fn resolved_capabilities_with_mcp(
     settings: &AppSettings,
     mode: &str,
@@ -337,6 +336,7 @@ pub(crate) fn capability_prompt(capabilities: &[AgentCapabilitySpec]) -> String 
 }
 
 /// Enhanced capability prompt that includes dependency and conflict information
+#[allow(dead_code)]
 pub(crate) fn capability_prompt_with_metadata(capabilities: &[AgentCapabilitySpec]) -> String {
     let mut output = String::new();
     
@@ -366,6 +366,7 @@ pub(crate) fn capability_prompt_with_metadata(capabilities: &[AgentCapabilitySpe
 }
 
 /// Get active MCP tool names for capability integration
+#[allow(dead_code)]
 pub(crate) async fn active_mcp_tools(_mcp_manager: &McpManager) -> Vec<String> {
     // This would normally query the MCP manager for currently available tools
     // For now, return empty vector - the actual implementation would be:
