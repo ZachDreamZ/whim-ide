@@ -6,8 +6,6 @@
 //! and (c) surface lightweight live-only progress. It depends on `tauri`,
 //! `serde_json`, and `crate::backend` but on no other `agent::*` module.
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Manager, WebviewWindow};

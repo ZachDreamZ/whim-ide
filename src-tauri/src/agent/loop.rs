@@ -37,6 +37,73 @@ const KEEP_RECENT_MESSAGES: usize = 8;
 const MAX_RECOVERY_ITERS: usize = 5;
 pub(crate) const MAX_PROVIDER_RETRIES: usize = 3;
 
+/// Enhanced error categorization for intelligent recovery
+#[derive(Debug, Clone, PartialEq)]
+enum AgentErrorKind {
+    /// Transient network errors that should be retried
+    NetworkTransient,
+    /// Provider errors that are likely temporary (rate limits, server errors)
+    ProviderTransient,
+    /// Provider errors that are permanent (auth, invalid requests)
+    ProviderPermanent,
+    /// Tool execution errors that can be recovered from
+    ToolRecoverable,
+    /// Tool execution errors that require user intervention
+    ToolFatal,
+    /// Context/timeout errors
+    Timeout,
+    /// Unknown error type
+    Unknown,
+}
+
+fn categorize_agent_error(error: &str) -> AgentErrorKind {
+    let error_lower = error.to_lowercase();
+    
+    // Network transient errors
+    if error_lower.contains("connection") || error_lower.contains("timeout") || error_lower.contains("network") {
+        return AgentErrorKind::NetworkTransient;
+    }
+    
+    // Provider transient errors (5xx, rate limits)
+    if error_lower.contains("500") || error_lower.contains("502") || error_lower.contains("503") || 
+       error_lower.contains("504") || error_lower.contains("rate limit") || error_lower.contains("overloaded") {
+        return AgentErrorKind::ProviderTransient;
+    }
+    
+    // Provider permanent errors (4xx except 429)
+    if error_lower.contains("401") || error_lower.contains("403") || error_lower.contains("404") || 
+       error_lower.contains("422") || error_lower.contains("authentication") || error_lower.contains("unauthorized") {
+        return AgentErrorKind::ProviderPermanent;
+    }
+    
+    // Tool errors
+    if error_lower.contains("tool") || error_lower.contains("command") {
+        if error_lower.contains("permission") || error_lower.contains("access denied") {
+            return AgentErrorKind::ToolFatal;
+        }
+        return AgentErrorKind::ToolRecoverable;
+    }
+    
+    // Timeout errors
+    if error_lower.contains("timeout") || error_lower.contains("timed out") {
+        return AgentErrorKind::Timeout;
+    }
+    
+    AgentErrorKind::Unknown
+}
+
+fn should_retry_error(error: &str, retry_count: usize, max_retries: usize) -> bool {
+    if retry_count >= max_retries {
+        return false;
+    }
+    
+    match categorize_agent_error(error) {
+        AgentErrorKind::NetworkTransient | AgentErrorKind::ProviderTransient => true,
+        AgentErrorKind::ToolRecoverable => retry_count < 2, // Fewer retries for tool errors
+        _ => false,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_research(
     state: State<'_, BackendState>,
@@ -259,6 +326,65 @@ pub(crate) fn remaining_agent_budget(start: Instant, total_timeout_ms: u64) -> O
         .checked_sub(elapsed_ms)
         .filter(|remaining| *remaining > 0)
         .map(Duration::from_millis)
+}
+
+/// Enhanced logging helper for agent lifecycle events
+fn log_agent_lifecycle(
+    app: &WebviewWindow<impl tauri::Runtime>,
+    operation_id: &str,
+    events: &mut Vec<Value>,
+    event_type: &str,
+    message: &str,
+    metadata: Option<Value>,
+) {
+    let mut event_data = json!({
+        "type": event_type,
+        "message": message,
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    });
+    
+    if let Some(meta) = metadata {
+        event_data["metadata"] = meta;
+    }
+    
+    record_agent_event(
+        app,
+        operation_id,
+        events,
+        AgentEvent::Progress {
+            message: format!("[{}]", message),
+        },
+    );
+}
+
+/// Enhanced logging for tool execution
+fn log_tool_execution(
+    app: &WebviewWindow<impl tauri::Runtime>,
+    operation_id: &str,
+    events: &mut Vec<Value>,
+    tool_name: &str,
+    duration_ms: u64,
+    success: bool,
+    error_message: Option<&str>,
+) {
+    let metadata = json!({
+        "tool": tool_name,
+        "duration_ms": duration_ms,
+        "success": success,
+        "error": error_message,
+    });
+    
+    log_agent_lifecycle(
+        app,
+        operation_id,
+        events,
+        "tool_execution",
+        &format!("Tool {} completed in {}ms (success: {})", tool_name, duration_ms, success),
+        Some(metadata),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -530,20 +656,48 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
             Ok(result) => match result {
                 Ok(response) => response,
                 Err(error) => {
-                    let is_client = ["400", "401", "403", "404", "422"]
-                        .iter()
-                        .any(|code| error.contains(code));
-                    if !is_client && auto_continue && provider_retry < MAX_PROVIDER_RETRIES {
+                    let error_kind = categorize_agent_error(&error);
+                    
+                    // Intelligent retry logic based on error categorization
+                    if should_retry_error(&error, provider_retry, MAX_PROVIDER_RETRIES) {
+                        let retry_message = match error_kind {
+                            AgentErrorKind::NetworkTransient => "Network error detected, retrying...",
+                            AgentErrorKind::ProviderTransient => "Provider temporarily unavailable, retrying...",
+                            AgentErrorKind::ToolRecoverable => "Tool error detected, attempting recovery...",
+                            _ => "Error detected, retrying...",
+                        };
+                        
+                        record_agent_event(
+                            app,
+                            operation_id,
+                            &mut events,
+                            AgentEvent::Warning {
+                                code: "RETRY_ATTEMPT".into(),
+                                message: format!("{} (attempt {}/{})", retry_message, provider_retry + 1, MAX_PROVIDER_RETRIES),
+                            },
+                        );
+                        
                         provider_retry += 1;
                         continue;
                     }
+                    
+                    // Permanent errors or retry limit exceeded
+                    let error_code = match error_kind {
+                        AgentErrorKind::ProviderPermanent => Some("PROVIDER_AUTH".into()),
+                        AgentErrorKind::ToolFatal => Some("TOOL_PERMISSION".into()),
+                        AgentErrorKind::Timeout => Some("TIMEOUT".into()),
+                        AgentErrorKind::NetworkTransient => Some("NETWORK_ERROR".into()),
+                        AgentErrorKind::ProviderTransient => Some("PROVIDER_TRANSIENT".into()),
+                        _ => Some("PROVIDER".into()),
+                    };
+                    
                     record_agent_event(
                         app,
                         operation_id,
                         &mut events,
                         AgentEvent::Error {
                             error: AgentErrorDetail {
-                                code: Some("PROVIDER".into()),
+                                code: error_code,
                                 message: error,
                             },
                         },
@@ -652,11 +806,34 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                         }
                     })
                     .collect();
+                
+                // Categorize errors for intelligent recovery guidance
+                let error_kinds: Vec<AgentErrorKind> = error_messages
+                    .iter()
+                    .map(|e| categorize_agent_error(e))
+                    .collect();
+                
+                let has_tool_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::ToolRecoverable | AgentErrorKind::ToolFatal));
+                let has_provider_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::ProviderTransient | AgentErrorKind::ProviderPermanent));
+                let has_network_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::NetworkTransient));
+                
+                let recovery_guidance = if has_tool_errors {
+                    "Review the tool errors above. Check for incorrect arguments, missing files, or permission issues. Fix the specific tool calls and try again."
+                } else if has_provider_errors {
+                    "There was an issue with the model provider. If this is an authentication error, check your API keys. If it's a rate limit, wait a moment and try again."
+                } else if has_network_errors {
+                    "A network error occurred. Check your internet connection and try again."
+                } else {
+                    "Review the error output, identify the root cause, and attempt to fix it."
+                };
+                
                 let nudge = format!(
-                    "You are not finished. The previous steps reported {} error(s):\n{}\nReview the error output, fix the root cause, and continue. Do not end your turn until the task is complete and any verification you ran passes.",
+                    "You are not finished. The previous steps reported {} error(s):\n{}\n\nRecovery guidance: {}\n\nReview the error output, fix the root cause, and continue. Do not end your turn until the task is complete and any verification you ran passes.",
                     error_messages.len(),
-                    error_messages.join("\n")
+                    error_messages.join("\n"),
+                    recovery_guidance
                 );
+                
                 record_agent_event(
                     app,
                     operation_id,
@@ -1070,6 +1247,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                 ),
             )
             .await;
+            let tool_start = Instant::now();
             let (output, is_error) = match tool_result {
                 Ok(result) => result,
                 Err(_) => {
@@ -1090,6 +1268,18 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                     break 'agent_loop;
                 }
             };
+            let tool_duration = tool_start.elapsed().as_millis() as u64;
+            
+            // Log tool execution for comprehensive monitoring
+            record_agent_event(
+                app,
+                operation_id,
+                &mut events,
+                AgentEvent::Progress {
+                    message: format!("Tool {} completed in {}ms (success: {})", tool_display(&call.name), tool_duration, !is_error),
+                },
+            );
+            
             // Behavioral loop detection observes every completed tool call.
             loop_detector.observe(&call.name, &call.arguments, &output);
             record_agent_event(

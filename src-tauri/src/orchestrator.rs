@@ -4,8 +4,6 @@
 //! never receives provider credentials or raw command output, which keeps the
 //! audit trail useful without turning it into another secret store.
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -50,20 +48,6 @@ impl JobMode {
             Self::Plan | Self::Research => JobRisk::Low,
             Self::Auto | Self::Vibe | Self::Build | Self::Verify | Self::Review => JobRisk::Medium,
             Self::Ship | Self::Operate => JobRisk::High,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn agent_name(self) -> Option<&'static str> {
-        match self {
-            Self::Auto | Self::Vibe => Some("auto"),
-            Self::Plan => Some("plan"),
-            Self::Research => Some("researcher"),
-            Self::Build => Some("build"),
-            Self::Verify => Some("verify"),
-            Self::Review => Some("review"),
-            Self::Ship => Some("ship"),
-            Self::Operate => Some("operate"),
         }
     }
 }
@@ -1520,14 +1504,6 @@ pub struct SubTask {
     pub error: Option<String>,
     pub started_at_ms: Option<u64>,
     pub finished_at_ms: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubTaskEvent {
-    pub sub_task_id: String,
-    pub kind: String,
-    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

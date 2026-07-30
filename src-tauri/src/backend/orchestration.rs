@@ -109,6 +109,74 @@ fn orchestration_error(error: String) -> String {
     format!("WHIM:ORCHESTRATION|{error}")
 }
 
+/// Enhanced error categorization for better user feedback and debugging
+#[derive(Debug, Clone)]
+enum OrchestrationErrorKind {
+    WorkspaceNotFound,
+    InvalidWorkspace,
+    JobNotFound,
+    InvalidJobState,
+    PermissionDenied,
+    NetworkError,
+    Timeout,
+    InternalError,
+}
+
+fn categorize_orchestration_error(error: &str) -> OrchestrationErrorKind {
+    if error.contains("No workspace selected") || error.contains("workspace not found") {
+        OrchestrationErrorKind::WorkspaceNotFound
+    } else if error.contains("Invalid workspace") || error.contains("Cannot resolve workspace") {
+        OrchestrationErrorKind::InvalidWorkspace
+    } else if error.contains("job not found") || error.contains("Job does not exist") {
+        OrchestrationErrorKind::JobNotFound
+    } else if error.contains("invalid transition") || error.contains("invalid state") {
+        OrchestrationErrorKind::InvalidJobState
+    } else if error.contains("permission") || error.contains("access denied") {
+        OrchestrationErrorKind::PermissionDenied
+    } else if error.contains("timeout") || error.contains("timed out") {
+        OrchestrationErrorKind::Timeout
+    } else if error.contains("network") || error.contains("connection") {
+        OrchestrationErrorKind::NetworkError
+    } else {
+        OrchestrationErrorKind::InternalError
+    }
+}
+
+fn format_orchestration_error(error: String) -> String {
+    let kind = categorize_orchestration_error(&error);
+    let error_code = match kind {
+        OrchestrationErrorKind::WorkspaceNotFound => "WORKSPACE_NOT_FOUND",
+        OrchestrationErrorKind::InvalidWorkspace => "WORKSPACE_INVALID",
+        OrchestrationErrorKind::JobNotFound => "JOB_NOT_FOUND",
+        OrchestrationErrorKind::InvalidJobState => "JOB_STATE_INVALID",
+        OrchestrationErrorKind::PermissionDenied => "PERMISSION_DENIED",
+        OrchestrationErrorKind::Timeout => "TIMEOUT",
+        OrchestrationErrorKind::NetworkError => "NETWORK_ERROR",
+        OrchestrationErrorKind::InternalError => "INTERNAL_ERROR",
+    };
+    
+    let recovery_hint = match kind {
+        OrchestrationErrorKind::WorkspaceNotFound => 
+            "Please select a workspace from the workspace panel before running this task.",
+        OrchestrationErrorKind::InvalidWorkspace => 
+            "The workspace path is invalid or inaccessible. Check that the path exists and you have permissions.",
+        OrchestrationErrorKind::JobNotFound => 
+            "The orchestration job may have been cleaned up or the ID is incorrect. Try creating a new job.",
+        OrchestrationErrorKind::InvalidJobState => 
+            "This action is not allowed in the current job state. Wait for the current operation to complete.",
+        OrchestrationErrorKind::PermissionDenied => 
+            "You don't have the required permissions for this operation. Check your workspace access rights.",
+        OrchestrationErrorKind::Timeout => 
+            "The operation timed out. Try again with a simpler task or check your network connection.",
+        OrchestrationErrorKind::NetworkError => 
+            "A network error occurred. Check your internet connection and provider status.",
+        OrchestrationErrorKind::InternalError => 
+            "An internal error occurred. If this persists, please report it as a bug.",
+    };
+    
+    format!("WHIM:{}|{}\n\nRecovery hint: {}", error_code, error, recovery_hint)
+}
+
 /// Resolve the workspace key for an orchestration task: an explicit path wins,
 /// otherwise the currently selected workspace. The key is just a stable string
 /// used to group tasks; the durable ledger stores it verbatim.
@@ -155,9 +223,9 @@ pub async fn create_orchestration_job(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), Some(request.workspace.as_str()))
         .await
-        .map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
     let mode = request.mode.unwrap_or(JobMode::Auto);
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .create(CreateJobInput {
             workspace,
@@ -169,7 +237,7 @@ pub async fn create_orchestration_job(
             model: request.model,
             max_duration_ms: request.max_duration_ms,
         })
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 #[tauri::command]
@@ -179,11 +247,11 @@ pub async fn list_orchestration_jobs(
 ) -> Result<Vec<OrchestrationJob>, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .list_for_workspace(&workspace)
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 /// List tasks for the currently selected workspace. The frontend calls this
@@ -194,11 +262,11 @@ pub async fn list_project_orchestration_jobs(
 ) -> Result<Vec<OrchestrationJob>, String> {
     let workspace = orchestration_workspace(state.inner(), None)
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .list_for_workspace(&workspace)
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 #[tauri::command]
@@ -208,11 +276,11 @@ pub async fn get_orchestration_job(
 ) -> Result<OrchestrationJobDetail, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .detail(&workspace, &request.job_id)
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 #[tauri::command]
@@ -222,11 +290,11 @@ pub async fn transition_orchestration_job(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .transition(&workspace, &request.job_id, request.action)
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 #[tauri::command]
@@ -236,8 +304,8 @@ pub async fn record_verification_result(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .record_verification(
             &workspace,
@@ -247,7 +315,7 @@ pub async fn record_verification_result(
             request.success,
             request.duration_ms,
         )
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 #[tauri::command]
@@ -257,8 +325,8 @@ pub async fn finish_orchestration_job(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     let job = store
         .finish(
             &workspace,
@@ -267,7 +335,7 @@ pub async fn finish_orchestration_job(
             request.summary.clone(),
             request.evidence,
         )
-        .map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
     drop(store);
 
     let project_memory_enabled = read_lock(&state.settings, "settings")
@@ -298,8 +366,8 @@ pub async fn retry_orchestration_job(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
-    let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
+    let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
     store
         .schedule_retry(
             &workspace,
@@ -307,7 +375,7 @@ pub async fn retry_orchestration_job(
             &request.operation_id,
             request.delay_ms,
         )
-        .map_err(orchestration_error)
+        .map_err(format_orchestration_error)
 }
 
 pub(crate) fn background_agent_evidence(result: &AgentRunResult) -> JobEvidence {
@@ -333,24 +401,24 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
 ) -> Result<OrchestrationJob, String> {
     let workspace = orchestration_workspace(state.inner(), request.workspace.as_deref())
         .await
-        .map_err(orchestration_error)?;
+        .map_err(format_orchestration_error)?;
 
     let (started, agent_request) = {
         let root = dunce::canonicalize(std::path::Path::new(&workspace))
-            .map_err(|error| format!("Cannot resolve workspace: {error}"))?;
+            .map_err(|error| format_orchestration_error(format!("Cannot resolve workspace: {error}")))?;
         let (profile, _) = crate::agent::load_harness_profile(&root)
-            .map_err(|error| format!("Cannot load harness profile: {error}"))?;
+            .map_err(|error| format_orchestration_error(format!("Cannot load harness profile: {error}")))?;
 
         if profile.require_signed_profiles.unwrap_or(false) {
-            return Err("This project requires cryptographically signed profiles, which are not yet supported by this version of Whim.".to_string());
+            return Err(format_orchestration_error("This project requires cryptographically signed profiles, which are not yet supported by this version of Whim.".to_string()));
         }
 
         let intent = {
             let mut store =
-                lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+                lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
             let detail = store
                 .detail(&workspace, &request.job_id)
-                .map_err(orchestration_error)?;
+                .map_err(format_orchestration_error)?;
 
             if let Some(policy) = &profile.model_policy {
                 if policy == "local_only"
@@ -361,10 +429,10 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
                         .unwrap_or("")
                         .eq_ignore_ascii_case("local")
                 {
-                    return Err(
+                    return Err(format_orchestration_error(
                         "This project's harness profile restricts execution to local models only."
                             .to_string(),
-                    );
+                    ));
                 }
             }
             detail.job.intent.clone()
@@ -384,14 +452,14 @@ pub async fn dispatch_orchestration_job<R: tauri::Runtime>(
         )
         .await;
 
-        let mut store = lock(&state.orchestration, "orchestration").await.map_err(orchestration_error)?;
+        let mut store = lock(&state.orchestration, "orchestration").await.map_err(format_orchestration_error)?;
         let detail = store
             .detail(&workspace, &request.job_id)
-            .map_err(orchestration_error)?;
+            .map_err(format_orchestration_error)?;
 
         let started = store
             .transition(&workspace, &request.job_id, JobAction::Start)
-            .map_err(orchestration_error)?;
+            .map_err(format_orchestration_error)?;
         let agent_request = crate::agent::AgentRunRequest {
             prompt: detail.job.intent.clone(),
             workspace: Some(workspace.clone()),
