@@ -1,5 +1,15 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { whimError } from "@/lib/bridge";
+import { 
+  Folder, 
+  ClipboardList, 
+  Lock, 
+  Timer, 
+  Globe, 
+  Key, 
+  AlertTriangle,
+  Cloud
+} from "lucide-react";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -70,26 +80,52 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
   }
 
-  getErrorIcon(): string {
+  getErrorIcon(): ReactNode {
+    const iconClassName = "w-12 h-12 mx-auto mb-4";
+    
     switch (this.state.errorCategory) {
       case "WORKSPACE_NOT_FOUND":
       case "WORKSPACE_INVALID":
-        return "📁";
+        return <Folder className={iconClassName} />;
       case "JOB_NOT_FOUND":
       case "JOB_STATE_INVALID":
-        return "📋";
+        return <ClipboardList className={iconClassName} />;
       case "PERMISSION_DENIED":
       case "TOOL_PERMISSION":
-        return "🔒";
+        return <Lock className={iconClassName} />;
       case "TIMEOUT":
-        return "⏱️";
+        return <Timer className={iconClassName} />;
       case "NETWORK_ERROR":
-        return "🌐";
+        return <Globe className={iconClassName} />;
+      case "PROVIDER_AUTH":
+        return <Key className={iconClassName} />;
+      case "PROVIDER_TRANSIENT":
+        return <Cloud className={iconClassName} />;
+      default:
+        return <AlertTriangle className={iconClassName} />;
+    }
+  }
+
+  getErrorIconColor(): string {
+    switch (this.state.errorCategory) {
+      case "WORKSPACE_NOT_FOUND":
+      case "WORKSPACE_INVALID":
+        return "text-[#e0e0e0]";
+      case "JOB_NOT_FOUND":
+      case "JOB_STATE_INVALID":
+        return "text-[#e0e0e0]";
+      case "PERMISSION_DENIED":
+      case "TOOL_PERMISSION":
+        return "text-[#f87171]";
+      case "TIMEOUT":
+        return "text-[#fbbf24]";
+      case "NETWORK_ERROR":
+        return "text-[#60a5fa]";
       case "PROVIDER_AUTH":
       case "PROVIDER_TRANSIENT":
-        return "🔑";
+        return "text-[#f87171]";
       default:
-        return "⚠️";
+        return "text-[#f87171]";
     }
   }
 
@@ -98,7 +134,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="flex h-dvh w-dvh items-center justify-center bg-[#0f0f0f] p-8">
           <div className="max-w-md text-center">
-            <div className="mb-4 text-4xl">{this.getErrorIcon()}</div>
+            <div className={this.getErrorIconColor()}>
+              {this.getErrorIcon()}
+            </div>
             <h1 className="mb-2 text-lg font-semibold text-[#e0e0e0]">
               {this.getErrorTitle()}
             </h1>
