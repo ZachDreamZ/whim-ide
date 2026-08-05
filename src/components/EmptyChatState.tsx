@@ -16,6 +16,9 @@ type EmptyChatStateProps = {
   onRetry?: () => void;
   isRunning?: boolean;
   onStop?: () => void;
+  onAttach?: () => void;
+  attachments?: readonly { id: string; name: string; size?: number }[];
+  onRemoveAttachment?: (id: string) => void;
 };
 
 const suggestions = [
@@ -40,6 +43,9 @@ export function EmptyChatState({
   onRetry,
   isRunning = false,
   onStop,
+  onAttach,
+  attachments,
+  onRemoveAttachment,
 }: EmptyChatStateProps) {
   const projectName = workspaceInfo?.name ?? null;
   const hasGitRepo = workspaceInfo?.gitRepository ?? false;
@@ -82,6 +88,9 @@ export function EmptyChatState({
           onOpenProviders={onOpenProviders}
           showRetry={showRetry}
           onRetry={onRetry}
+          onAttach={onAttach}
+          attachments={attachments}
+          onRemoveAttachment={onRemoveAttachment}
         />
       </div>
 

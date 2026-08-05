@@ -486,6 +486,46 @@ body {
   max-width: 520px;
 }
 
+.composer-attachments {
+  max-width: 820px;
+  margin: 0 auto 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.composer-attachment {
+  max-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  background: var(--card);
+  font-size: 11px;
+}
+
+.composer-attachment > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment button {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.composer-attachment button:hover { color: var(--foreground); background: var(--accent); }
+
 .message-composer-inner {
   max-width: 820px;
   margin: 0 auto;

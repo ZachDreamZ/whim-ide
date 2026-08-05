@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { bridge } from "../lib/bridge";
 import { AgentChatView, parseAgentEvent } from "./AgentChatView";
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+
 vi.mock("../lib/bridge", () => ({
   bridge: {
     isNative: vi.fn(),

@@ -17,6 +17,9 @@ type MessageComposerProps = {
   onOpenProviders?: () => void;
   showRetry?: boolean;
   onRetry?: () => void;
+  onAttach?: () => void;
+  attachments?: readonly { id: string; name: string; size?: number }[];
+  onRemoveAttachment?: (id: string) => void;
 };
 
 export function MessageComposer({
@@ -32,6 +35,9 @@ export function MessageComposer({
   onOpenProviders,
   showRetry = false,
   onRetry,
+  onAttach,
+  attachments = [],
+  onRemoveAttachment,
 }: MessageComposerProps) {
   const [value, setValue] = useState("");
   const [recording, setRecording] = useState(false);
@@ -116,11 +122,27 @@ export function MessageComposer({
 
   return (
     <div className="message-composer">
+      {attachments.length > 0 && (
+        <div className="composer-attachments" aria-label="Attached files">
+          {attachments.map((attachment) => (
+            <span key={attachment.id} className="composer-attachment" title={attachment.name}>
+              <Paperclip size={11} />
+              <span>{attachment.name}</span>
+              {onRemoveAttachment && (
+                <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)}>×</button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="message-composer-inner">
         <button
           type="button"
           className="composer-attach-button"
-          aria-label="Attach files"
+          aria-label="Attach workspace files"
+          title={onAttach ? "Attach workspace text files" : "File attachments are available in the installed desktop app"}
+          onClick={onAttach}
+          disabled={!onAttach || isRunning}
         >
           <Paperclip size={16} />
         </button>

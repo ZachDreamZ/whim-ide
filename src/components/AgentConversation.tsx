@@ -25,6 +25,9 @@ type AgentConversationProps = {
   onOpenProviders?: () => void;
   showRetry?: boolean;
   onRetry?: () => void;
+  onAttach?: () => void;
+  attachments?: readonly { id: string; name: string; size?: number }[];
+  onRemoveAttachment?: (id: string) => void;
 };
 
 function isErrorPart(part: Record<string, unknown>): boolean {
@@ -87,6 +90,9 @@ export function AgentConversation({
   onOpenProviders,
   showRetry = false,
   onRetry,
+  onAttach,
+  attachments,
+  onRemoveAttachment,
 }: AgentConversationProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { showJumpButton, scrollToBottom } = useSmartAutoScroll(scrollContainerRef);
@@ -213,6 +219,9 @@ export function AgentConversation({
             onOpenProviders={onOpenProviders}
             showRetry={showRetry}
             onRetry={onRetry}
+            onAttach={onAttach}
+            attachments={attachments}
+            onRemoveAttachment={onRemoveAttachment}
           />
         </>
       )}
