@@ -13,6 +13,8 @@ type FileChangeCardProps = {
   totalAdditions: number;
   totalDeletions: number;
   onOpenFile?: (path: string) => void;
+  /** Opens the most relevant review surface (typically the first changed file). */
+  onReview?: () => void;
   canUndo?: boolean;
 };
 
@@ -23,6 +25,7 @@ export function FileChangeCard({
   totalAdditions,
   totalDeletions,
   onOpenFile,
+  onReview,
   canUndo = false,
 }: FileChangeCardProps) {
   const [showAll, setShowAll] = useState(false);
@@ -43,7 +46,14 @@ export function FileChangeCard({
           </span>
         </div>
         <div className="file-change-card-actions">
-          <Button variant="ghost" size="icon-sm" aria-label="Review">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Review changed files"
+            title={onReview ? "Review changed files" : "Open a workspace to review files"}
+            disabled={!onReview}
+            onClick={onReview}
+          >
             <Eye size={14} />
           </Button>
           {canUndo && (
