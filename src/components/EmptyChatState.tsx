@@ -25,7 +25,7 @@ const suggestions = [
   { icon: Code2, text: "Analyze the current project structure and suggest improvements" },
   { icon: Blocks, text: "Add a new feature to handle user authentication" },
   { icon: Wand2, text: "Fix TypeScript compilation errors in the codebase" },
-  { icon: Sparkles, text: "Write tests for the main components" },
+  { icon: Sparkles, text: "Run the project gauntlet: inspect Git state, run relevant checks, and report evidence-backed failures" },
 ];
 
 export function EmptyChatState({

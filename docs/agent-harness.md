@@ -133,6 +133,23 @@ article](https://www.anthropic.com/engineering/effective-harnesses-for-long-runn
 | Observable evidence | Typed Rust agent events → chat timeline and task ledger |
 | Human gate | Explicit approval posture; mutations remain guarded |
 
+## Gauntlet automation loop
+
+Whim exposes a **Gauntlet health loop** as a workspace-scoped scheduled task.
+It is intentionally a *verification* task, not an unattended coding/deployment
+agent. On each due run it asks the native runtime to inspect workspace state,
+discover and run the lightest relevant checks, then return exact actionable
+failure evidence. The task is configured in the existing Scheduled hub and is
+subject to the same durable job, budget, cancellation, and task-ledger rules as
+an interactive run.
+
+This design chooses a low-risk evaluator loop first: deterministic evidence is
+useful even when a code-changing loop should wait for human review. A future
+mutation loop must use an isolated worktree, explicit file/change budget,
+pre-change checkpoint, deterministic acceptance checks, and a human approval
+boundary; it must not reuse the health-loop schedule as permission to modify a
+shared workspace.
+
 ## Non-negotiable safety rules
 
 - A model's declaration of success is never verification evidence.

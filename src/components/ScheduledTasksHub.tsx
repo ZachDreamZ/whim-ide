@@ -60,10 +60,10 @@ export function ScheduledTasksHub({ workspace }: { workspace: string }) {
     setNextRun(localInputValue(task.nextRunAtMs)); setMode(task.mode); setComposerOpen(true);
   };
 
-  const useSuggestion = (kind: "daily" | "weekly" | "followup") => {
+  const useSuggestion = (kind: "daily" | "weekly" | "followup" | "gauntlet") => {
     const now = new Date();
     const next = new Date(now);
-    const hour = kind === "weekly" ? 16 : kind === "daily" ? 8 : 9;
+    const hour = kind === "weekly" ? 16 : kind === "daily" ? 8 : kind === "gauntlet" ? 10 : 9;
     next.setHours(hour, 0, 0, 0);
     if (kind === "weekly") {
       const days = (5 - next.getDay() + 7) % 7;
@@ -76,7 +76,9 @@ export function ScheduledTasksHub({ workspace }: { workspace: string }) {
       ? { title: "Daily brief", prompt: "Start each weekday with a summary of this workspace, current tasks, and priorities.", recurrence: "weekdays" as const, mode: "research" as const }
       : kind === "weekly"
         ? { title: "Weekly review", prompt: "Turn the recent work in this workspace into a concise status update every Friday.", recurrence: "weekly" as const, mode: "review" as const }
-        : { title: "Follow-up monitor", prompt: "Review recent workspace activity and flag anything that needs attention.", recurrence: "weekdays" as const, mode: "operate" as const };
+        : kind === "gauntlet"
+          ? { title: "Gauntlet health loop", prompt: "Run the workspace gauntlet: inspect current Git state, discover and run the lightest relevant verification checks, and report actionable failures with exact evidence. Do not edit files, deploy, or claim success without verification evidence.", recurrence: "weekdays" as const, mode: "verify" as const }
+          : { title: "Follow-up monitor", prompt: "Review recent workspace activity and flag anything that needs attention.", recurrence: "weekdays" as const, mode: "operate" as const };
     setTitle(values.title); setPrompt(values.prompt); setRecurrence(values.recurrence); setMode(values.mode); setNextRun(localInputValue(next.getTime())); setComposerOpen(true);
   };
 
@@ -130,6 +132,7 @@ export function ScheduledTasksHub({ workspace }: { workspace: string }) {
             <button type="button" onClick={() => useSuggestion("daily")}><CalendarClock size={18} /><strong>Daily brief</strong><span>Weekdays at 8:00 AM</span><p>Start each weekday with a summary of your workspace and priorities</p></button>
             <button type="button" onClick={() => useSuggestion("weekly")}><CalendarClock size={18} /><strong>Weekly review</strong><span>Fridays at 4:00 PM</span><p>Turn your recent work into a concise status update every Friday</p></button>
             <button type="button" onClick={() => useSuggestion("followup")}><CalendarClock size={18} /><strong>Follow-up monitor</strong><span>Weekdays at 9:00 AM</span><p>Review recent workspace activity and flag anything that needs attention</p></button>
+            <button type="button" onClick={() => useSuggestion("gauntlet")}><CalendarClock size={18} /><strong>Gauntlet health loop</strong><span>Weekdays at 10:00 AM</span><p>Run safe checks and return evidence-backed failures—never deploy or edit automatically</p></button>
           </div></div> : (
             <ul className="integration-list">{sorted.map((task) => <li className={`integration-card ${task.enabled ? "" : "muted"}`} key={task.id}>
               <div className="integration-card-main"><div className="integration-icon"><CalendarClock size={17} /></div><div><strong>{task.title}</strong><p>{task.prompt}</p><span>{scheduleLabel(task)} · {task.mode}</span>{task.lastRunAtMs && <span>Last started {new Date(task.lastRunAtMs).toLocaleString()}</span>}</div></div>
