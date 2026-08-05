@@ -12,7 +12,11 @@ vi.mock("../lib/bridge", () => ({
     saveChatThread: vi.fn(),
     runAgent: vi.fn(),
     cancelOperation: vi.fn(),
+    createOrchestrationJob: vi.fn(),
+    transitionOrchestrationJob: vi.fn(),
+    finishOrchestrationJob: vi.fn(),
   },
+  agentRunEvidence: vi.fn(() => ({ eventCount: 0, toolCallCount: 0, failedToolCallCount: 0, durationMs: null, timedOut: false })),
 }));
 
 vi.mock("./AgentConversation", () => ({
@@ -77,16 +81,22 @@ describe("AgentChatView", () => {
 
   it("renders a resolved native failure as a retryable conversation error", async () => {
     vi.mocked(bridge.isNative).mockReturnValue(true);
+    const job = { id: "job-1", workspace: "", status: "running" };
+    vi.mocked(bridge.createOrchestrationJob).mockResolvedValue(job as never);
+    vi.mocked(bridge.transitionOrchestrationJob).mockResolvedValue(job as never);
+    vi.mocked(bridge.finishOrchestrationJob).mockResolvedValue(job as never);
     vi.mocked(bridge.runAgent).mockResolvedValue({
       success: false,
       stderr: "Provider connection failed",
       events: [],
     });
-    render(<AgentChatView {...props} />);
+    render(<AgentChatView {...props} workspace="C:/workspace" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Error: Provider connection failed")).toBeVisible();
+    expect(bridge.createOrchestrationJob).toHaveBeenCalledWith(expect.objectContaining({ workspace: "C:/workspace", mode: "auto" }));
+    expect(bridge.finishOrchestrationJob).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-1", outcome: "failed" }));
     expect(bridge.runAgent).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining("Closed-loop execution contract"),
     }));

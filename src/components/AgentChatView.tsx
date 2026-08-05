@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { open } from "@tauri-apps/plugin-dialog";
-import { bridge } from "../lib/bridge";
-import type { ChatThread } from "../lib/bridge";
+import { agentRunEvidence, bridge } from "../lib/bridge";
+import type { ChatThread, NativeResult, OrchestrationJob } from "../lib/bridge";
 import { buildAgentHarnessPrompt, buildRetryReflection } from "../lib/agent-harness";
 import { AgentConversation } from "./AgentConversation";
 import { EmptyChatState } from "./EmptyChatState";
@@ -396,8 +396,27 @@ export function AgentChatView({
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
       const collectedParts: UIMessage["parts"][0][] = [];
+      let durableJob: OrchestrationJob | null = null;
+      let resultForLedger: NativeResult | null = null;
 
       try {
+        // Native agent work is always represented by a durable task before any
+        // tool can run. This makes autonomous/scheduled and interactive work
+        // visible in the same ledger and recoverable after a UI restart.
+        if (bridge.isNative() && workspace) {
+          const created = await bridge.createOrchestrationJob({
+            workspace,
+            intent: content,
+            title: generateTitle(content),
+            mode: "auto",
+            operationId,
+            provider,
+            model: model === "auto" ? undefined : model,
+          });
+          durableJob = await bridge.transitionOrchestrationJob(workspace, created.id, "start");
+          window.dispatchEvent(new Event("whim:history-changed"));
+        }
+
         const handleEvent = (event: unknown) => {
           const part = parseAgentEvent(event as NativeEvent);
           if (!part) return;
@@ -429,6 +448,7 @@ export function AgentChatView({
             onEvent: handleEvent,
           })
           : { success: true, message: browserDemoReply(content, workspaceInfo?.name), events: [] };
+        resultForLedger = result;
 
         // The invoke response is authoritative when event wiring is not
         // available (for example, if Tauri event subscription failed).
@@ -459,12 +479,34 @@ export function AgentChatView({
           ? { ...message, parts: [...collectedParts] } as unknown as UIMessage
           : message));
 
+        if (durableJob && workspace) {
+          await bridge.finishOrchestrationJob({
+            workspace,
+            jobId: durableJob.id,
+            outcome: "completed",
+            summary: "Chat mission completed; inspect the conversation evidence and workspace diff.",
+            evidence: agentRunEvidence(result),
+          }).catch(() => undefined);
+          window.dispatchEvent(new Event("whim:history-changed"));
+        }
         void persistThread(content, collectedParts);
         setRetryReflection(null);
         setAttachments([]);
         onRunComplete?.();
       } catch (error) {
         const errorText = error instanceof Error ? error.message : "Request failed";
+        if (durableJob && workspace) {
+          await bridge.finishOrchestrationJob({
+            workspace,
+            jobId: durableJob.id,
+            outcome: resultForLedger?.cancelled ? "cancelled" : "failed",
+            summary: resultForLedger?.cancelled ? "Chat mission was cancelled by the user." : `Chat mission failed: ${errorText}`,
+            evidence: resultForLedger ? agentRunEvidence(resultForLedger) : {
+              eventCount: 0, toolCallCount: 0, failedToolCallCount: 0, durationMs: null, timedOut: false,
+            },
+          }).catch(() => undefined);
+          window.dispatchEvent(new Event("whim:history-changed"));
+        }
         setRetryReflection((current) => current ?? buildRetryReflection({ message: errorText }));
         const errorPart = { type: "text", text: `Error: ${errorText}` } as UIMessage["parts"][0];
         const finalParts = [...collectedParts, errorPart];
