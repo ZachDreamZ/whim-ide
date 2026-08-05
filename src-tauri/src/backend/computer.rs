@@ -1,18 +1,26 @@
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
 use std::collections::HashMap;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+#[cfg(windows)]
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(windows)]
 use std::sync::Mutex;
 
+#[cfg(windows)]
 use windows::core::{Interface, BSTR};
+#[cfg(windows)]
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+#[cfg(windows)]
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationInvokePattern,
     IUIAutomationTogglePattern,     IUIAutomationValuePattern, ToggleState_Off, TreeScope_Descendants,
     UIA_InvokePatternId, UIA_TogglePatternId, UIA_ValuePatternId,
 };
+#[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -36,19 +44,25 @@ pub struct UIState {
     pub elements: Vec<UIElement>,
 }
 
+#[cfg(windows)]
 lazy_static::lazy_static! {
     static ref ELEMENT_CACHE: Mutex<HashMap<String, SyncElement>> = Mutex::new(HashMap::new());
 }
 
+#[cfg(windows)]
 struct SyncElement(IUIAutomationElement);
+#[cfg(windows)]
 unsafe impl Send for SyncElement {}
+#[cfg(windows)]
 unsafe impl Sync for SyncElement {}
 
 // RAII guard: initializes COM on construction and uninitializes it on drop.
 // Previously each helper called CoUninitialize() directly, which tore down the
 // COM apartment on the calling thread (and could fire RPC_E_WRONG_THREAD on the
 // next UI Automation call). This keeps init/uninit balanced per operation.
+#[cfg(windows)]
 struct ComGuard;
+#[cfg(windows)]
 impl ComGuard {
     fn init() -> Result<ComGuard, String> {
         // S_FALSE (already initialized) is acceptable; only a hard error (e.g.
@@ -58,15 +72,19 @@ impl ComGuard {
         Ok(ComGuard)
     }
 }
+#[cfg(windows)]
 impl Drop for ComGuard {
     fn drop(&mut self) {
         unsafe { CoUninitialize() };
     }
 }
 
+#[cfg(windows)]
 static REF_COUNTER: AtomicUsize = AtomicUsize::new(0);
+#[cfg(windows)]
 const MAX_UI_ELEMENTS: i32 = 250;
 
+#[cfg(windows)]
 fn get_automation() -> Result<(ComGuard, IUIAutomation), String> {
     let _guard = ComGuard::init()?;
     let automation: IUIAutomation = unsafe {
@@ -85,6 +103,7 @@ fn get_automation() -> Result<(ComGuard, IUIAutomation), String> {
 
 // Map a UIA control-type id to a human-readable name. Without this the agent
 // only saw `Type_<number>`, which is unusable for reasoning about the UI.
+#[cfg(windows)]
 fn control_type_name(id: i32) -> String {
     let name = match id {
         50000 => "Button",
@@ -133,6 +152,7 @@ fn control_type_name(id: i32) -> String {
 
 // Best-effort extract the element's current text value via the Value pattern
 // (Edit/Document/ComboBox selections), falling back to its accessible name.
+#[cfg(windows)]
 fn element_text(element: &IUIAutomationElement) -> Option<String> {
     unsafe {
         if let Ok(pattern) = element.GetCurrentPattern(UIA_ValuePatternId) {
@@ -154,6 +174,7 @@ fn element_text(element: &IUIAutomationElement) -> Option<String> {
     }
 }
 
+#[cfg(windows)]
 pub fn computer_inspect() -> Result<UIState, String> {
     let (_guard, automation) = get_automation()?;
     let mut cache = ELEMENT_CACHE
@@ -252,6 +273,7 @@ pub fn computer_inspect() -> Result<UIState, String> {
 // Try to (re)locate a cached element. If it has gone stale (e.g. the cache was
 // cleared by a newer inspect), re-run an inspection of the foreground window so
 // the agent's verify loop can still resolve the ref instead of failing hard.
+#[cfg(windows)]
 fn resolve_element(ref_id: &str) -> Result<IUIAutomationElement, String> {
     {
         let cache = ELEMENT_CACHE
@@ -272,6 +294,7 @@ fn resolve_element(ref_id: &str) -> Result<IUIAutomationElement, String> {
         .ok_or_else(|| format!("Element {} not found or stale", ref_id))
 }
 
+#[cfg(windows)]
 pub fn computer_invoke(ref_id: &str) -> Result<(), String> {
     let (_guard, _automation) = get_automation()?;
     let element = resolve_element(ref_id)?;
@@ -296,6 +319,7 @@ pub fn computer_invoke(ref_id: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(windows)]
 pub fn computer_set_value(ref_id: &str, text: &str) -> Result<(), String> {
     let (_guard, _automation) = get_automation()?;
     let element = resolve_element(ref_id)?;
@@ -315,6 +339,7 @@ pub fn computer_set_value(ref_id: &str, text: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(windows)]
 pub fn computer_launch(path: &str) -> Result<(), String> {
     let path = path.trim();
     if path.is_empty() || path.chars().any(char::is_control) {
@@ -347,6 +372,7 @@ pub fn computer_launch(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(windows)]
 #[tauri::command]
 pub fn open_gpt_section(section: String) -> Result<(), String> {
     if !matches!(
@@ -415,4 +441,31 @@ pub fn open_gpt_section(section: String) -> Result<(), String> {
     Err(format!(
         "Could not find the {section} page in the GPT desktop app"
     ))
+}
+
+
+#[cfg(not(windows))]
+pub fn computer_inspect() -> Result<UIState, String> {
+    Err("Computer UI inspection is only supported on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn computer_invoke(_ref_id: &str) -> Result<(), String> {
+    Err("Computer UI invocation is only supported on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn computer_set_value(_ref_id: &str, _text: &str) -> Result<(), String> {
+    Err("Computer UI modification is only supported on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn computer_launch(_path: &str) -> Result<(), String> {
+    Err("Desktop launch is only supported on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn open_gpt_section(_section: String) -> Result<(), String> {
+    Err("open_gpt_section is only supported on Windows".to_string())
 }
