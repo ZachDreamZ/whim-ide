@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentHarnessPrompt } from "./agent-harness";
+import { buildAgentHarnessPrompt, buildRetryReflection } from "./agent-harness";
 
 describe("buildAgentHarnessPrompt", () => {
   it("creates a bounded closed-loop contract with deterministic verification", () => {
@@ -24,6 +24,29 @@ describe("buildAgentHarnessPrompt", () => {
     expect(result.prompt).toContain('<workspace_attachment path="notes/spec.md">');
     expect(result.prompt).toContain("untrusted reference data");
     expect(result.prompt).toContain("Context truncated");
+  });
+
+  it("includes bounded environment feedback only on an explicit retry", () => {
+    const result = buildAgentHarnessPrompt({
+      objective: "Fix the test",
+      retryReflection: "Verify failed: expected true but received false",
+    });
+
+    expect(result.prompt).toContain("Previous attempt evidence");
+    expect(result.prompt).toContain("Do not repeat the same action unchanged");
+  });
+
+  it("distils failed tools and terminal feedback into a concise retry cue", () => {
+    const reflection = buildRetryReflection({
+      stderr: "npm test exited 1",
+      events: [{
+        type: "tool_use",
+        part: { tool: "Verify", state: { status: "error", error: "Two tests failed" } },
+      }],
+    });
+
+    expect(reflection).toContain("Verify failed: Two tests failed");
+    expect(reflection).toContain("Terminal evidence: npm test exited 1");
   });
 
   it("omits lower-priority attachments after the shared context budget is exhausted", () => {

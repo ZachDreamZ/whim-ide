@@ -7,6 +7,39 @@ cancellation, and durable task records.
 
 ## Research synthesis
 
+### Empirical foundations and design boundaries
+
+The harness uses a deliberately conservative subset of research results rather
+than claiming benchmark scores transfer directly to a Windows desktop project:
+
+- **ReAct** interleaves reasoning, actions, and environment observations; its
+  authors report improved interactive task results and more interpretable
+  trajectories compared with reasoning-only or action-only baselines. Whim
+  adopts the *inspect → act → observe* shape, but does not expose private model
+  chain-of-thought as a product feature. [Yao et al., 2023, arXiv:2210.03629](https://arxiv.org/abs/2210.03629)
+- **Reflexion** uses bounded verbal feedback from a failed trajectory as
+  episodic memory on a later trial. Whim implements a transparent, deterministic
+  adaptation: only real tool errors, stderr, timeout signals, and structured
+  agent errors form a retry cue; the user must explicitly initiate the retry.
+  [Shinn et al., 2023, arXiv:2303.11366](https://arxiv.org/abs/2303.11366)
+- **SWE-agent** demonstrates that the agent-computer interface—not only the
+  model prompt—strongly affects repository-level software engineering results.
+  This motivates typed tool events, relative workspace paths, bounded outputs,
+  and reviewable evidence in Whim's native boundary. [Yang et al., 2024,
+  arXiv:2405.15793](https://arxiv.org/abs/2405.15793)
+- **LATS** combines planning, acting, and external feedback through costly
+  search. It is useful evidence that feedback and evaluation matter, but it is
+  not appropriate as a default desktop mutation strategy: speculative branches
+  can multiply cost and create shared-worktree conflicts. Whim only considers
+  fan-out for isolated, read-only or worktree-separated jobs. [Zhou et al.,
+  2024, arXiv:2310.04406](https://arxiv.org/abs/2310.04406)
+- **LOCA-bench** specifically measures agents under growing context and finds
+  scaffold/context-management choices materially affect success. This supports
+  explicit attachment budgets and context compaction rather than naive context
+  accumulation. It is a recent preprint, so its findings guide the design but
+  are not treated as settled production evidence. [Zeng et al., 2026,
+  arXiv:2602.07962](https://arxiv.org/abs/2602.07962)
+
 ### Prompt engineering
 
 Prompt engineering is the local instruction layer: clear objective, role,
@@ -93,6 +126,7 @@ article](https://www.anthropic.com/engineering/effective-harnesses-for-long-runn
 | --- | --- |
 | Prompt contract | `src/lib/agent-harness.ts` |
 | Context budget and attachment compaction | `buildAgentHarnessPrompt` |
+| Bounded retry reflection from real environment feedback | `buildRetryReflection` |
 | Primary desktop chat integration | `src/components/AgentChatView.tsx` |
 | Durable graph lifecycle | `src/lib/mission-graph.ts` |
 | Durable job/checkpoint authority | Rust backend orchestration store |

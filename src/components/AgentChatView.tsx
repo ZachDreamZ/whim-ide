@@ -3,7 +3,7 @@ import type { UIMessage } from "ai";
 import { open } from "@tauri-apps/plugin-dialog";
 import { bridge } from "../lib/bridge";
 import type { ChatThread } from "../lib/bridge";
-import { buildAgentHarnessPrompt } from "../lib/agent-harness";
+import { buildAgentHarnessPrompt, buildRetryReflection } from "../lib/agent-harness";
 import { AgentConversation } from "./AgentConversation";
 import { EmptyChatState } from "./EmptyChatState";
 
@@ -203,6 +203,7 @@ export function AgentChatView({
   const [isLoading, setIsLoading] = useState(false);
   const [conversationTitle, setConversationTitle] = useState("New chat");
   const [lastRunFailed, setLastRunFailed] = useState(false);
+  const [retryReflection, setRetryReflection] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<WorkspaceAttachment[]>([]);
   const lastPromptRef = useRef<string>("");
   const sessionIdRef = useRef<string | undefined>(undefined);
@@ -360,12 +361,15 @@ export function AgentChatView({
   const handleSend = useCallback(
     async (content: string) => {
       if (!content.trim() || isRunning) return;
+      const isRetry = lastRunFailed && content === lastPromptRef.current;
+      if (!isRetry) setRetryReflection(null);
       lastPromptRef.current = content;
       const harness = buildAgentHarnessPrompt({
         objective: content,
         workspaceName: workspaceInfo?.name,
         branch,
         attachments: attachments.map(({ path, content: attachmentContent }) => ({ path, content: attachmentContent })),
+        retryReflection: isRetry ? retryReflection ?? undefined : undefined,
       });
       const prompt = harness.prompt;
       setLastRunFailed(false);
@@ -437,6 +441,7 @@ export function AgentChatView({
           sessionIdRef.current = result.sessionId;
         }
         if (!result.success) {
+          setRetryReflection(buildRetryReflection(result));
           throw new Error(result.stderr?.trim() || result.message?.trim() || (result.timedOut ? "The agent timed out." : "The agent could not complete this request."));
         }
 
@@ -455,10 +460,12 @@ export function AgentChatView({
           : message));
 
         void persistThread(content, collectedParts);
+        setRetryReflection(null);
         setAttachments([]);
         onRunComplete?.();
       } catch (error) {
         const errorText = error instanceof Error ? error.message : "Request failed";
+        setRetryReflection((current) => current ?? buildRetryReflection({ message: errorText }));
         const errorPart = { type: "text", text: `Error: ${errorText}` } as UIMessage["parts"][0];
         const finalParts = [...collectedParts, errorPart];
         setLastRunFailed(true);
@@ -483,6 +490,8 @@ export function AgentChatView({
       baseUrl,
       model,
       isRunning,
+      lastRunFailed,
+      retryReflection,
       onRunComplete,
       onActivityChange,
       persistThread,
