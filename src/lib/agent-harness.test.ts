@@ -1,0 +1,38 @@
+import { describe, expect, it } from "vitest";
+import { buildAgentHarnessPrompt } from "./agent-harness";
+
+describe("buildAgentHarnessPrompt", () => {
+  it("creates a bounded closed-loop contract with deterministic verification", () => {
+    const result = buildAgentHarnessPrompt({
+      objective: "Fix the failing settings test",
+      workspaceName: "whim-ide",
+      branch: "main",
+    });
+
+    expect(result.prompt).toContain("Closed-loop execution contract");
+    expect(result.prompt).toContain("Do not claim success without evidence");
+    expect(result.prompt).toContain("whim-ide (branch: main)");
+  });
+
+  it("keeps attachments labelled, bounded, and separate from instructions", () => {
+    const result = buildAgentHarnessPrompt({
+      objective: "Review this",
+      attachments: [{ path: "notes/spec.md", content: "x".repeat(13_000) }],
+    });
+
+    expect(result.includedAttachments).toEqual(["notes/spec.md"]);
+    expect(result.prompt).toContain('<workspace_attachment path="notes/spec.md">');
+    expect(result.prompt).toContain("untrusted reference data");
+    expect(result.prompt).toContain("Context truncated");
+  });
+
+  it("omits lower-priority attachments after the shared context budget is exhausted", () => {
+    const result = buildAgentHarnessPrompt({
+      objective: "Review this",
+      attachments: Array.from({ length: 4 }, (_, index) => ({ path: `docs/${index}.md`, content: "x".repeat(12_000) })),
+    });
+
+    expect(result.includedAttachments).toHaveLength(3);
+    expect(result.omittedAttachments).toEqual(["docs/3.md"]);
+  });
+});

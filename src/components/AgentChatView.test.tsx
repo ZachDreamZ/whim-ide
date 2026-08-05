@@ -87,5 +87,8 @@ describe("AgentChatView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Error: Provider connection failed")).toBeVisible();
+    expect(bridge.runAgent).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining("Closed-loop execution contract"),
+    }));
   });
 });
