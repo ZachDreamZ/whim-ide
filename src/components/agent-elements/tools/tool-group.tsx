@@ -1,7 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toolRegistry } from "./tool-registry";
 import { GenericTool } from "./generic-tool";
-import { getToolStatus, type ToolPartBase } from "../utils/format-tool";
+import {
+  getToolStatus,
+  isToolObject,
+  type ToolPartBase,
+} from "../utils/format-tool";
 import { cn } from "../utils/cn";
 import { ToolRowBase } from "./tool-row-base";
 
@@ -91,6 +95,20 @@ function formatStreamCounts(fileCount: number, searchCount: number): string {
   return parts.join(", ");
 }
 
+function readStringField(value: unknown, field: string): string {
+  if (!isToolObject(value)) return "";
+  const fieldValue = value[field];
+  return typeof fieldValue === "string" ? fieldValue : "";
+}
+
+function readNumberField(value: unknown, field: string): number | undefined {
+  if (!isToolObject(value)) return undefined;
+  const fieldValue = value[field];
+  return typeof fieldValue === "number" && Number.isFinite(fieldValue)
+    ? fieldValue
+    : undefined;
+}
+
 export const ToolGroup = memo(function ToolGroup({
   part,
   nestedTools = [],
@@ -103,19 +121,17 @@ export const ToolGroup = memo(function ToolGroup({
   showElapsed = true,
 }: ToolGroupProps) {
   const { isPending, isInterrupted } = getToolStatus(part, chatStatus);
-  const description = (part.input as any)?.description || "";
+  const description = readStringField(part.input, "description");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [expanded, setExpanded] = useState(defaultOpen ?? false);
   const [visibleCount, setVisibleCount] = useState(0);
-  const startedAt =
-    ((part as any).callProviderMetadata?.custom?.startedAt as number | undefined) ??
-    ((part as any).startedAt as number | undefined);
+  const startedAt = part.callProviderMetadata?.custom?.startedAt ?? part.startedAt;
   const hasNestedTools = nestedTools.length > 0;
   const streamKey = part.toolCallId ?? part.id ?? "";
   const outputDuration =
-    (part.output as any)?.totalDurationMs ||
-    (part.output as any)?.duration ||
-    (part.output as any)?.duration_ms;
+    readNumberField(part.output, "totalDurationMs") ??
+    readNumberField(part.output, "duration") ??
+    readNumberField(part.output, "duration_ms");
   const maskThreshold = 4;
   const streamHeight = Math.max(1, maxVisibleTools) * 28;
   const visibleToolCount = isPending

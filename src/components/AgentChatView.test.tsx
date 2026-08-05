@@ -15,6 +15,7 @@ vi.mock("../lib/bridge", () => ({
     createOrchestrationJob: vi.fn(),
     transitionOrchestrationJob: vi.fn(),
     finishOrchestrationJob: vi.fn(),
+    getOrchestrationJob: vi.fn(),
   },
   agentRunEvidence: vi.fn(() => ({ eventCount: 0, toolCallCount: 0, failedToolCallCount: 0, durationMs: null, timedOut: false })),
 }));
@@ -77,6 +78,42 @@ describe("AgentChatView", () => {
 
     expect(await screen.findByText(/Browser preview response/)).toBeVisible();
     expect(bridge.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("loads a durable task selected from the sidebar into the conversation surface", async () => {
+    vi.mocked(bridge.isNative).mockReturnValue(true);
+    vi.mocked(bridge.getOrchestrationJob).mockResolvedValue({
+      job: {
+        id: "job-42",
+        workspace: "C:/workspace",
+        title: "Repair checks",
+        intent: "Fix failing checks",
+        mode: "build",
+        risk: "low",
+        status: "failed",
+        budget: { maxDurationMs: 600000, maxToolIterations: 100, maxAttempts: 3 },
+        operationId: null,
+        operationIds: [],
+        provider: null,
+        model: null,
+        createdAtMs: 1,
+        updatedAtMs: 2,
+        startedAtMs: null,
+        finishedAtMs: null,
+        summary: "Typecheck failed.",
+        evidence: { eventCount: 2, toolCallCount: 1, failedToolCallCount: 1, durationMs: null, timedOut: false },
+        eventCount: 2,
+        attempt: 2,
+        nextEligibleAtMs: null,
+      },
+      events: [],
+    });
+
+    render(<AgentChatView {...props} workspace="C:/workspace" initialJobId="job-42" />);
+
+    expect(await screen.findByText(/Task loaded: Repair checks/)).toBeVisible();
+    expect(screen.getByText(/Status: Failed/)).toBeVisible();
+    expect(bridge.getOrchestrationJob).toHaveBeenCalledWith("C:/workspace", "job-42");
   });
 
   it("renders a resolved native failure as a retryable conversation error", async () => {

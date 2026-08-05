@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { ScrollArea } from "./ui/scroll-area";
+import { isContinuationOnly } from "../lib/history";
 
 export type ProjectSidebarProps = {
   activeView?: string;
@@ -96,22 +97,6 @@ function loadPinned(): string[] {
   } catch {
     return [];
   }
-}
-
-/** Detect titles that are purely continuation stubs — exact words,
- * prefixed patterns like "Agent: continue", or single meaningful words
- * that are known continuation signals. */
-const CONTINUATION_WORDS = new Set([
-  "continue", "go", "next", "ok", "yes", "no", "done",
-  "more", "again", "retry", "fix", "apply", "proceed",
-]);
-
-function isContinuationTitle(title: string): boolean {
-  const lower = title.toLowerCase().trim();
-  if (CONTINUATION_WORDS.has(lower)) return true;
-  // Match patterns like "Agent: continue", "agent continue", "sub: next"
-  const stripped = lower.replace(/^[a-z0-9]+[:\s-]+/i, "").trim();
-  return stripped.length > 0 && CONTINUATION_WORDS.has(stripped);
 }
 
 function savePinned(items: string[]) {
@@ -180,7 +165,7 @@ export function ProjectSidebar({
     const needle = query.trim().toLowerCase();
     return jobs
       .filter((job) => {
-        if (isContinuationTitle(job.title)) return false;
+        if (isContinuationOnly(job.title)) return false;
         return !needle || `${job.title} ${job.workspace}`.toLowerCase().includes(needle);
       })
       .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
@@ -189,7 +174,7 @@ export function ProjectSidebar({
   const filteredChats = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return chats.filter((chat) => {
-      if (isContinuationTitle(chat.title)) return false;
+      if (isContinuationOnly(chat.title)) return false;
       return !needle || `${chat.title} ${chat.preview}`.toLowerCase().includes(needle);
     });
   }, [chats, query]);
