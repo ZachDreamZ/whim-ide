@@ -1,4 +1,4 @@
-import { Sparkles, Code2, Blocks, Wand2, FolderOpen, GitBranch } from "lucide-react";
+import { Sparkles, Code2, Blocks, Wand2, FolderOpen, GitBranch, ShieldCheck } from "lucide-react";
 import { MessageComposer } from "./MessageComposer";
 
 type EmptyChatStateProps = {
@@ -16,13 +16,36 @@ type EmptyChatStateProps = {
   onRetry?: () => void;
   isRunning?: boolean;
   onStop?: () => void;
+  onAttach?: () => void;
+  attachments?: readonly { id: string; name: string; size?: number }[];
+  onRemoveAttachment?: (id: string) => void;
 };
 
 const suggestions = [
-  { icon: Code2, text: "Analyze the current project structure and suggest improvements" },
-  { icon: Blocks, text: "Add a new feature to handle user authentication" },
-  { icon: Wand2, text: "Fix TypeScript compilation errors in the codebase" },
-  { icon: Sparkles, text: "Write tests for the main components" },
+  {
+    icon: Code2,
+    title: "Understand this codebase",
+    detail: "Map the architecture, key flows, and the safest next improvement.",
+    text: "Analyze the current project structure and suggest improvements.",
+  },
+  {
+    icon: Blocks,
+    title: "Build a feature",
+    detail: "Turn an outcome into a scoped implementation and verification plan.",
+    text: "Build a new feature. First inspect the relevant code, then implement the smallest complete solution and verify it.",
+  },
+  {
+    icon: Wand2,
+    title: "Fix a failure",
+    detail: "Trace a failing check to its cause and make an evidence-led repair.",
+    text: "Fix the current TypeScript, test, or build failures. Use the failing evidence, make a focused change, and rerun the relevant check.",
+  },
+  {
+    icon: Sparkles,
+    title: "Run the gauntlet",
+    detail: "Inspect Git state and run relevant checks. Report only actionable evidence.",
+    text: "Run the project gauntlet: inspect Git state, run relevant checks, and report evidence-backed failures.",
+  },
 ];
 
 export function EmptyChatState({
@@ -40,6 +63,9 @@ export function EmptyChatState({
   onRetry,
   isRunning = false,
   onStop,
+  onAttach,
+  attachments,
+  onRemoveAttachment,
 }: EmptyChatStateProps) {
   const projectName = workspaceInfo?.name ?? null;
   const hasGitRepo = workspaceInfo?.gitRepository ?? false;
@@ -47,23 +73,26 @@ export function EmptyChatState({
   return (
     <div className="empty-chat-state">
       <div className="empty-chat-welcome">
-        <h2 className="empty-chat-title">What do you want to build?</h2>
+        <span className="empty-chat-eyebrow"><Sparkles size={12} /> Mission control</span>
+        <h2 className="empty-chat-title">Ship the next useful change.</h2>
         <p className="empty-chat-subtitle">
-          Describe your task and Whim will inspect your project,
-          make changes, and verify the result.
+          Describe an outcome. Whim scopes the work, acts in your workspace, and returns real verification evidence.
         </p>
       </div>
 
-      <div className="empty-chat-suggestions">
-        {suggestions.map(({ icon: Icon, text }) => (
+      <div className="empty-chat-suggestions" aria-label="Suggested missions">
+        {suggestions.map(({ icon: Icon, title, detail, text }) => (
           <button
-            key={text}
+            key={title}
             type="button"
             className="empty-chat-suggestion-card"
             onClick={() => onSend(text)}
           >
-            <Icon size={15} className="empty-chat-suggestion-icon" />
-            <span className="empty-chat-suggestion-text">{text}</span>
+            <Icon size={16} className="empty-chat-suggestion-icon" />
+            <span className="empty-chat-suggestion-copy">
+              <strong>{title}</strong>
+              <span>{detail}</span>
+            </span>
           </button>
         ))}
       </div>
@@ -82,7 +111,15 @@ export function EmptyChatState({
           onOpenProviders={onOpenProviders}
           showRetry={showRetry}
           onRetry={onRetry}
+          onAttach={onAttach}
+          attachments={attachments}
+          onRemoveAttachment={onRemoveAttachment}
         />
+      </div>
+
+      <div className="empty-chat-guardrail">
+        <ShieldCheck size={13} />
+        <span>Durable task record · evidence before completion · consequential actions stay gated</span>
       </div>
 
       {projectName && (

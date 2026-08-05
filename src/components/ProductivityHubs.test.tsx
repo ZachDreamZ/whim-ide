@@ -35,6 +35,16 @@ describe("GPT-aligned productivity hubs", () => {
     await waitFor(() => expect(bridge.saveScheduledTask).toHaveBeenCalledWith(expect.objectContaining({ workspace: "C:/workspace", title: "Weekly review", prompt: "Review open work", recurrence: "once", mode: "build" })));
   });
 
+  it("offers a safe recurring gauntlet health loop", async () => {
+    vi.mocked(bridge.listScheduledTasks).mockResolvedValue([]);
+    render(<ScheduledTasksHub workspace="C:/workspace" />);
+
+    await waitFor(() => fireEvent.click(screen.getByRole("button", { name: /Gauntlet health loop/i })));
+    expect(screen.getByDisplayValue("Gauntlet health loop")).toBeVisible();
+    expect(screen.getByDisplayValue("verify")).toBeVisible();
+    expect(screen.getByDisplayValue(/Run the workspace gauntlet/)).toBeVisible();
+  });
+
   it("shows installed Codex plugin manifest metadata", async () => {
     vi.mocked(bridge.codexPluginCatalog).mockResolvedValue({ installed: [{ pluginId:"sites@openai-bundled", id:"sites", marketplaceName:"openai-bundled", installed:true, enabled:true, displayName:"Sites", description:"Build and deploy websites", version:"0.1.27", developerName:"OpenAI", category:"Productivity", capabilities:["Interactive","Write"], brandColor:"#0C79D8", manifestPath:"C:/plugins/sites/plugin.json" }], available: [] });
     render(<PluginsHub />);

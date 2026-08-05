@@ -99,6 +99,7 @@ Tauri writes release artifacts under `src-tauri/target/release/bundle/`. See the
 
 - [Product thesis, values, features, and metrics](./docs/product.md)
 - [Architecture](./docs/architecture.md)
+- [Agent harness: prompt, context, graph, and loop engineering](./docs/agent-harness.md)
 - [Provider, plugin, and deployment ecosystem](./docs/ecosystem.md)
 - [Trust and automation tiers](./docs/trust-and-automation.md)
 - [Research and official sources](./docs/research.md)

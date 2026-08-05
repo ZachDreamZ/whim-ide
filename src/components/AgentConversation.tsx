@@ -25,6 +25,9 @@ type AgentConversationProps = {
   onOpenProviders?: () => void;
   showRetry?: boolean;
   onRetry?: () => void;
+  onAttach?: () => void;
+  attachments?: readonly { id: string; name: string; size?: number }[];
+  onRemoveAttachment?: (id: string) => void;
 };
 
 function isErrorPart(part: Record<string, unknown>): boolean {
@@ -52,6 +55,25 @@ function isDelegationPart(part: Record<string, unknown>): boolean {
   return part.type === "delegation";
 }
 
+const MAX_TOOL_DETAIL_LENGTH = 8_000;
+
+/** Keep tool evidence useful for review without allowing one command output to
+ * dominate the chat surface. Native events remain the source of detail. */
+export function formatToolDetail(part: Record<string, unknown>): string {
+  const evidence: Record<string, unknown> = { input: part.args ?? {} };
+  if (part.result !== undefined && part.result !== "") evidence.output = part.result;
+  if (part.errorText) evidence.error = part.errorText;
+  let detail: string;
+  try {
+    detail = JSON.stringify(evidence, null, 2);
+  } catch {
+    detail = String(part.errorText ?? "Tool details could not be displayed.");
+  }
+  return detail.length > MAX_TOOL_DETAIL_LENGTH
+    ? `${detail.slice(0, MAX_TOOL_DETAIL_LENGTH)}\n… output truncated for this review surface`
+    : detail;
+}
+
 export function AgentConversation({
   messages,
   isRunning = false,
@@ -68,6 +90,9 @@ export function AgentConversation({
   onOpenProviders,
   showRetry = false,
   onRetry,
+  onAttach,
+  attachments,
+  onRemoveAttachment,
 }: AgentConversationProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { showJumpButton, scrollToBottom } = useSmartAutoScroll(scrollContainerRef);
@@ -105,9 +130,9 @@ export function AgentConversation({
                           event={{
                             id: String(p.toolCallId ?? i),
                             type: "tool_invocation",
-                            status: isRunning ? "running" : "succeeded",
-                            label: `Using ${String(p.toolName ?? "tool")}`,
-                            detail: JSON.stringify(p.args, null, 2),
+                            status: p.errorText ? "failed" : isRunning ? "running" : "succeeded",
+                            label: p.errorText ? `${String(p.toolName ?? "Tool")} failed` : `Using ${String(p.toolName ?? "tool")}`,
+                            detail: formatToolDetail(p),
                           }}
                         />
                       );
@@ -162,6 +187,7 @@ export function AgentConversation({
                         totalAdditions={files.reduce((s, f) => s + f.additions, 0)}
                         totalDeletions={files.reduce((s, f) => s + f.deletions, 0)}
                         onOpenFile={onOpenFile}
+                        onReview={onOpenFile ? () => onOpenFile(files[0].path) : undefined}
                       />
                     );
                   })()}
@@ -193,6 +219,9 @@ export function AgentConversation({
             onOpenProviders={onOpenProviders}
             showRetry={showRetry}
             onRetry={onRetry}
+            onAttach={onAttach}
+            attachments={attachments}
+            onRemoveAttachment={onRemoveAttachment}
           />
         </>
       )}
