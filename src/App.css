@@ -1938,3 +1938,70 @@ a:focus-visible {
 /* Semantic success stays emerald (T3's --success), failures stay red */
 .provider-health-indicator .health-unhealthy { color: #ef4444; }
 .status-good { color: #10b981; }
+
+/* ═══ T3 theme — last hub sweep (learned, integration, site, pr) ═══ */
+
+.learned-card { background: rgba(255, 255, 255, 0.02); border-radius: 12px; }
+.learned-card > button:not(.learned-enforce) { color: var(--muted-foreground); background: transparent; }
+.learned-group-head { color: var(--foreground); }
+.learned-head em { color: var(--muted-foreground); }
+
+.integration-icon,
+.pr-state {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.integration-card-actions button,
+.plugin-actions button,
+.pr-list button {
+  color: var(--muted-foreground);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+.integration-card-actions button:hover,
+.plugin-actions button:hover,
+.pr-list button:hover {
+  color: var(--foreground);
+  border-color: var(--t3-line-strong);
+}
+
+.integration-toolbar label {
+  color: var(--muted-foreground);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+.integration-toolbar input { color: var(--foreground); }
+
+.site-status-card {
+  border-color: var(--t3-line);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+}
+.site-status-card > span.good {
+  color: color-mix(in srgb, var(--primary) 80%, white);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.site-status-card > span.warn {
+  color: #f6c66f;
+  background: rgba(246, 198, 111, 0.1);
+}
+.site-status-card small { color: var(--muted-foreground); }
+.site-status-card h2 { color: var(--foreground); }
+.site-status-card p { color: var(--muted-foreground); }
+
+.pr-list li { background: rgba(255, 255, 255, 0.02); border-radius: 10px; }
+.pr-list strong { color: var(--foreground); }
+.pr-list p { color: var(--muted-foreground); }
+
+/* Status pills used by hubs */
+.status-pill { color: var(--muted-foreground); background: rgba(255, 255, 255, 0.04); }
+.status-pill.active { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+
+/* Releases / ship */
+.release-card { border-radius: 14px; }
+.release-card-head em { color: var(--muted-foreground); }
+.release-score p { color: var(--muted-foreground); }
+
+/* Autopilot policy cards */
+.policy-card { border-radius: 12px; }
+.policy-card p { color: var(--muted-foreground); }
