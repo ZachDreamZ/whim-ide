@@ -77,7 +77,7 @@ export function EmptyChatState({
       <div className="empty-chat-welcome">
         <h2 className="empty-chat-title">What are we shipping?</h2>
         <p className="empty-chat-subtitle">
-          Ask for a feature, fix, or review. Whim plans, edits, verifies, and keeps every action tied to durable evidence.
+          Describe an outcome. Whim scopes the work, acts in your workspace, and returns real verification evidence.
         </p>
       </div>
 
