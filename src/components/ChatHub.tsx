@@ -13,7 +13,7 @@ import {
   type ChatThreadMessage,
   type ChatThreadSummary,
 } from "../lib/bridge";
-import { attachmentPathIsSensitive, workspaceRelativeAttachmentPath } from "./MissionControl";
+import { attachmentPathIsSensitive, workspaceRelativeAttachmentPath } from "../lib/attachment-utils";
 
 type ChatHubProps = {
   workspace: string | null;

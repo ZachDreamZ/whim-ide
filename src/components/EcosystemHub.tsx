@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { bridge } from "../lib/bridge";
+import { HubHeader } from "./HubHeader";
 
 type EcosystemHubProps = { workspace: string };
 type IntegrationKind = "MCP" | "Plugin";
@@ -175,7 +176,7 @@ function customIntegrations(config: Record<string, unknown> | null): Integration
       kind: "Plugin" as const,
       permissions: ["Whim runtime"],
       icon: PackagePlus,
-      color: "#ff9a7f",
+      color: "var(--primary)",
       packageName,
       custom: true,
     }));
@@ -372,7 +373,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
             kind: "Plugin",
             permissions: ["Whim runtime"],
             icon: PackagePlus,
-            color: "#ff9a7f",
+            color: "var(--primary)",
             packageName: value,
             custom: true,
           };
@@ -397,6 +398,12 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
 
   return (
     <main className="hub-page ecosystem-page">
+      <HubHeader
+        kicker="Ecosystem"
+        title="Integrations &amp; skills"
+        description="Browse and configure MCP servers, skills, and IDE integrations for this workspace. Everything is declared in .whim/config.json and stays workspace-local."
+        icon={<Plug size={13} />}
+      />
       {!native && (
         <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
           <Plug size={14} />
@@ -430,7 +437,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
           ))}
           <div className="market-divider" />
           <span>Source</span>
-          <div style={{ padding: "5px 7px", color: "#687384", fontSize: 8, lineHeight: 1.5 }}>Workspace<br />.whim/config.json</div>
+          <div style={{ padding: "5px 7px", color: "var(--muted-foreground)", fontSize: 8, lineHeight: 1.5 }}>Workspace<br />.whim/config.json</div>
         </aside>
 
         <section className="plugin-results">

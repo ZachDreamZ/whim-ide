@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { bridge, type DiscoveredProvider, type OAuthProviderStatus, type ProviderHealthStatus } from "../lib/bridge";
+import { HubHeader } from "./HubHeader";
 import { 
   OMNIROUTE_ROUTES, 
   isOmniRouteProvider,
@@ -288,7 +289,12 @@ export function ProviderHub({ onRefresh, agentProvider, agentApiKey, agentBaseUr
 
   return (
     <main className="hub-page provider-page">
-
+      <HubHeader
+        kicker="Models &amp; providers"
+        title="Providers"
+        description="Connect cloud providers, local runtimes, or an OmniRoute gateway. Keys stay on this PC and are never written into source files or renderer state."
+        icon={<Cpu size={13} />}
+      />
 
       <section className="provider-status-strip">
         <span className="status-good"><Check size={13} /> Whim native runtime ready</span>

@@ -8,6 +8,9 @@ type MessageComposerProps = {
   onStop?: () => void;
   isRunning?: boolean;
   placeholder?: string;
+  /** When true, Enter submits and Shift+Enter inserts a newline. When false,
+   *  Enter inserts a newline and Ctrl/Cmd+Enter submits. */
+  enterToSend?: boolean;
   projectName?: string;
   modelLabel?: string;
   micSupported?: boolean;
@@ -27,6 +30,7 @@ export function MessageComposer({
   onStop,
   isRunning = false,
   placeholder = "What do you want to build?",
+  enterToSend = true,
   modelLabel,
   micSupported = false,
   provider,
@@ -65,12 +69,14 @@ export function MessageComposer({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key !== "Enter") return;
+      const submit = enterToSend ? !e.shiftKey : (e.ctrlKey || e.metaKey);
+      if (submit) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend]
+    [enterToSend, handleSend]
   );
 
   const stopRecording = useCallback(() => {
@@ -135,6 +141,13 @@ export function MessageComposer({
           ))}
         </div>
       )}
+      <div className="composer-hint" aria-hidden="true">
+        {enterToSend ? (
+          <span><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span>
+        ) : (
+          <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> send · <kbd>Enter</kbd> new line</span>
+        )}
+      </div>
       <div className="message-composer-inner">
         <button
           type="button"

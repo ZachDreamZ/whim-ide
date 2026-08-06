@@ -2,21 +2,21 @@
   <title id="title">Whim gauntlet loop graph</title>
   <desc id="desc">A continuous quality loop moves from design to typecheck, lint, tests, build, audit, screenshots, and commit.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07080a"/><stop offset="1" stop-color="#101217"/></linearGradient>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#ff7a59"/></marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0a0a0a"/><stop offset="1" stop-color="#0e0e0f"/></linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#3670fb"/></marker>
   </defs>
   <rect width="980" height="360" rx="24" fill="url(#bg)"/>
   <text x="42" y="54" fill="#f4f4f5" font-family="Inter,Segoe UI,sans-serif" font-size="24" font-weight="800">Gauntlet loop</text>
   <text x="42" y="78" fill="#8b919d" font-family="Inter,Segoe UI,sans-serif" font-size="13">Design changes only land after automated checks and reviewable artifacts stay green.</text>
   <g transform="translate(86 126)" font-family="Inter,Segoe UI,sans-serif">
     <path d="M72 72 C130 -35 330 -35 388 72 C446 179 646 179 704 72" fill="none" stroke="#ffffff13" stroke-width="18" stroke-linecap="round"/>
-    <path d="M72 72 C130 -35 330 -35 388 72 C446 179 646 179 704 72" fill="none" stroke="#ff7a59" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <path d="M72 72 C130 -35 330 -35 388 72 C446 179 646 179 704 72" fill="none" stroke="#3670fb" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
     <g font-size="12" font-weight="800">
-      <g transform="translate(0 36)"><rect width="144" height="72" rx="18" fill="#12151b" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Design pass</text><text x="72" y="52" text-anchor="middle" fill="#8b919d" font-size="10" font-weight="600">T3 shell + UX</text></g>
-      <g transform="translate(176 0)"><rect width="144" height="72" rx="18" fill="#12151b" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Typecheck</text><text x="72" y="52" text-anchor="middle" fill="#72c99f" font-size="10" font-weight="700">tsc --noEmit</text></g>
-      <g transform="translate(352 36)"><rect width="144" height="72" rx="18" fill="#12151b" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Lint + tests</text><text x="72" y="52" text-anchor="middle" fill="#72c99f" font-size="10" font-weight="700">141 passing</text></g>
-      <g transform="translate(528 108)"><rect width="144" height="72" rx="18" fill="#12151b" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Build + audit</text><text x="72" y="52" text-anchor="middle" fill="#72c99f" font-size="10" font-weight="700">0 vulns</text></g>
-      <g transform="translate(704 36)"><rect width="144" height="72" rx="18" fill="#ff7a59"/><text x="72" y="32" text-anchor="middle" fill="#170b07">Commit</text><text x="72" y="52" text-anchor="middle" fill="#35130b" font-size="10" font-weight="700">push branch</text></g>
+      <g transform="translate(0 36)"><rect width="144" height="72" rx="18" fill="#141416" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Design pass</text><text x="72" y="52" text-anchor="middle" fill="#8b919d" font-size="10" font-weight="600">T3 shell + UX</text></g>
+      <g transform="translate(176 0)"><rect width="144" height="72" rx="18" fill="#141416" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Typecheck</text><text x="72" y="52" text-anchor="middle" fill="#3670fb" font-size="10" font-weight="700">tsc --noEmit</text></g>
+      <g transform="translate(352 36)"><rect width="144" height="72" rx="18" fill="#141416" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Lint + tests</text><text x="72" y="52" text-anchor="middle" fill="#3670fb" font-size="10" font-weight="700">141 passing</text></g>
+      <g transform="translate(528 108)"><rect width="144" height="72" rx="18" fill="#141416" stroke="#ffffff16"/><text x="72" y="32" text-anchor="middle" fill="#f4f4f5">Build + audit</text><text x="72" y="52" text-anchor="middle" fill="#3670fb" font-size="10" font-weight="700">0 vulns</text></g>
+      <g transform="translate(704 36)"><rect width="144" height="72" rx="18" fill="#3670fb"/><text x="72" y="32" text-anchor="middle" fill="#ffffff">Commit</text><text x="72" y="52" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="700">push branch</text></g>
     </g>
   </g>
 </svg>

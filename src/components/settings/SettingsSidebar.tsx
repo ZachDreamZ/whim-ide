@@ -44,7 +44,7 @@ export function SettingsSidebar({ activeCategory, onCategoryChange }: SettingsSi
     <div className="flex-1 overflow-y-auto pb-6">
       {CATEGORIES.map((group) => (
         <div key={group.name} className="mb-4">
-          <div className="px-4 py-2 text-xs font-medium text-[#a3a3a3] uppercase tracking-wider">
+          <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             {group.name}
           </div>
           <div className="flex flex-col px-2">
@@ -54,11 +54,11 @@ export function SettingsSidebar({ activeCategory, onCategoryChange }: SettingsSi
                 onClick={() => onCategoryChange(item.id)}
                 className={`flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition-colors ${
                   activeCategory === item.id 
-                    ? "bg-[#2f2f2f] text-white" 
-                    : "text-[#ececf1] hover:bg-white/5"
+                    ? "bg-accent text-foreground" 
+                    : "text-foreground/90 hover:bg-accent"
                 }`}
               >
-                <span className="text-[#a3a3a3]">{item.icon}</span>
+                <span className="text-muted-foreground">{item.icon}</span>
                 {item.label}
               </button>
             ))}

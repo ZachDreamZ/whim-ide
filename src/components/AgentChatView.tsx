@@ -24,6 +24,11 @@ type AgentChatViewProps = {
   onOpenFile?: (path: string) => void;
   projectName?: string;
   micSupported?: boolean;
+  /** Enter submits (Shift+Enter newline); when false Enter inserts a newline
+   *  and Ctrl+Enter submits. */
+  enterToSend?: boolean;
+  /** Persist conversation threads to the durable ledger. */
+  persistHistory?: boolean;
   onOpenProviders?: () => void;
   onTitleChange?: (title: string) => void;
   onOpenWorkspace?: () => void;
@@ -143,11 +148,19 @@ function collectText(parts: UIMessage["parts"][0][]): string {
     .join("\n");
 }
 
-/** A clearly-labelled, deterministic response for Vite/browser evaluation.
- * Native runs always use the installed agent and never reach this path. */
+/** Browser/preview-mode response. The native Windows app runs the real agent;
+ *  when the Tauri bridge is absent (Vite preview, QA, screenshots) sending a
+ *  message surfaces this honest preview notice instead of fabricating agent
+ *  output. */
 function browserDemoReply(prompt: string, workspaceName?: string): string {
   const outcome = prompt.trim().replace(/\s+/g, " ");
-  return `**Browser preview response**\n\nI captured your request${workspaceName ? ` for **${workspaceName}**` : ""}: “${outcome}”\n\nIn the installed Whim app, I would inspect the workspace, propose a focused plan, make only approved changes, and report the verification evidence. Connect a provider and open the Windows desktop app to run this for real.`;
+  return [
+    "> **Preview mode** — the agent runtime is not available in this browser window.",
+    "",
+    `Your request${workspaceName ? ` for **${workspaceName}**` : ""} was captured: “${outcome}”`,
+    "",
+    "Open the installed **Whim Windows app** to run the real agent: it will inspect the workspace, propose a focused plan, make only approved changes, and report verification evidence.",
+  ].join("\n");
 }
 
 function workspaceRelativePath(workspace: string, selectedPath: string): string | null {
@@ -182,6 +195,8 @@ export function AgentChatView({
   onOpenFile,
   projectName,
   micSupported = false,
+  enterToSend = true,
+  persistHistory = true,
   onOpenProviders,
   onTitleChange,
   onOpenWorkspace,
@@ -282,13 +297,12 @@ export function AgentChatView({
     return () => clearTimeout(timer);
   }, [resetKey, onTitleChange]);
 
-  // Persist conversation accumulating ALL messages
+  // Persist conversation accumulating ALL messages. When history persistence
+  // is disabled, the thread is still titled and tracked in memory so the
+  // current session behaves identically, but nothing is written to the ledger.
   const persistThread = useCallback(
     async (userContent: string, newParts: UIMessage["parts"][0][]) => {
       try {
-        const threadId = threadIdRef.current ?? crypto.randomUUID();
-        threadIdRef.current = threadId;
-
         const text = collectText(newParts);
         const isContinuation = isContinuationOnly(userContent);
         let title =
@@ -300,42 +314,49 @@ export function AgentChatView({
         // Safety net: if the title is somehow a continuation word, force "New chat"
         if (isContinuationOnly(title)) title = "New chat";
 
-        // Accumulate all messages from history
-        const allMessages: ChatThread["messages"] = [
-          ...messageHistoryRef.current.map((m) => ({
-            id: crypto.randomUUID(),
-            role: m.role,
-            content: m.content,
-            createdAtMs: Date.now(),
-          })),
-          {
-            id: crypto.randomUUID(),
-            role: "user" as const,
-            content: userContent,
-            createdAtMs: Date.now(),
-          },
-          {
-            id: crypto.randomUUID(),
-            role: "assistant" as const,
-            content: text || "(no text response)",
-            createdAtMs: Date.now(),
-          },
-        ];
+        if (persistHistory) {
+          const threadId = threadIdRef.current ?? crypto.randomUUID();
+          threadIdRef.current = threadId;
 
-        const thread: ChatThread = {
-          id: threadId,
-          title,
-          createdAtMs: Date.now(),
-          updatedAtMs: Date.now(),
-          model: model ?? null,
-          messages: allMessages,
-          // Carry workspace and branch so the status bar and sidebar
-          // always show the correct project context for this conversation.
-          workspace: workspace ?? null,
-          branch: branch ?? null,
-        };
+          // Accumulate all messages from history
+          const allMessages: ChatThread["messages"] = [
+            ...messageHistoryRef.current.map((m) => ({
+              id: crypto.randomUUID(),
+              role: m.role,
+              content: m.content,
+              createdAtMs: Date.now(),
+            })),
+            {
+              id: crypto.randomUUID(),
+              role: "user" as const,
+              content: userContent,
+              createdAtMs: Date.now(),
+            },
+            {
+              id: crypto.randomUUID(),
+              role: "assistant" as const,
+              content: text || "(no text response)",
+              createdAtMs: Date.now(),
+            },
+          ];
 
-        await bridge.saveChatThread(thread);
+          const thread: ChatThread = {
+            id: threadId,
+            title,
+            createdAtMs: Date.now(),
+            updatedAtMs: Date.now(),
+            model: model ?? null,
+            messages: allMessages,
+            // Carry workspace and branch so the status bar and sidebar
+            // always show the correct project context for this conversation.
+            workspace: workspace ?? null,
+            branch: branch ?? null,
+          };
+
+          await bridge.saveChatThread(thread);
+          window.dispatchEvent(new Event("whim:history-changed"));
+        }
+
         setConversationTitle(title);
         onTitleChange?.(title);
 
@@ -345,13 +366,11 @@ export function AgentChatView({
           { role: "user", content: userContent },
           { role: "assistant", content: text || "(no text response)" },
         ];
-
-        window.dispatchEvent(new Event("whim:history-changed"));
       } catch {
         // Persistence is best-effort
       }
     },
-    [conversationTitle, model, workspace, branch, onTitleChange]
+    [conversationTitle, model, workspace, branch, persistHistory, onTitleChange]
   );
 
   const attachWorkspaceFiles = useCallback(async () => {
@@ -611,6 +630,7 @@ export function AgentChatView({
           branch={branch}
           modelLabel={model}
           micSupported={micSupported}
+          enterToSend={enterToSend}
           provider={provider}
           apiKey={apiKey}
           baseUrl={baseUrl}
@@ -628,6 +648,7 @@ export function AgentChatView({
       projectName={projectName}
       modelLabel={model}
       micSupported={micSupported}
+      enterToSend={enterToSend}
       provider={provider}
       apiKey={apiKey}
       baseUrl={baseUrl}

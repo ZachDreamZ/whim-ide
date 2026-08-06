@@ -19,6 +19,7 @@ type AgentConversationProps = {
   projectName?: string;
   modelLabel?: string;
   micSupported?: boolean;
+  enterToSend?: boolean;
   provider?: string;
   apiKey?: string;
   baseUrl?: string;
@@ -84,6 +85,7 @@ export function AgentConversation({
   projectName,
   modelLabel,
   micSupported = false,
+  enterToSend = true,
   provider,
   apiKey,
   baseUrl,
@@ -213,6 +215,7 @@ export function AgentConversation({
             projectName={projectName}
             modelLabel={modelLabel}
             micSupported={micSupported}
+            enterToSend={enterToSend}
             provider={provider}
             apiKey={apiKey}
             baseUrl={baseUrl}

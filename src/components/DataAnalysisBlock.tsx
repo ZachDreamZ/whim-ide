@@ -47,9 +47,9 @@ export function DataAnalysisBlock({ type = "analysis", code, output, status, lan
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {expanded ? (
-            <ChevronDown size={14} className="text-white/40 group-hover:text-white/70" />
+            <ChevronDown size={14} className="text-white/40 group-hover:text-foreground/70" />
           ) : (
-            <ChevronRight size={14} className="text-white/40 group-hover:text-white/70" />
+            <ChevronRight size={14} className="text-white/40 group-hover:text-foreground/70" />
           )}
         </div>
       </button>
@@ -62,7 +62,7 @@ export function DataAnalysisBlock({ type = "analysis", code, output, status, lan
             <div className="absolute top-2 right-2 z-10">
               <button
                 onClick={handleCopy}
-                className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                className="p-1.5 rounded bg-white/5 hover:bg-accent text-white/40 hover:text-foreground/80 transition-colors"
                 title="Copy code"
               >
                 {copied ? <Check size={12} /> : <Copy size={12} />}

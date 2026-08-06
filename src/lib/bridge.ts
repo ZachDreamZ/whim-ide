@@ -248,7 +248,7 @@ export const defaultAppSettings: AppSettings = {
   general: { showBottomPanel: true, suggestedPrompts: true },
   personalization: { enabled: true, customInstructions: "", responseStyle: "normal", projectMemory: true },
   chat: { enterToSend: true, showCopyActions: true, persistHistory: true },
-  appearance: { accent: "#72c99f", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60, reduceMotion: "system", pointerCursors: true, uiFontSize: 14, codeFontSize: 13 },
+  appearance: { accent: "#3670fb", uiFont: "IBM Plex Sans Variable", codeFont: "JetBrains Mono Variable", contrast: 60, reduceMotion: "system", pointerCursors: true, uiFontSize: 14, codeFontSize: 13 },
   voice: { voice: "alloy", language: "auto", dictionary: "", ambient: false, autoSpeak: false, wakePhrase: "" },
   computerUse: { enabled: false, screenCapture: true, appContext: true },
   agent: {

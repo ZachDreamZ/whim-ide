@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { Titlebar } from "./components/Titlebar";
-import { type ViewId } from "./components/WorkspaceRail";
 import { ProjectSidebar } from "./components/ProjectSidebar";
+import type { ViewId } from "./types/navigation";
 const ChatHub = lazy(() => import("./components/ChatHub").then(m => ({ default: m.ChatHub })));
 const CreativeStudio = lazy(() => import("./components/CreativeStudio").then(m => ({ default: m.CreativeStudio })));
 const ProviderHub = lazy(() => import("./components/ProviderHub").then(m => ({ default: m.ProviderHub })));
@@ -115,7 +115,10 @@ function App() {
   const [openedJobId, setOpenedJobId] = useState<string | null>(null);
 
 
-  const [models] = useState<string[]>([]);
+  // Discovered model list is populated by the native provider runtime and
+  // reported through ProviderHub; the chat surfaces render "Provider default"
+  // plus the saved model until discovery is wired through.
+  const models: string[] = [];
   const [agentProvider, setAgentProvider] = useState(() => localStorage.getItem("whim:agent:provider") ?? "auto");
   const [agentApiKey, setAgentApiKey] = useState("");
   const [agentBaseUrl, setAgentBaseUrl] = useState(() => localStorage.getItem("whim:agent:baseUrl") ?? "");
@@ -512,6 +515,8 @@ function App() {
                 onActivityChange={(running) => setActivity(running ? "agent" : "idle")}
                 onOpenFile={(path) => void loadReadOnlyFile(workspacePath ?? "", path)}
                 micSupported={typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia}
+                enterToSend={appSettings.chat.enterToSend}
+                persistHistory={appSettings.chat.persistHistory}
                 onOpenProviders={() => setView("providers")}
                 onTitleChange={setChatTitle}
                 onOpenWorkspace={openWorkspace}
@@ -624,7 +629,7 @@ function App() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : view === "settings" ? null : (
           <Suspense fallback={<LoadingFallback />}>
           {workspacePath ? <AutopilotHub workspace={workspacePath} environment={environment} onOpenFile={chooseFile} /> : workspaceGate("Autopilot needs a workspace")}
           </Suspense>

@@ -76,7 +76,7 @@ describe("AgentChatView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(await screen.findByText(/Browser preview response/)).toBeVisible();
+    expect(await screen.findByText(/Preview mode/)).toBeVisible();
     expect(bridge.runAgent).not.toHaveBeenCalled();
   });
 

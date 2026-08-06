@@ -33,7 +33,7 @@ export function Titlebar({ projectName, native, onCommand, onProjectClick }: Tit
   return (
     <header className="titlebar">
       <div className="titlebar-left">
-        <span className="font-semibold text-[#dfe3eb] ml-3 text-xs tracking-wide uppercase opacity-80">Whim</span>
+        <span className="font-semibold text-foreground ml-3 text-xs tracking-wide uppercase opacity-80">Whim</span>
         <span className="titlebar-divider" />
         <button className="project-switcher" type="button" onClick={onProjectClick} title="Open another workspace">
           <span className="project-dot" />

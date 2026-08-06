@@ -37,3 +37,10 @@ whim-release.key
 # OS
 Thumbs.db
 "$null" 
+
+# Dev/agent scratch state (not part of the product)
+scratch/
+.pi/
+
+# Generated QA screenshots (regenerate against a real browser)
+qa/

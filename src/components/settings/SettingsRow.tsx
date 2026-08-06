@@ -18,11 +18,11 @@ export interface SettingsRowProps {
 
 export function SettingsRow({ label, description, control, children, borderBottom = true }: SettingsRowProps) {
   return (
-    <div className={`flex items-center justify-between py-4 ${borderBottom ? "border-b border-white/5" : ""}`}>
+    <div className={`flex items-center justify-between py-4 ${borderBottom ? "border-b border-border" : ""}`}>
       <div className="flex-1 pr-6">
-        <div className="text-sm font-medium text-[#ececf1]">{label}</div>
-        {description && <div className="text-[13px] text-[#a3a3a3] mt-1 leading-relaxed">{description}</div>}
-        {children && <div className="mt-2 text-[13px] text-[#a3a3a3]">{children}</div>}
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {description && <div className="text-[13px] text-muted-foreground mt-1 leading-relaxed">{description}</div>}
+        {children && <div className="mt-2 text-[13px] text-muted-foreground">{children}</div>}
       </div>
       <div className="flex-shrink-0 flex items-center">
         {control.type === "toggle" && (
@@ -42,25 +42,25 @@ export function SettingsRow({ label, description, control, children, borderBotto
             <select
               value={control.value}
               onChange={(e) => control.onChange(e.target.value)}
-              className="appearance-none bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 rounded-md pl-3 pr-8 py-1.5 text-sm outline-none transition-colors cursor-pointer text-[#ececf1] min-w-[120px]"
+              className="appearance-none bg-white/5 border border-border hover:border-white/20 hover:bg-accent rounded-md pl-3 pr-8 py-1.5 text-sm outline-none transition-colors cursor-pointer text-foreground min-w-[120px]"
             >
               {control.options.map((opt) => (
-                <option key={opt} value={opt} className="bg-[#171717]">{opt}</option>
+                <option key={opt} value={opt} className="bg-card">{opt}</option>
               ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#a3a3a3] pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           </div>
         )}
         {control.type === "segmented" && (
-          <div className="flex bg-white/5 p-0.5 rounded-md border border-white/5">
+          <div className="flex bg-white/5 p-0.5 rounded-md border border-border">
             {control.options.map((opt) => (
               <button
                 key={opt}
                 onClick={() => control.onChange(opt)}
                 className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
                   control.value === opt
-                    ? "bg-[#2f2f2f] text-white shadow-sm"
-                    : "text-[#a3a3a3] hover:text-[#ececf1]"
+                    ? "bg-accent text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {opt}
@@ -74,7 +74,7 @@ export function SettingsRow({ label, description, control, children, borderBotto
             value={control.value}
             onChange={(e) => control.onChange(e.target.value)}
             placeholder={control.placeholder}
-            className="appearance-none bg-white/5 border border-white/10 hover:border-white/20 focus:border-white/30 rounded-md px-3 py-1.5 text-sm outline-none transition-colors text-[#ececf1] min-w-[200px]"
+            className="appearance-none bg-white/5 border border-border hover:border-white/20 focus:border-white/30 rounded-md px-3 py-1.5 text-sm outline-none transition-colors text-foreground min-w-[200px]"
           />
         )}
         {control.type === "custom" && control.node}
