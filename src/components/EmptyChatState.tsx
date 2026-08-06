@@ -73,10 +73,10 @@ export function EmptyChatState({
   return (
     <div className="empty-chat-state">
       <div className="empty-chat-welcome">
-        <span className="empty-chat-eyebrow"><Sparkles size={12} /> T3 Code mode</span>
-        <h2 className="empty-chat-title">What are we shipping?</h2>
+        <span className="empty-chat-eyebrow"><Sparkles size={12} /> Mission control</span>
+        <h2 className="empty-chat-title">Ship the next useful change.</h2>
         <p className="empty-chat-subtitle">
-          Ask for a feature, fix, or review. Whim plans, edits, verifies, and keeps every action tied to durable evidence.
+          Describe an outcome. Whim scopes the work, acts in your workspace, and returns real verification evidence.
         </p>
       </div>
 

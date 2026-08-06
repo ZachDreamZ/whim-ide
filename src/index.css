@@ -936,7 +936,6 @@ body {
   .empty-chat-suggestions { grid-template-columns: 1fr; }
   .empty-chat-guardrail { text-align: center; }
 }
-
 /* ─── T3 Code-inspired visual pass: compact IDE shell + focused chat canvas ─── */
 :root,
 .dark {

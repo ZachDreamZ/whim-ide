@@ -55,7 +55,6 @@ function taskStatusSummary(job: OrchestrationJob): string {
   const summary = job.summary?.trim() ? `\n\n${job.summary.trim()}` : "";
   return `Task loaded: ${title}\n\nStatus: ${status}\nMode: ${job.mode}\nAttempt: ${job.attempt}/${job.budget.maxAttempts}\nEvidence: ${job.evidence.toolCallCount} tool call${job.evidence.toolCallCount === 1 ? "" : "s"}, ${job.evidence.failedToolCallCount} failed${summary}`;
 }
-
 export function parseAgentEvent(event: NativeEvent): UIMessage["parts"][0] | null {
   if (!event) return null;
 
