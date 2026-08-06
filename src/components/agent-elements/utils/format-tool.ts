@@ -6,6 +6,18 @@ type CachedToolState = {
 
 const toolStateCache = new Map<string, CachedToolState>();
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Tool payloads are provider-defined JSON with open schemas. */
+
+export type ToolJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ToolJsonValue[]
+  | { [key: string]: ToolJsonValue };
+
+export type ToolObject = Record<string, unknown>;
+
 export type ToolPartBase = {
   type: string;
   id?: string;
@@ -15,7 +27,22 @@ export type ToolPartBase = {
   output?: any;
   args?: any;
   result?: any;
+  startedAt?: number;
+  callProviderMetadata?: {
+    custom?: {
+      startedAt?: number;
+    };
+  };
 };
+
+export function isToolObject(value: unknown): value is ToolObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasSuccessfulOutput(output: unknown): boolean | undefined {
+  if (!isToolObject(output)) return undefined;
+  return typeof output.success === "boolean" ? output.success : undefined;
+}
 
 function getToolStateSnapshot(part: ToolPartBase): CachedToolState {
   return {
@@ -79,12 +106,12 @@ export function areToolPropsEqual(
 }
 
 /** Get tool status from part state */
-export function getToolStatus(part: ToolPartBase & { output?: { success?: boolean } }, chatStatus?: string) {
+export function getToolStatus(part: ToolPartBase, chatStatus?: string) {
   const basePending =
     part.state !== "output-available" && part.state !== "output-error";
   const isError =
     part.state === "output-error" ||
-    (part.state === "output-available" && part.output?.success === false);
+    (part.state === "output-available" && hasSuccessfulOutput(part.output) === false);
   const isSuccess = part.state === "output-available" && !isError;
   const isPending = basePending && chatStatus === "streaming";
   const isInterrupted =

@@ -1,5 +1,6 @@
 "use client";
 
+import type { HTMLAttributes } from "react";
 import { Streamdown, type Components } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 import { cn } from "./utils/cn";
@@ -37,13 +38,17 @@ function normalizeCodeFenceLanguages(text: string): string {
   });
 }
 
+import { CitationChip } from "../ui/SourcesSidebar";
+
 export type MarkdownProps = {
   content: string;
   className?: string;
   textContrast?: "normal" | "high";
 };
 
-import { CitationChip } from "../ui/SourcesSidebar";
+type CitationElementProps = HTMLAttributes<HTMLElement> & {
+  "data-citation"?: string | number;
+};
 
 const code = createCodePlugin({
   themes: ["github-light", "github-dark"],
@@ -171,7 +176,7 @@ export function Markdown({ content, className }: MarkdownProps) {
         {children}
       </td>
     ),
-    cite: ({ "data-citation": citationId, ...props }: any) => {
+    cite: ({ "data-citation": citationId, ...props }: CitationElementProps) => {
       if (citationId) {
         return <CitationChip id={Number(citationId)} />;
       }

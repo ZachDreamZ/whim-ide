@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { agentRunEvidence, bridge } from "../lib/bridge";
 import type { ChatThread, NativeResult, OrchestrationJob } from "../lib/bridge";
 import { buildAgentHarnessPrompt, buildRetryReflection } from "../lib/agent-harness";
+import { generateConversationTitle, isContinuationOnly } from "../lib/history";
 import { AgentConversation } from "./AgentConversation";
 import { EmptyChatState } from "./EmptyChatState";
 
@@ -19,6 +20,7 @@ type AgentChatViewProps = {
   onActivityChange?: (running: boolean) => void;
   resetKey?: number;
   initialThreadId?: string | null;
+  initialJobId?: string | null;
   onOpenFile?: (path: string) => void;
   projectName?: string;
   micSupported?: boolean;
@@ -47,27 +49,12 @@ interface NativeEvent {
   [key: string]: unknown;
 }
 
-const CONTINUATION_WORDS = new Set([
-  "continue", "go", "next", "ok", "yes", "no", "done",
-  "more", "again", "retry", "fix", "apply", "proceed",
-]);
-
-function isContinuationMessage(content: string): boolean {
-  return CONTINUATION_WORDS.has(content.trim().toLowerCase());
+function taskStatusSummary(job: OrchestrationJob): string {
+  const title = job.title || "Untitled task";
+  const status = job.status.charAt(0).toUpperCase() + job.status.slice(1);
+  const summary = job.summary?.trim() ? `\n\n${job.summary.trim()}` : "";
+  return `Task loaded: ${title}\n\nStatus: ${status}\nMode: ${job.mode}\nAttempt: ${job.attempt}/${job.budget.maxAttempts}\nEvidence: ${job.evidence.toolCallCount} tool call${job.evidence.toolCallCount === 1 ? "" : "s"}, ${job.evidence.failedToolCallCount} failed${summary}`;
 }
-
-function generateTitle(content: string): string {
-  const cleaned = content.replace(/\s+/g, " ").trim();
-  if (!cleaned) return "New chat";
-
-  // Never use single-word continuations as titles
-  if (isContinuationMessage(cleaned)) return "New chat";
-
-  // Use the first meaningful sentence
-  const sentence = cleaned.match(/^(.+?[.!?])\s/)?.[1] ?? cleaned;
-  return sentence.length > 72 ? sentence.slice(0, 69) + "..." : sentence;
-}
-
 export function parseAgentEvent(event: NativeEvent): UIMessage["parts"][0] | null {
   if (!event) return null;
 
@@ -191,6 +178,7 @@ export function AgentChatView({
   onActivityChange,
   resetKey,
   initialThreadId,
+  initialJobId,
   onOpenFile,
   projectName,
   micSupported = false,
@@ -242,6 +230,44 @@ export function AgentChatView({
     return () => { current = false; };
   }, [initialThreadId, onTitleChange]);
 
+  // Load a durable task when selected from the sidebar. This makes the task
+  // history rail actionable instead of only switching projects.
+  useEffect(() => {
+    if (!initialJobId || !workspace || !bridge.isNative()) return;
+    let current = true;
+    setIsLoading(true);
+    bridge
+      .getOrchestrationJob(workspace, initialJobId)
+      .then((detail) => {
+        if (!current) return;
+        const title = `Task: ${detail.job.title || detail.job.id}`;
+        threadIdRef.current = undefined;
+        sessionIdRef.current = undefined;
+        messageHistoryRef.current = [];
+        setConversationTitle(title);
+        onTitleChange?.(title);
+        setMessages([
+          {
+            id: `task-${detail.job.id}`,
+            role: "assistant",
+            parts: [{ type: "text", text: taskStatusSummary(detail.job) }],
+          } as unknown as UIMessage,
+        ]);
+      })
+      .catch(() => {
+        if (!current) return;
+        setMessages([
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            parts: [{ type: "text", text: "Could not load the selected task from the durable ledger." }],
+          } as unknown as UIMessage,
+        ]);
+      })
+      .finally(() => { if (current) setIsLoading(false); });
+    return () => { current = false; };
+  }, [initialJobId, onTitleChange, workspace]);
+
   // Reset conversation when resetKey changes
   useEffect(() => {
     setMessages([]);
@@ -264,15 +290,15 @@ export function AgentChatView({
         threadIdRef.current = threadId;
 
         const text = collectText(newParts);
-        const isContinuation = isContinuationMessage(userContent);
+        const isContinuation = isContinuationOnly(userContent);
         let title =
           // State updates are asynchronous. The ref is the source of truth for
           // whether this is the first persisted turn, including restored chats.
           messageHistoryRef.current.length === 0 && !isContinuation
-            ? generateTitle(userContent)
+            ? generateConversationTitle(userContent)
             : conversationTitle;
         // Safety net: if the title is somehow a continuation word, force "New chat"
-        if (isContinuationMessage(title)) title = "New chat";
+        if (isContinuationOnly(title)) title = "New chat";
 
         // Accumulate all messages from history
         const allMessages: ChatThread["messages"] = [
@@ -407,7 +433,7 @@ export function AgentChatView({
           const created = await bridge.createOrchestrationJob({
             workspace,
             intent: content,
-            title: generateTitle(content),
+            title: generateConversationTitle(content),
             mode: "auto",
             operationId,
             provider,
