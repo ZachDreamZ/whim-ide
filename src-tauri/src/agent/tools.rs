@@ -119,7 +119,7 @@ pub(crate) fn tool_defs() -> Vec<ToolDef> {
                 "properties": {
                     "role": { 
                         "type": "string", 
-                        "enum": ["implementer", "tester", "researcher", "planner", "reviewer", "securityReviewer", "designer", "debugger", "releaseAgent", "janitor", "gameDesigner", "techArtist", "playtester", "assetGenerator", "refactorer", "dataScientist", "accessibilityExpert", "localizer"],
+                        "enum": ["implementer", "tester", "researcher", "planner", "reviewer", "securityReviewer", "designer", "debugger", "releaseAgent", "janitor", "gameDesigner", "techArtist", "playtester", "assetGenerator", "refactorer", "dataScientist", "accessibilityExpert", "localizer", "primeAgent"],
                         "description": "The agent role to spawn" 
                     },
                     "task": { "type": "string", "description": "The specific instruction for the sub-agent" }

@@ -98,6 +98,7 @@ pub enum AgentRole {
     DataScientist,
     AccessibilityExpert,
     Localizer,
+    PrimeAgent,
 }
 
 impl AgentRole {
@@ -123,8 +124,9 @@ impl AgentRole {
             "datascientist" | "data_scientist" => Ok(Self::DataScientist),
             "accessibilityexpert" | "a11y" => Ok(Self::AccessibilityExpert),
             "localizer" => Ok(Self::Localizer),
+            "primeagent" | "prime_agent" | "prime" | "rlm" => Ok(Self::PrimeAgent),
             other => Err(format!(
-                "Unsupported agent role '{other}'. Supported: chat, auto, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer"
+                "Unsupported agent role '{other}'. Supported: chat, auto, planner, researcher, implementer, reviewer, tester, securityreviewer, designer, debugger, releaseagent, janitor, gamedesigner, techartist, playtester, assetgenerator, refactorer, datascientist, accessibilityexpert, localizer, primeagent"
             )),
         }
     }
@@ -151,6 +153,7 @@ impl AgentRole {
             Self::DataScientist => "datascientist",
             Self::AccessibilityExpert => "accessibilityexpert",
             Self::Localizer => "localizer",
+            Self::PrimeAgent => "primeagent",
         }
     }
 
@@ -194,7 +197,8 @@ impl AgentRole {
             | Self::AssetGenerator
             | Self::Refactorer
             | Self::DataScientist
-            | Self::Localizer => true,
+            | Self::Localizer
+            | Self::PrimeAgent => true,
         }
     }
 }
