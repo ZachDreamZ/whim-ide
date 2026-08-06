@@ -71,7 +71,7 @@ Whim’s context boundary is:
 1. **Stable contract:** compact, fixed operating and safety instructions.
 2. **Current task:** the user's exact goal, not an expanding transcript.
 3. **Project facts:** selected workspace/branch, intent brief, and bounded
-   repository index where the Mission Control surface is used.
+   repository index where the agent conversation surface is used.
 4. **User-selected evidence:** attachments are workspace-relative only,
    sensitive files are refused, each file is capped, and the total attachment
    budget is capped.

@@ -4,7 +4,7 @@
 
 The repository now provides an interactive Tauri 2 application with a Rust host and a React 19, TypeScript, Vite, Tailwind, Monaco, and agent-chat interface. On Windows, Tauri renders the interface with the operating system's WebView2 runtime.
 
-Implemented desktop surfaces include Build, Preview, Code, Changes, Mission Control, Provider Hub, Ecosystem, Ship Hub, Autopilot, a terminal drawer, and the command palette. The native bridge provides:
+Implemented desktop surfaces include the agent-first Build workspace (project rail, agent conversation, read-only file viewer, context inspector), the private Chat hub, Provider Hub, Ecosystem, Plugins, Services, Sites, Pull requests, Creative Studio, Ship Hub, Autopilot, Settings, and the command palette. The native bridge provides:
 
 - guarded workspace selection, listing, relative file reads, and writes;
 - Windows toolchain and credential-name discovery;

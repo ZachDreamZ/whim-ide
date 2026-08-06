@@ -68,9 +68,9 @@ The modes are one continuous workflow, not separate products.
 
 | Area | Implemented now | Boundary |
 | --- | --- | --- |
-| Workbench | Project sidebar, live product preview, Changes view, terminal drawer, build checks, and save flow | Browser preview simulates native filesystem and command operations |
-| Code | Monaco editor, language selection, custom theme, editable buffer, and Ctrl+S | Full language-server, debugger, and repository-wide symbol services are future work |
-| Agent | Mission Control conversation, Vibe/Build/Ship selector, model picker, native agent bridge, and session reuse | A connected provider or local model is required for a real native agent run |
+| Workbench | T3 Code-style shell: project rail, agent conversation, read-only file viewer, context inspector, and status bar | File browsing is read-only; there is no in-app editor |
+| Agent | Agent conversation with model selection, durable task ledger, attachable workspace files, and streaming tool evidence | A connected provider or local model is required for a real native agent run |
+| Chat | Private tool-free conversation hub with thread history, voice dictation, and workspace attachments | Runs in the native app; browser preview shows a notice instead of fabricating output |
 | Providers | Curated/direct/gateway/local/enterprise lanes, toolchain discovery, credential-name discovery, in-app key entry, and model listing bridge | No provider credentials were configured in the verified snapshot |
 | Ecosystem | Search, filters, permission cards, and workspace-local install toggles for MCP, skills, and IDE items | General package installation, signing verification, and plugin sandbox execution remain spec-only |
 | Ship | Adapter selection, native project/CLI preflight for seven targets, readiness stream, and production guard | No production deployment was executed; Azure and Windows adapter cards are UI/spec-only |

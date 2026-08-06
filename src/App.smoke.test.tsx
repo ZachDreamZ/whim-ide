@@ -88,4 +88,59 @@ describe("App surface navigation", () => {
     },
     60000
   );
+
+  it("command palette opens with Ctrl+K and Enter runs the selected command", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("What are we shipping?")).toBeTruthy());
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Command palette" })).toBeTruthy());
+
+    // Type to filter to a single command and press Enter to run it.
+    fireEvent.change(screen.getByPlaceholderText("What do you want to do?"), {
+      target: { value: "pull requests" },
+    });
+    const item = await screen.findByText("Review pull requests");
+    expect(item).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText(/Pull requests/)).toBeTruthy(), { timeout: 4000 });
+  });
+
+  it("settings opens with Ctrl+, and every category renders without crashing", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("What are we shipping?")).toBeTruthy());
+
+    fireEvent.keyDown(window, { key: ",", ctrlKey: true });
+    await waitFor(() => expect(screen.getByRole("heading", { name: "General" })).toBeTruthy());
+
+    const categories: { button: string; marker: RegExp }[] = [
+      { button: "Personalization", marker: /Custom instructions/ },
+      { button: "Chat", marker: /Local chat data/ },
+      { button: "Appearance", marker: /Surface contrast/ },
+      { button: "Voice", marker: /Ambient voice/ },
+      { button: "Keyboard shortcuts", marker: /Command palette/ },
+      { button: "Updates", marker: /Update channel|Release channel|Check for updates/ },
+      { button: "Configuration", marker: /Capabilities/ },
+      { button: "Computer use", marker: /Screen capture/ },
+    ];
+    for (const { button, marker } of categories) {
+      const target = screen.getByRole("button", { name: new RegExp(`^${button}$`) });
+      fireEvent.click(target);
+      await waitFor(() => expect(screen.getByText(marker)).toBeTruthy(), { timeout: 4000 });
+    }
+  });
+
+  it("sending a message in browser mode shows the honest preview notice", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("What are we shipping?")).toBeTruthy());
+
+    const textarea = document.querySelector(".composer-textarea");
+    expect(textarea).toBeTruthy();
+    fireEvent.change(textarea!, { target: { value: "build me a landing page" } });
+    fireEvent.keyDown(textarea!, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText(/Preview mode/)).toBeTruthy(), { timeout: 4000 });
+    // The user bubble and the quoted preview notice both contain the request.
+    expect(screen.getAllByText(/build me a landing page/).length).toBeGreaterThan(0);
+  });
 });

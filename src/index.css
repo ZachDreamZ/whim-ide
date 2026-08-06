@@ -191,102 +191,6 @@ body {
   position: relative;
 }
 
-/* Floating Input and Pill styling */
-.chat-input-container {
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 680px;
-  background: #151922;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  gap: 8px;
-  z-index: 10;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.chat-input-container:focus-within {
-  border-color: rgba(156, 140, 255, 0.4);
-  box-shadow: 0 10px 30px rgba(156, 140, 255, 0.15);
-}
-
-.chat-input-area {
-  width: 100%;
-  background: transparent;
-  border: none;
-  resize: none;
-  outline: none;
-  color: #dfe3eb;
-  font-size: 14px;
-  line-height: 1.5;
-  max-height: 160px;
-  padding: 4px 8px;
-}
-
-.chat-input-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  padding-top: 8px;
-  margin-top: 4px;
-}
-
-.chat-input-tools {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.chat-pill {
-  background: #1e2430;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 9999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  color: #8a95a5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.chat-pill:hover {
-  background: #252c3c;
-  color: #dfe3eb;
-}
-
-.chat-send-btn {
-  background: #ff6f4c;
-  color: #0d0b0a;
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
-}
-
-.chat-send-btn:hover {
-  opacity: 0.9;
-  transform: scale(1.05);
-}
-
-.chat-send-btn:disabled {
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.15);
-  cursor: not-allowed;
-  transform: none;
-}
 
 /* ─── App Shell (Three-column layout) ─── */
 
@@ -735,23 +639,23 @@ body {
 }
 
 .empty-chat-project-status {
-  color: #72c99f;
+  color: var(--primary);
 }
 
 .empty-chat-connect-repo {
   padding: 2px 8px;
-  border: 1px solid #72c99f;
+  border: 1px solid color-mix(in srgb, var(--primary) 55%, var(--t3-line));
   border-radius: 4px;
   background: transparent;
-  color: #72c99f;
+  color: var(--primary);
   font-size: 10px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .empty-chat-connect-repo:hover {
-  background: #72c99f;
-  color: #08110d;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .jump-to-latest-button {

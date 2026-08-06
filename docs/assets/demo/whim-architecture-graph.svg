@@ -2,26 +2,26 @@
   <title id="title">Whim architecture graph</title>
   <desc id="desc">Chat-first React shell routes work through a typed Tauri bridge into a Rust backend, native agent runtime, durable ledger, providers, and workspace tools.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07080a"/><stop offset="1" stop-color="#101217"/></linearGradient>
-    <linearGradient id="hot" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff9b7f"/><stop offset="1" stop-color="#ff704d"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0a0a0a"/><stop offset="1" stop-color="#0e0e0f"/></linearGradient>
+    <linearGradient id="hot" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5b8bfd"/><stop offset="1" stop-color="#3670fb"/></linearGradient>
     <filter id="shadow"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".35"/></filter>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#ff9b7f"/></marker>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#5b8bfd"/></marker>
   </defs>
   <rect width="980" height="420" rx="24" fill="url(#bg)"/>
-  <circle cx="780" cy="0" r="260" fill="#ff7a59" opacity=".08"/>
-  <circle cx="80" cy="30" r="210" fill="#7d5cff" opacity=".08"/>
+  <circle cx="780" cy="0" r="260" fill="#3670fb" opacity=".08"/>
+  <circle cx="80" cy="30" r="210" fill="#3670fb" opacity=".08"/>
   <text x="42" y="54" fill="#f4f4f5" font-family="Inter,Segoe UI,sans-serif" font-size="24" font-weight="800">Whim agent-first architecture</text>
   <text x="42" y="78" fill="#8b919d" font-family="Inter,Segoe UI,sans-serif" font-size="13">Every action moves through typed boundaries, durable evidence, and human-visible state.</text>
   <g font-family="Inter,Segoe UI,sans-serif" font-size="13" font-weight="700">
-    <g filter="url(#shadow)"><rect x="42" y="130" width="170" height="82" rx="16" fill="#12151b" stroke="#ffffff16"/><text x="127" y="164" text-anchor="middle" fill="#fff">React T3 shell</text><text x="127" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">chat · sidebar · evidence</text></g>
-    <g filter="url(#shadow)"><rect x="275" y="130" width="170" height="82" rx="16" fill="#12151b" stroke="#ffffff16"/><text x="360" y="164" text-anchor="middle" fill="#fff">Typed bridge</text><text x="360" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">IPC · OAuth · events</text></g>
-    <g filter="url(#shadow)"><rect x="508" y="130" width="170" height="82" rx="16" fill="#12151b" stroke="#ffffff16"/><text x="593" y="164" text-anchor="middle" fill="#fff">Rust host</text><text x="593" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">workspace · commands</text></g>
-    <g filter="url(#shadow)"><rect x="741" y="130" width="170" height="82" rx="16" fill="url(#hot)"/><text x="826" y="164" text-anchor="middle" fill="#170b07">Native agent</text><text x="826" y="187" text-anchor="middle" fill="#35130b" font-size="11" font-weight="600">providers · tools · loop</text></g>
-    <g><rect x="155" y="286" width="170" height="70" rx="16" fill="#0d0f13" stroke="#ffffff14"/><text x="240" y="316" text-anchor="middle" fill="#f4f4f5">Durable ledger</text><text x="240" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">jobs · evidence · retry</text></g>
-    <g><rect x="405" y="286" width="170" height="70" rx="16" fill="#0d0f13" stroke="#ffffff14"/><text x="490" y="316" text-anchor="middle" fill="#f4f4f5">Workspace</text><text x="490" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">files · git · checks</text></g>
-    <g><rect x="655" y="286" width="170" height="70" rx="16" fill="#0d0f13" stroke="#ffffff14"/><text x="740" y="316" text-anchor="middle" fill="#f4f4f5">Integrations</text><text x="740" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">MCP · deploy · services</text></g>
+    <g filter="url(#shadow)"><rect x="42" y="130" width="170" height="82" rx="16" fill="#141416" stroke="#ffffff16"/><text x="127" y="164" text-anchor="middle" fill="#fff">React T3 shell</text><text x="127" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">chat · sidebar · evidence</text></g>
+    <g filter="url(#shadow)"><rect x="275" y="130" width="170" height="82" rx="16" fill="#141416" stroke="#ffffff16"/><text x="360" y="164" text-anchor="middle" fill="#fff">Typed bridge</text><text x="360" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">IPC · OAuth · events</text></g>
+    <g filter="url(#shadow)"><rect x="508" y="130" width="170" height="82" rx="16" fill="#141416" stroke="#ffffff16"/><text x="593" y="164" text-anchor="middle" fill="#fff">Rust host</text><text x="593" y="187" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">workspace · commands</text></g>
+    <g filter="url(#shadow)"><rect x="741" y="130" width="170" height="82" rx="16" fill="url(#hot)"/><text x="826" y="164" text-anchor="middle" fill="#ffffff">Native agent</text><text x="826" y="187" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="600">providers · tools · loop</text></g>
+    <g><rect x="155" y="286" width="170" height="70" rx="16" fill="#0c0c0d" stroke="#ffffff14"/><text x="240" y="316" text-anchor="middle" fill="#f4f4f5">Durable ledger</text><text x="240" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">jobs · evidence · retry</text></g>
+    <g><rect x="405" y="286" width="170" height="70" rx="16" fill="#0c0c0d" stroke="#ffffff14"/><text x="490" y="316" text-anchor="middle" fill="#f4f4f5">Workspace</text><text x="490" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">files · git · checks</text></g>
+    <g><rect x="655" y="286" width="170" height="70" rx="16" fill="#0c0c0d" stroke="#ffffff14"/><text x="740" y="316" text-anchor="middle" fill="#f4f4f5">Integrations</text><text x="740" y="337" text-anchor="middle" fill="#8b919d" font-size="11" font-weight="500">MCP · deploy · services</text></g>
   </g>
-  <g stroke="#ff9b7f" stroke-width="2" marker-end="url(#arrow)" opacity=".9">
+  <g stroke="#5b8bfd" stroke-width="2" marker-end="url(#arrow)" opacity=".9">
     <path d="M212 171H268"/><path d="M445 171H501"/><path d="M678 171H734"/>
     <path d="M826 213C818 260 779 281 742 286"/><path d="M593 213C575 250 527 270 494 286"/><path d="M360 213C338 250 286 270 244 286"/>
   </g>

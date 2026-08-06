@@ -10,26 +10,10 @@ Whim is a Windows-first desktop environment for a provider-neutral vibe-coding w
 Whim's shell follows the T3 Code design language: a neutral near-black chrome (`#0a0a0a`), 6% hairline borders, `white/4%` hover surfaces, a 10px control radius, a floating glass composer, and a compact 256px sidebar. Every accent-aware surface (focus rings, active states, progress, buttons, command palette) resolves through the user's **Appearance → Accent** picker, which defaults to the T3 primary blue. No decorative gradients or glows — flat surfaces that keep the agent loop feeling fast without hiding state.
 
 <p align="center">
-  <img src="./docs/assets/demo/whim-t3-shell.svg" alt="Whim T3 Code-inspired chat shell" width="920" />
+  <img src="./docs/assets/demo/whim-t3-shell.svg" alt="Whim T3 Code chat shell" width="920" />
 </p>
 
-### Animated product demo
-
-This GIF is generated from the QA screenshot set with `node scripts/render-t3-demo.mjs`, so the README can be refreshed without a design tool.
-
-<p align="center">
-  <img src="./docs/assets/demo/whim-demo.gif" alt="Animated Whim product demo" width="920" />
-</p>
-
-### Screenshots
-
-| Build / agent-first | Providers |
-| --- | --- |
-| <img src="./docs/assets/screenshots/build-agent-first.png" alt="Whim build surface" width="440" /> | <img src="./docs/assets/screenshots/providers.png" alt="Whim providers hub" width="440" /> |
-
-| Ship Hub | Autopilot |
-| --- | --- |
-| <img src="./docs/assets/screenshots/ship-hub.png" alt="Whim Ship Hub" width="440" /> | <img src="./docs/assets/screenshots/autopilot.png" alt="Whim Autopilot" width="440" /> |
+The shell is organized like T3 Code: a compact 256px project rail on the left, a centered `max-w-3xl` conversation column, and a floating glass composer pinned at the bottom. Opening a file slides in a read-only viewer beside the conversation, and an optional context inspector tracks branch and change state.
 
 ### Product graphs
 
@@ -69,13 +53,14 @@ The application is a Tauri 2 Windows desktop app with a Rust backend and a React
 
 | Surface | Implemented state |
 | --- | --- |
-| Build | Agent-first workspace: read-only project file tree, Mission Control agent chat as the central surface, and a read-only file viewer when you open a file |
-| Agent | Mission Control chat and model selection; browser preview uses a deterministic demo response, while the native app can invoke the Whim native agent |
+| Build | Agent-first workspace: read-only project file tree, the agent conversation as the central surface, and a read-only file viewer when you open a file |
+| Agent | Agent conversation with model selection, durable task ledger, attachable workspace files, and streaming tool evidence. Browser preview shows an explicit **Preview mode** notice; the native app invokes the real Whim agent |
 | Providers | Provider hub, Windows toolchain discovery, credential-name discovery, in-app API-key entry, and provider model discovery |
-| Ecosystem | Searchable MCP, skill, and IDE catalog with permission cards and workspace-local UI state |
+| Ecosystem | Searchable MCP, skill, and IDE catalog with permission cards and workspace-local configuration |
 | Ship Hub | Adapter catalog, project-aware native preflight for supported CLIs, readiness stream, and explicit human-owned production guard |
 | Autopilot | Persisted automation preferences, environment discovery, safety-rule locks, and reviewable personalization surfaces |
-| Commands | Searchable command palette with keyboard navigation into the core product hubs |
+| Commands | Searchable command palette (Ctrl+K) with keyboard navigation into the core product hubs |
+| Chat | Private, tool-free conversation hub (Ctrl+Alt+N) with thread history, voice dictation, and workspace file attachments |
 
 The Rust bridge also implements guarded workspace file access, PowerShell command execution, environment discovery, native agent prompts/models/sessions, deploy preflight, and confirmed CLI deployment commands.
 
@@ -139,11 +124,11 @@ npm run tauri build
 Tauri writes release artifacts under `src-tauri/target/release/bundle/`. See the official [Windows installer guide](https://v2.tauri.app/distribute/windows-installer/) for MSI, NSIS, WebView2, and signing details.
 
 ## Latest frontend gauntlet
- 
+
 - `npm run check` — passed: TypeScript, ESLint, and Vitest.
 - `npm run build` — passed.
 - `npm audit --audit-level=moderate` — passed with 0 vulnerabilities.
-- Current frontend suite: 34 test files and 122 tests passing.
+- Current frontend suite: 34 test files and 125 tests passing, including an App-level smoke test that walks every hub, the command palette, settings categories, and the browser preview notice.
 - Native Rust checks require a local Rust/MSVC/WebView2-capable Windows environment; this sandbox does not include Cargo.
 
 Historical native verification from the Windows environment remains:

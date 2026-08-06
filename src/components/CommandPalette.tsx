@@ -57,10 +57,18 @@ export function CommandPalette({ open, projectName, onClose, onNavigate, onOpenW
 
   useEffect(() => setSelectedIndex(0), [query]);
 
+  // Reset the palette only when it opens. Keeping this effect's dependency
+  // list on `open` alone prevents typing from re-triggering the reset (the
+  // key handler and `shown` change on every keystroke).
   useEffect(() => {
     if (!open) return;
     setQuery("");
+    setSelectedIndex(0);
     requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
       if (event.key === "ArrowDown") { event.preventDefault(); setSelectedIndex((index) => Math.min(index + 1, Math.max(0, shown.length - 1))); }
