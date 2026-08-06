@@ -12,4 +12,10 @@ describe("providerHasEnvironmentCredential", () => {
     expect(providerHasEnvironmentCredential("anthropic", ["OPENAI_API_KEY"])).toBe(false);
     expect(providerHasEnvironmentCredential("compatible", ["OPENAI_API_KEY"])).toBe(false);
   });
+
+  it("recognizes newly added providers", () => {
+    expect(providerHasEnvironmentCredential("prime", ["PRIME_API_KEY"])).toBe(true);
+    expect(providerHasEnvironmentCredential("groq", ["GROQ_API_KEY"])).toBe(true);
+    expect(providerHasEnvironmentCredential("fireworks", ["FIREWORKS_API_KEY"])).toBe(true);
+  });
 });

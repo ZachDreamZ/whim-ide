@@ -31,6 +31,12 @@ pub enum Provider {
     ZenMux,
     XAi,
     OrcaRouter,
+    Groq,
+    Fireworks,
+    Together,
+    Mistral,
+    Cohere,
+    Prime,
 }
 
 pub fn parse_provider(value: &str) -> Result<Provider, String> {
@@ -48,8 +54,14 @@ pub fn parse_provider(value: &str) -> Result<Provider, String> {
         "zenmux" => Ok(Provider::ZenMux),
         "xai" | "grok" => Ok(Provider::XAi),
         "orcarouter" | "orca-router" | "orca" => Ok(Provider::OrcaRouter),
+        "groq" => Ok(Provider::Groq),
+        "fireworks" => Ok(Provider::Fireworks),
+        "together" => Ok(Provider::Together),
+        "mistral" => Ok(Provider::Mistral),
+        "cohere" => Ok(Provider::Cohere),
+        "prime" | "primeagent" | "prime_agent" | "primeintellect" | "prime-intellect" => Ok(Provider::Prime),
         other => Err(format!(
-            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai, orcarouter"
+            "Unsupported agent provider '{other}'. Supported: openai, anthropic, google, opencode, qwen, deepseek, xiaomi, local, omniroute, compatible, zenmux, xai, orcarouter, groq, fireworks, together, mistral, cohere, prime"
         )),
     }
 }
@@ -69,6 +81,12 @@ pub(crate) fn provider_name(provider: Provider) -> &'static str {
         Provider::ZenMux => "zenmux",
         Provider::XAi => "xai",
         Provider::OrcaRouter => "orcarouter",
+        Provider::Groq => "groq",
+        Provider::Fireworks => "fireworks",
+        Provider::Together => "together",
+        Provider::Mistral => "mistral",
+        Provider::Cohere => "cohere",
+        Provider::Prime => "prime",
     }
 }
 
@@ -220,6 +238,12 @@ pub(crate) fn default_base(provider: Provider) -> &'static str {
         Provider::ZenMux => "https://zenmux.ai/api/v1",
         Provider::XAi => "https://api.x.ai/v1",
         Provider::OrcaRouter => "https://api.orcarouter.ai/v1",
+        Provider::Groq => "https://api.groq.com/openai/v1",
+        Provider::Fireworks => "https://api.fireworks.ai/inference/v1",
+        Provider::Together => "https://api.together.xyz/v1",
+        Provider::Mistral => "https://api.mistral.ai/v1",
+        Provider::Cohere => "https://api.cohere.com/v1",
+        Provider::Prime => "https://app.primeintellect.ai/api/v1",
     }
 }
 
@@ -239,6 +263,12 @@ pub(crate) fn provider_label(provider: Provider) -> &'static str {
         Provider::ZenMux => "ZenMux",
         Provider::XAi => "xAI (Grok)",
         Provider::OrcaRouter => "OrcaRouter",
+        Provider::Groq => "Groq",
+        Provider::Fireworks => "Fireworks",
+        Provider::Together => "Together AI",
+        Provider::Mistral => "Mistral AI",
+        Provider::Cohere => "Cohere",
+        Provider::Prime => "Prime Intellect",
     }
 }
 
@@ -266,6 +296,12 @@ pub fn provider_environment_variables(provider: &str) -> &'static [&'static str]
         "zenmux" => &["ZENMUX_API_KEY"],
         "xai" => &["XAI_API_KEY"],
         "orcarouter" => &["ORCAROUTER_API_KEY"],
+        "groq" => &["GROQ_API_KEY"],
+        "fireworks" => &["FIREWORKS_API_KEY"],
+        "together" => &["TOGETHER_API_KEY"],
+        "mistral" => &["MISTRAL_API_KEY"],
+        "cohere" => &["COHERE_API_KEY"],
+        "prime" => &["PRIME_API_KEY", "PRIME_INTELLECT_API_KEY"],
         _ => &[],
     }
 }
@@ -377,6 +413,12 @@ pub fn default_model(provider: Provider, role: AgentRole) -> &'static str {
         Provider::ZenMux => "claude-3-5-sonnet-latest",
         Provider::XAi => "grok-4.5",
         Provider::OrcaRouter => "openai/gpt-4o-mini",
+        Provider::Groq => "llama-3.3-70b-versatile",
+        Provider::Fireworks => "accounts/fireworks/models/llama-v3p1-70b-instruct",
+        Provider::Together => "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        Provider::Mistral => "mistral-large-latest",
+        Provider::Cohere => "command-r-plus",
+        Provider::Prime => "deepseek-v3",
     }
 }
 
