@@ -1819,3 +1819,122 @@ a:focus-visible {
 :focus-visible {
   outline-color: color-mix(in srgb, var(--ring) 70%, transparent);
 }
+
+/* ═══ T3 theme — legacy surface sweep (market, provider, plugin, oauth) ═══ */
+
+.market-sidebar > span { color: var(--muted-foreground); }
+.market-sidebar button { color: var(--muted-foreground); }
+.market-sidebar button:hover { color: var(--foreground); background: var(--t3-hover); }
+.market-sidebar button.active {
+  color: var(--foreground);
+  background: var(--t3-active);
+}
+.market-sidebar button em { color: var(--muted-foreground); }
+
+.provider-card {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+}
+.provider-card:hover {
+  translate: 0 -1px;
+  border-color: var(--t3-line-strong);
+  background: rgba(255, 255, 255, 0.03);
+}
+.provider-card.expanded {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--t3-line));
+  background: rgba(255, 255, 255, 0.03);
+}
+.provider-card.active {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--t3-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.provider-card::after { display: none; }
+
+.oauth-provider-card { border-radius: 12px; }
+.oauth-provider-card.connected { border-color: color-mix(in srgb, var(--primary) 45%, var(--t3-line)); }
+
+.plugin-card {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.plugin-card:hover {
+  border-color: var(--t3-line-strong);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.signed-note { color: var(--muted-foreground); }
+.portable-badge { color: var(--muted-foreground); }
+
+/* T3 scrollbars: 6px, white/8% thumb */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.12); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.12) transparent; }
+
+/* Model dropdown (ProviderHub) */
+.model-select-trigger,
+.model-select {
+  border-color: var(--t3-line);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+/* ═══ T3 theme — status/accent color sweep (mint era → primary/emerald) ═══ */
+
+.project-dot {
+  background: var(--primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.command-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--foreground);
+}
+
+.oauth-connect-btn {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--t3-line));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.oauth-connect-btn:hover { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+
+.provider-connected { border-color: color-mix(in srgb, var(--primary) 22%, var(--t3-line)); }
+.provider-status.connected {
+  color: color-mix(in srgb, var(--primary) 78%, white);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.active-dot {
+  background: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+.active-pill {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--t3-line));
+  color: color-mix(in srgb, var(--primary) 80%, white);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+
+.plugin-card > button.installed {
+  color: color-mix(in srgb, var(--primary) 75%, white);
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--t3-line));
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.ecosystem-trust-strip {
+  border-color: var(--t3-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+.ecosystem-trust-strip > span {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.live-dot {
+  background: var(--primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.release-gates .passed {
+  color: color-mix(in srgb, var(--primary) 75%, white);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+
+/* Semantic success stays emerald (T3's --success), failures stay red */
+.provider-health-indicator .health-unhealthy { color: #ef4444; }
+.status-good { color: #10b981; }

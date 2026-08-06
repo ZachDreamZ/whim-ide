@@ -176,7 +176,7 @@ function customIntegrations(config: Record<string, unknown> | null): Integration
       kind: "Plugin" as const,
       permissions: ["Whim runtime"],
       icon: PackagePlus,
-      color: "#ff9a7f",
+      color: "var(--primary)",
       packageName,
       custom: true,
     }));
@@ -373,7 +373,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
             kind: "Plugin",
             permissions: ["Whim runtime"],
             icon: PackagePlus,
-            color: "#ff9a7f",
+            color: "var(--primary)",
             packageName: value,
             custom: true,
           };

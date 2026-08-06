@@ -5,7 +5,7 @@ import { bridge, type CodexPlugin, type CodexPluginCatalog } from "../lib/bridge
 const emptyCatalog: CodexPluginCatalog = { installed: [], available: [] };
 
 function PluginCard({ plugin, busy, onInstall, onRemove }: { plugin: CodexPlugin; busy: boolean; onInstall?: () => void; onRemove?: () => void }) {
-  return <article className="plugin-card" style={{ "--plugin-color": plugin.brandColor ?? "#9c8cff" } as React.CSSProperties}>
+  return <article className="plugin-card" style={{ "--plugin-color": plugin.brandColor ?? "var(--primary)" } as React.CSSProperties}>
     <div className="plugin-card-top"><span className="plugin-mark">{plugin.displayName.slice(0, 1).toUpperCase()}</span><span className={`status-pill ${plugin.installed ? "good" : "neutral"}`}>{plugin.installed ? "Installed" : plugin.marketplaceName || "Available"}</span></div>
     <h2>{plugin.displayName}</h2><p>{plugin.description || `Add ${plugin.displayName} capabilities to Codex and Whim.`}</p>
     <div className="plugin-meta"><span>{plugin.developerName}</span><span>v{plugin.version}</span>{plugin.category && <span>{plugin.category}</span>}</div>
