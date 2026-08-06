@@ -22,6 +22,7 @@ import {
   FileCode,
   Trash2,
   FilePlus,
+  FolderPlus,
 } from "lucide-react";
 import type { ViewId } from "../types/navigation";
 import {
@@ -60,6 +61,7 @@ export type ProjectSidebarProps = {
   onFileSelect?: (path: string) => void;
   onFileCreate?: (path: string, content: string) => Promise<void>;
   onFileDelete?: (path: string) => Promise<void>;
+  onFolderCreate?: (path: string) => Promise<void>;
 };
 
 const primaryItems = [
@@ -133,6 +135,7 @@ export function ProjectSidebar({
   onFileSelect,
   onFileCreate,
   onFileDelete,
+  onFolderCreate,
 }: ProjectSidebarProps) {
   const native = bridge.isNative();
   const [jobs, setJobs] = useState<OrchestrationJob[]>([]);
@@ -300,22 +303,51 @@ export function ProjectSidebar({
           <section className="px-2 pb-2 border-b border-border/40" aria-labelledby="files-heading">
             <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
               <span id="files-heading" className="flex items-center gap-1.5"><FolderOpen size={12} /> Workspace Files</span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                title="Create file"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const path = prompt("Enter new file path relative to workspace root (e.g., src/utils.ts):");
-                  if (path && path.trim()) {
-                    await onFileCreate?.(path.trim(), "// Created by Whim Standalone Workspace\n");
-                  }
-                }}
-              >
-                <FilePlus size={14} />
-              </Button>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Create folder"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const path = prompt("Enter new folder path relative to workspace root (e.g., src/components):");
+                    if (path && path.trim()) {
+                      await onFolderCreate?.(path.trim());
+                    }
+                  }}
+                >
+                  <FolderPlus size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Create file"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const path = prompt("Enter new file path relative to workspace root (e.g., src/utils.ts):");
+                    if (path && path.trim()) {
+                      await onFileCreate?.(path.trim(), "// Created by Whim Standalone Workspace\n");
+                    }
+                  }}
+                >
+                  <FilePlus size={14} />
+                </Button>
+              </div>
             </div>
             <div className="space-y-0.5 mt-1 max-h-56 overflow-y-auto pr-1">
+              {files
+                .filter((f) => f.kind === "directory")
+                .map((dir) => (
+                  <div
+                    key={dir.path}
+                    className="group flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-default select-none"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Folder size={13} className="text-zinc-500 shrink-0" />
+                      <span className="truncate font-mono text-[11px] text-zinc-400">{dir.path}</span>
+                    </div>
+                  </div>
+                ))}
               {files
                 .filter((f) => f.kind === "file")
                 .map((file) => (

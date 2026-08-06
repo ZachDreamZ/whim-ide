@@ -486,6 +486,22 @@ function App() {
     }
   }, [workspacePath, refreshWorkspace]);
 
+  const handleFolderCreate = useCallback(async (path: string) => {
+    if (!workspacePath) return;
+    try {
+      if (bridge.isNative()) {
+        await bridge.runCommand(workspacePath, `New-Item -ItemType Directory -Force -Path "${path}"`, {
+          operationId: crypto.randomUUID(),
+          timeoutMs: 10_000,
+        });
+      }
+      setToast(`Created folder ${path} successfully!`);
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to create folder.");
+    }
+  }, [workspacePath, refreshWorkspace]);
+
   const closeReadOnlyFile = useCallback(() => {
     setReadOnlyFile(null);
     setActiveFile("");
@@ -589,6 +605,7 @@ function App() {
               onFileSelect: (path) => void chooseFile(path),
               onFileCreate: handleFileCreate,
               onFileDelete: handleFileDelete,
+              onFolderCreate: handleFolderCreate,
             }}
             branch={branch}
             changesCount={changes.length}
@@ -775,6 +792,7 @@ function App() {
               onFileSelect={(path) => void chooseFile(path)}
               onFileCreate={handleFileCreate}
               onFileDelete={handleFileDelete}
+              onFolderCreate={handleFolderCreate}
             />
             <div className="workbench">
               <div className="workbench-main agent-first">
