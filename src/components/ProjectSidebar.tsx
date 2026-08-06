@@ -62,6 +62,7 @@ export type ProjectSidebarProps = {
   onFileCreate?: (path: string, content: string) => Promise<void>;
   onFileDelete?: (path: string) => Promise<void>;
   onFolderCreate?: (path: string) => Promise<void>;
+  onChatDelete?: (id: string) => Promise<void>;
 };
 
 const primaryItems = [
@@ -136,6 +137,7 @@ export function ProjectSidebar({
   onFileCreate,
   onFileDelete,
   onFolderCreate,
+  onChatDelete,
 }: ProjectSidebarProps) {
   const native = bridge.isNative();
   const [jobs, setJobs] = useState<OrchestrationJob[]>([]);
@@ -448,17 +450,31 @@ export function ProjectSidebar({
                           </Button>
                         ))}
                         {projectChats.map((chat) => (
-                          <Button
+                          <div
                             key={chat.id}
-                            variant="ghost"
-                            className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
-                            title={chat.title}
+                            className="group/chat flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
                             onClick={() => onChatSelect?.(chat)}
                             onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
                           >
-                            <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 flex-1 truncate">{chat.title}</span>
-                          </Button>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                              <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="opacity-0 group-hover/chat:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                              title="Delete conversation"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                                  await onChatDelete?.(chat.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={11} />
+                            </Button>
+                          </div>
                         ))}
                       </>
                     )}
@@ -474,17 +490,31 @@ export function ProjectSidebar({
           <section className="px-2 pb-3" aria-labelledby="chats-heading">
             <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="chats-heading">Chats</div>
             {unattachedChats.slice(0, 8).map((chat) => (
-              <Button
+              <div
                 key={chat.id}
-                variant="ghost"
-                className="h-7 w-full justify-start gap-2 px-2 text-xs font-normal"
-                title={chat.title}
+                className="group/chat flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
                 onClick={() => onChatSelect?.(chat)}
                 onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
               >
-                <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{chat.title}</span>
-              </Button>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="opacity-0 group-hover/chat:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                  title="Delete conversation"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                      await onChatDelete?.(chat.id);
+                    }
+                  }}
+                >
+                  <Trash2 size={11} />
+                </Button>
+              </div>
             ))}
           </section>
         )}

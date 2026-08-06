@@ -527,6 +527,16 @@ function App() {
     }
   }, [workspacePath, activeFile, closeReadOnlyFile, refreshWorkspace]);
 
+  const handleChatDelete = useCallback(async (id: string) => {
+    try {
+      await bridge.deleteChatThread(id);
+      setToast("Conversation deleted successfully.");
+      window.dispatchEvent(new Event("whim:history-changed"));
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to delete conversation.");
+    }
+  }, []);
+
   const refreshCurrentProviders = refreshProviders;
 
   const openSidebarTask = useCallback(async (job: OrchestrationJob) => {
@@ -606,6 +616,7 @@ function App() {
               onFileCreate: handleFileCreate,
               onFileDelete: handleFileDelete,
               onFolderCreate: handleFolderCreate,
+              onChatDelete: handleChatDelete,
             }}
             branch={branch}
             changesCount={changes.length}
@@ -793,6 +804,7 @@ function App() {
               onFileCreate={handleFileCreate}
               onFileDelete={handleFileDelete}
               onFolderCreate={handleFolderCreate}
+              onChatDelete={handleChatDelete}
             />
             <div className="workbench">
               <div className="workbench-main agent-first">
