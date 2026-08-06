@@ -9,6 +9,13 @@ import {
   Radio,
   ShieldCheck,
   Sparkles,
+  Code2,
+  Eye,
+  Play,
+  Save,
+  Trash2,
+  Globe,
+  X,
 } from "lucide-react";
 import "./App.css";
 import { Titlebar } from "./components/Titlebar";
@@ -110,6 +117,21 @@ function App() {
   const [, setTreeError] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState("");
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
+
+  const [editedContent, setEditedContent] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
+  const [editorTab, setEditorTab] = useState<"editor" | "preview">("editor");
+  const [runOutput, setRunOutput] = useState("");
+  const [isRunningCommand, setIsRunningCommand] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("http://127.0.0.1:1420");
+
+  useEffect(() => {
+    if (readOnlyFile) {
+      setEditedContent(readOnlyFile.content);
+      setIsDirty(false);
+      setRunOutput("");
+    }
+  }, [readOnlyFile]);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [openedJobId, setOpenedJobId] = useState<string | null>(null);
@@ -413,6 +435,43 @@ function App() {
     }
   }, [loadReadOnlyFile, workspacePath]);
 
+  const handleSaveFile = useCallback(async () => {
+    if (!workspacePath || !readOnlyFile) return;
+    try {
+      await bridge.writeFile(workspacePath, readOnlyFile.path, editedContent);
+      setIsDirty(false);
+      setToast(`Saved ${readOnlyFile.path.split(/[\\/]/).pop()} successfully!`);
+      void refreshWorkspace();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save file.";
+      setToast(message);
+    }
+  }, [workspacePath, readOnlyFile, editedContent, refreshWorkspace]);
+
+  const handleRunCommand = useCallback(async () => {
+    if (!workspacePath) return;
+    setIsRunningCommand(true);
+    setRunOutput("Executing verification check...");
+    try {
+      const result = await bridge.runCommand(
+        workspacePath,
+        "npm run check",
+        { operationId: crypto.randomUUID(), timeoutMs: 60_000 }
+      );
+      const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+      setRunOutput(output || "Verification completed with no output.");
+      if (result.success) {
+        setToast("Verification check passed!");
+      } else {
+        setToast("Verification check failed.");
+      }
+    } catch (error) {
+      setRunOutput(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsRunningCommand(false);
+    }
+  }, [workspacePath]);
+
   const closeReadOnlyFile = useCallback(() => {
     setReadOnlyFile(null);
     setActiveFile("");
@@ -522,17 +581,143 @@ function App() {
                 onOpenWorkspace={openWorkspace}
               />
             {readOnlyFile && (
-              <section className="read-only-file" aria-label="File viewer">
-                <header className="read-only-file-header">
-                  <span>{currentFileName}</span>
-                  <button type="button" onClick={closeReadOnlyFile} aria-label="Close file">Close</button>
+              <section className="flex-1 min-w-[400px] h-full flex flex-col bg-[#0b0e14] border-l border-zinc-800" aria-label="Standalone workspace workbench">
+                <header className="h-12 px-4 flex items-center justify-between border-b border-zinc-800 bg-[#10141b] text-sm text-zinc-300 font-sans select-none">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-zinc-200 tracking-wide font-mono text-xs truncate max-w-[150px]">
+                      {currentFileName}
+                    </span>
+                    <div className="flex items-center gap-1 bg-[#0b0e14] p-1 rounded-lg border border-zinc-800/80">
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("editor")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                          editorTab === "editor"
+                            ? "bg-zinc-800 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <Code2 size={12} />
+                        Code Editor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("preview")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                          editorTab === "preview"
+                            ? "bg-zinc-800 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <Eye size={12} />
+                        Live Preview
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {editorTab === "editor" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRunCommand}
+                          disabled={isRunningCommand}
+                          className="h-8 px-3 text-xs font-semibold rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 transition disabled:opacity-50"
+                        >
+                          <Play size={11} className={isRunningCommand ? "animate-pulse" : ""} />
+                          Run Check
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveFile}
+                          className={`h-8 px-3 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition ${
+                            isDirty
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 hover:border-emerald-400 shadow-md shadow-emerald-950/20"
+                              : "bg-transparent hover:bg-zinc-900 text-zinc-500 border-zinc-800"
+                          }`}
+                        >
+                          <Save size={11} />
+                          Save Changes
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeReadOnlyFile}
+                      className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-zinc-200 transition"
+                      aria-label="Close panel"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
                 </header>
+
                 {fileLoading ? (
-                  <p className="palette-empty">Reading…</p>
+                  <div className="flex-1 flex flex-col items-center justify-center text-sm text-zinc-500 bg-[#0d1117]">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-zinc-500 mb-2"></div>
+                    Loading file...
+                  </div>
                 ) : fileError ? (
-                  <p className="file-error">{fileError}</p>
+                  <div className="flex-1 p-6 text-zinc-400 bg-[#0d1117] flex flex-col items-center justify-center gap-4 text-center">
+                    <span className="text-zinc-600 font-sans">⚠️ {fileError}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadReadOnlyFile(workspacePath ?? "", readOnlyFile?.path ?? "")}
+                      className="px-4 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 transition"
+                    >
+                      Retry Reading File
+                    </button>
+                  </div>
+                ) : editorTab === "editor" ? (
+                  <div className="flex-1 min-h-0 flex flex-col relative bg-[#0b0e14]">
+                    <textarea
+                      value={editedContent}
+                      onChange={(e) => {
+                        setEditedContent(e.target.value);
+                        setIsDirty(e.target.value !== readOnlyFile.content);
+                      }}
+                      className="flex-1 w-full h-full p-4 bg-[#0d1117] text-[#c9d1d9] font-mono text-xs leading-relaxed focus:outline-none resize-none overflow-y-auto selection:bg-zinc-700/80"
+                      spellCheck={false}
+                    />
+
+                    {runOutput && (
+                      <div className="h-44 border-t border-zinc-800 bg-[#090d12] flex flex-col min-h-0 shadow-inner">
+                        <header className="h-8 px-4 flex items-center justify-between bg-[#11161d] text-[10px] text-zinc-400 font-sans border-b border-zinc-800/60 uppercase tracking-wider select-none font-bold">
+                          <span>Terminal Console</span>
+                          <button
+                            type="button"
+                            onClick={() => setRunOutput("")}
+                            className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition"
+                            title="Clear console"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </header>
+                        <pre className="flex-1 p-3 overflow-y-auto font-mono text-[11px] text-zinc-300 leading-normal whitespace-pre-wrap select-text bg-[#090d12]">
+                          {runOutput}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <pre className="read-only-file-content">{readOnlyFile.content}</pre>
+                  <div className="flex-1 min-h-0 flex flex-col bg-[#0b0e14]">
+                    <div className="h-10 px-3 flex items-center gap-2 border-b border-zinc-800 bg-[#10141b]">
+                      <Globe size={12} className="text-zinc-500" />
+                      <input
+                        type="text"
+                        value={previewUrl}
+                        onChange={(e) => setPreviewUrl(e.target.value)}
+                        className="flex-1 h-7 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-700"
+                        placeholder="http://127.0.0.1:1420"
+                      />
+                    </div>
+                    <iframe
+                      src={previewUrl}
+                      title="Live App Preview"
+                      className="flex-1 w-full border-none bg-white"
+                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    />
+                  </div>
                 )}
               </section>
             )}
