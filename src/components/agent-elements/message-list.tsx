@@ -15,7 +15,7 @@ import { UserMessage } from "./user-message";
 import { ErrorMessage } from "./error-message";
 import type { CustomToolRendererProps } from "./types";
 import { ToolRowBase } from "./tools/tool-row-base";
-import { IconCopy, IconCheck } from "@tabler/icons-react";
+import { IconCopy, IconCheck, IconSparkles } from "@tabler/icons-react";
 import { ToolRenderer as DefaultToolRenderer } from "./tools/tool-renderer";
 import { normalizeAssistantToolParts } from "./utils/tool-part-normalizer";
 import { SpiralLoader } from "./spiral-loader";
@@ -133,6 +133,14 @@ function isErrorPart(
 ): part is { type: "error"; title?: string; message: string } {
   return (
     isRecord(part) && part.type === "error" && typeof part.message === "string"
+  );
+}
+
+function isDelegationPart(
+  part: unknown,
+): part is { type: "delegation"; id: string; name: string; task: string } {
+  return (
+    isRecord(part) && part.type === "delegation" && typeof part.name === "string"
   );
 }
 
@@ -768,6 +776,29 @@ function AssistantParts({
       const part = parts[i]!;
 
       if (isV5ToolPart(part) && part.type === "tool-TaskOutput") {
+        i++;
+        continue;
+      }
+
+      if (isDelegationPart(part)) {
+        elems.push(
+          <div
+            key={part.id ?? `${msg.id}-delegation-${i}`}
+            className="flex items-center gap-3 p-3 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800/80 rounded-xl transition font-sans text-xs my-2 group select-none shadow-sm"
+          >
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-400 border border-indigo-500/15">
+              <IconSparkles size={11} className="animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-zinc-200">
+                Spawning sub-agent: <span className="text-indigo-400 capitalize">{part.name}</span>
+              </div>
+              <div className="text-zinc-400 mt-0.5 truncate font-mono text-[11px] leading-relaxed">
+                Task: "{part.task}"
+              </div>
+            </div>
+          </div>,
+        );
         i++;
         continue;
       }
