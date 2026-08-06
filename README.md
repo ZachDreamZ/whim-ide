@@ -4,6 +4,65 @@
 
 Whim is a Windows-first desktop prototype for a provider-neutral vibe-coding environment, reshaped around the agent. Describe what you want, steer it naturally, and keep the path to deployment in the same workspace. The agent chat (Mission Control) is the primary surface; the project file tree and a read-only file viewer are satellites around it — there is no editor and no simulated live preview.
 
+
+## T3 Code-inspired experience
+
+Whim now uses a darker, compact, chat-first shell inspired by T3 Code: a commandable top bar, dense project rail, central conversation canvas, glowing composer, durable evidence cards, and an optional context inspector. The goal is to make the agent loop feel fast without hiding state.
+
+<p align="center">
+  <img src="./docs/assets/demo/whim-t3-shell.svg" alt="Whim T3 Code-inspired chat shell" width="920" />
+</p>
+
+### Animated product demo
+
+This GIF is generated from the QA screenshot set with `node scripts/render-t3-demo.mjs`, so the README can be refreshed without a design tool.
+
+<p align="center">
+  <img src="./docs/assets/demo/whim-demo.gif" alt="Animated Whim product demo" width="920" />
+</p>
+
+### Screenshots
+
+| Build / agent-first | Providers |
+| --- | --- |
+| <img src="./docs/assets/screenshots/build-agent-first.png" alt="Whim build surface" width="440" /> | <img src="./docs/assets/screenshots/providers.png" alt="Whim providers hub" width="440" /> |
+
+| Ship Hub | Autopilot |
+| --- | --- |
+| <img src="./docs/assets/screenshots/ship-hub.png" alt="Whim Ship Hub" width="440" /> | <img src="./docs/assets/screenshots/autopilot.png" alt="Whim Autopilot" width="440" /> |
+
+### Product graphs
+
+<p align="center">
+  <img src="./docs/assets/demo/whim-architecture-graph.svg" alt="Whim architecture graph" width="920" />
+</p>
+
+<p align="center">
+  <img src="./docs/assets/demo/whim-gauntlet-graph.svg" alt="Whim gauntlet loop graph" width="920" />
+</p>
+
+```mermaid
+flowchart LR
+  User[User intent] --> Chat[T3 Code-style chat shell]
+  Chat --> Bridge[Typed Tauri bridge]
+  Bridge --> Ledger[Durable task ledger]
+  Bridge --> Agent[Native agent runtime]
+  Agent --> Tools[Workspace tools + providers]
+  Tools --> Evidence[Diffs, events, verification]
+  Evidence --> Chat
+```
+
+```mermaid
+flowchart TD
+  Design[UI/UX change] --> Typecheck[npm run typecheck]
+  Typecheck --> Lint[npm run lint]
+  Lint --> Tests[npm test]
+  Tests --> Build[npm run build]
+  Build --> Audit[npm audit --audit-level=moderate]
+  Audit --> Commit[Commit + push]
+  Commit --> Design
+```
+
 ## Prototype status
 
 This repository is a working **product prototype**, not yet a production-ready IDE.
@@ -81,14 +140,20 @@ npm run tauri build
 
 Tauri writes release artifacts under `src-tauri/target/release/bundle/`. See the official [Windows installer guide](https://v2.tauri.app/distribute/windows-installer/) for MSI, NSIS, WebView2, and signing details.
 
-## Verified through 12 July 2026
+## Latest frontend gauntlet
  
+- `npm run check` — passed: TypeScript, ESLint, and Vitest.
 - `npm run build` — passed.
+- `npm audit --audit-level=moderate` — passed with 0 vulnerabilities.
+- Current frontend suite: 39 test files and 141 tests passing.
+- Native Rust checks require a local Rust/MSVC/WebView2-capable Windows environment; this sandbox does not include Cargo.
+
+Historical native verification from the Windows environment remains:
+
 - `cargo fmt --check --manifest-path src-tauri/Cargo.toml` — passed.
 - `cargo check --manifest-path src-tauri/Cargo.toml` — passed.
-- `cargo test --manifest-path src-tauri/Cargo.toml` — passed, 63 tests (including the env-gated orchestration lifecycle integration test in `backend/orchestration.rs`, which is skipped by default and runs with `WHIM_E2E_PROVIDER` set).
-- `npm test -- --run` — passed, 11 files and 31 tests.
-- `npm run tauri -- build --debug --no-bundle` — passed; built the current native executable at `src-tauri/target/debug/workwhim-ide.exe`.
+- `cargo test --manifest-path src-tauri/Cargo.toml` — passed, 63 tests in that run.
+- `npm run tauri -- build --debug --no-bundle` — passed; built the native executable at `src-tauri/target/debug/workwhim-ide.exe`.
 - Durable, neutral verification recording of lint/test/build results in the task ledger (`jobs.json`) verified under native runs.
 - Enhanced layout readability and scaling tested and verified for 1920x1080 resolution screens.
 - Browser verification covered Build/agent-first, agent send, Provider Hub, Ecosystem, Ship Hub, Autopilot, and the command palette.
