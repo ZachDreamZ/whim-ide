@@ -54,7 +54,7 @@ body {
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: #ffffff10;
-  --color-ring: #72c99f;
+  --color-ring: var(--ring);
 
   --radius-sm: 4px;
   --radius-md: 8px;

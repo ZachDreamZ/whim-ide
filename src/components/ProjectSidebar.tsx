@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Blocks,
+  Boxes,
   CalendarClock,
   ChevronDown,
   Clapperboard,
@@ -12,11 +14,13 @@ import {
   MoreHorizontal,
   Plus,
   Pin,
+  Rocket,
   Search,
   Settings2,
   Sparkles,
+  WandSparkles,
 } from "lucide-react";
-import type { ViewId } from "./WorkspaceRail";
+import type { ViewId } from "../types/navigation";
 import {
   bridge,
   type ChatThreadSummary,
@@ -58,11 +62,15 @@ const primaryItems = [
 
 const moreItems = [
   { id: "sites", label: "Sites", icon: Globe2 },
+  { id: "services", label: "Services", icon: Boxes },
+  { id: "ecosystem", label: "Ecosystem", icon: Blocks },
   { id: "pullRequests", label: "Pull requests", icon: GitPullRequest },
   { id: "chat", label: "Chat", icon: MessageSquareText },
   { id: "browser", label: "Browser", icon: Globe2 },
   { id: "creative", label: "Creative studio", icon: Clapperboard },
   { id: "providers", label: "Models & providers", icon: Settings2 },
+  { id: "ship", label: "Ship", icon: Rocket },
+  { id: "autopilot", label: "Autopilot", icon: WandSparkles },
 ] satisfies { id: ViewId; label: string; icon: typeof Sparkles }[];
 
 function normalized(value: string) {

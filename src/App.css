@@ -1817,3 +1817,241 @@ a:focus-visible {
 .ops-endpoint-actions button { height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--secondary); color: var(--text-soft); font-size: 11px; }
 .ops-endpoint-actions button:hover:not(:disabled) { color: var(--foreground); border-color: var(--line-strong); }
 .ops-endpoint-actions button:disabled { opacity: .4; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   UI/UX polish pass — unify every remaining surface on the T3 design tokens.
+   Accent-aware: all highlights use var(--primary)/var(--ring) so the user's
+   Appearance → Accent picker propagates everywhere.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hub pages: replace the purple-era radial with a primary-tinted glow ── */
+.hub-page {
+  background:
+    radial-gradient(900px 420px at 78% -120px, color-mix(in srgb, var(--primary) 7%, transparent), transparent 68%),
+    radial-gradient(700px 380px at 4% -90px, color-mix(in srgb, var(--primary) 4%, transparent), transparent 60%),
+    var(--background);
+}
+
+/* ── Consistent hero header for every hub ── */
+.integration-hero {
+  min-height: 118px;
+  padding: 22px 24px;
+  border: 1px solid var(--t3-line, var(--line));
+  border-radius: 16px;
+  background: linear-gradient(150deg, rgba(255,255,255,.042), rgba(255,255,255,.014));
+  box-shadow: inset 0 1px rgba(255,255,255,.03), 0 16px 44px rgba(0,0,0,.16);
+}
+.integration-hero h1 {
+  color: var(--foreground);
+  font-family: var(--font-display);
+  letter-spacing: -.04em;
+}
+.integration-hero p { color: var(--muted-foreground); }
+.integration-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-hero { margin-bottom: 18px; }
+
+.section-kicker {
+  color: color-mix(in srgb, var(--primary) 82%, white);
+  letter-spacing: .09em;
+}
+
+/* ── Notices, text actions, and inline links → accent-aware ── */
+.inline-notice {
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--t3-line, var(--line)));
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--primary) 6%, rgba(255,255,255,.02));
+  border-radius: 10px;
+}
+.inline-notice button { color: color-mix(in srgb, var(--primary) 70%, white); }
+.text-action {
+  color: color-mix(in srgb, var(--primary) 82%, white);
+  font-weight: 550;
+}
+.text-action:hover { color: var(--primary); text-decoration: underline; }
+
+/* ── Market / toolbar surfaces (Ecosystem, Ship) ── */
+.market-toolbar { margin-bottom: 16px; }
+.market-search {
+  flex: 1;
+  max-width: 460px;
+  height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--t3-line, var(--line));
+  border-radius: 10px;
+  background: rgba(255,255,255,.03);
+  color: var(--muted-foreground);
+  transition: border-color .15s, box-shadow .15s;
+}
+.market-search:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--t3-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.market-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 13px; }
+.market-search input::placeholder { color: var(--muted-foreground); }
+
+/* ── Provider status strip ── */
+.provider-status-strip {
+  border-radius: 12px;
+  background: rgba(255,255,255,.022);
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+.provider-status-strip .status-good { color: color-mix(in srgb, var(--primary) 75%, white); }
+.provider-status-strip button:hover { color: var(--foreground); }
+
+/* ── Command palette: primary-tinted instead of purple ── */
+.palette-backdrop { background: rgba(4, 6, 8, .5); backdrop-filter: blur(8px); }
+.command-palette {
+  border-color: var(--t3-line-strong, rgba(255,255,255,.15));
+  background: rgba(15, 17, 22, .98);
+  box-shadow: 0 32px 90px rgba(0,0,0,.55), inset 0 1px rgba(255,255,255,.05);
+}
+.palette-search { border-bottom-color: var(--t3-line, var(--line)); color: var(--muted-foreground); }
+.palette-search input { color: var(--foreground); }
+.palette-search input::placeholder { color: var(--muted-foreground); }
+.palette-context { color: var(--muted-foreground); border-bottom-color: var(--t3-line, var(--line)); }
+.palette-context span:first-child { color: color-mix(in srgb, var(--primary) 70%, white); }
+.palette-results > small { color: var(--muted-foreground); }
+.palette-results > button { color: var(--muted-foreground); }
+.palette-results > button:hover,
+.palette-results > button.highlighted {
+  color: var(--foreground);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 14%, transparent), rgba(255,255,255,.03));
+}
+.palette-icon {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.palette-results button em { color: var(--muted-foreground); }
+.palette-empty { color: var(--muted-foreground); }
+.palette-footer { color: var(--muted-foreground); border-top-color: var(--t3-line, var(--line)); }
+.palette-footer kbd { color: var(--muted-foreground); }
+
+/* ── Settings overlay: T3 dark theme (was VS-Code grey) ── */
+.settings-overlay {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+.settings-sidebar-wrapper {
+  width: 260px;
+  border-right: 1px solid var(--t3-line, var(--line)) !important;
+  background: linear-gradient(180deg, rgba(12,14,18,.96), rgba(8,9,12,.96)) !important;
+}
+.settings-header { border-bottom-color: var(--t3-line, var(--line)) !important; }
+.settings-header button {
+  color: var(--muted-foreground) !important;
+  border-radius: 9px;
+}
+.settings-header button:hover { color: var(--foreground) !important; background: rgba(255,255,255,.06) !important; }
+.settings-content { background: transparent !important; }
+.settings-sidebar-wrapper button[class*="bg-[#2f2f2f]"],
+.settings-sidebar-wrapper .settings-active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, transparent), rgba(255,255,255,.045)) !important;
+  color: var(--foreground) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* Settings page cards and section labels */
+.settings-content .rounded-xl {
+  border-color: var(--t3-line, var(--line));
+  background: rgba(255,255,255,.022);
+}
+
+/* ── Read-only file viewer: theme tokens (was navy) ── */
+.read-only-file {
+  border-left-color: var(--t3-line, var(--line));
+  background: rgba(8, 10, 13, .92);
+}
+.read-only-file-header {
+  border-bottom-color: var(--t3-line, var(--line));
+  color: var(--muted-foreground);
+}
+.read-only-file-header button {
+  border-color: var(--t3-line, var(--line));
+  color: var(--muted-foreground);
+  background: rgba(255,255,255,.03);
+}
+.read-only-file-header button:hover { color: var(--foreground); border-color: var(--t3-line-strong); }
+.read-only-file-content {
+  color: #c3c9d4;
+  background: transparent;
+}
+
+/* ── Creative Studio: primary accents (was purple) ── */
+.creative-studio {
+  color: var(--foreground);
+  background: radial-gradient(circle at 72% 8%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 34%), var(--background);
+}
+.creative-header h1 { letter-spacing: -.035em; }
+.creative-header p { color: var(--muted-foreground); }
+.creative-eyebrow { color: color-mix(in srgb, var(--primary) 75%, white); }
+.creative-field input:focus,
+.creative-field textarea:focus,
+.creative-options select:focus {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--t3-line));
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+.creative-generate {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 88%, #ffffff 8%), var(--primary));
+  color: var(--primary-foreground);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.creative-progress > span.active { background: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent); }
+.creative-empty > span { color: var(--primary); }
+.creative-artifact footer span { color: color-mix(in srgb, var(--primary) 72%, white); }
+
+/* ── Model menu link ── */
+.model-menu .manage-models { color: var(--primary); }
+
+/* ── Scrollbars: theme-tinted ── */
+* { scrollbar-color: color-mix(in srgb, var(--primary) 18%, #343c4a) transparent; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--primary) 18%, #343c4a); }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--primary) 30%, #4a5468); }
+
+/* ── Text selection ── */
+::selection { background: color-mix(in srgb, var(--primary) 26%, transparent); }
+
+/* ── Composer hint (keyboard binding) ── */
+.composer-hint {
+  max-width: 820px;
+  margin: 7px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  opacity: .75;
+  transition: opacity .15s;
+}
+.composer-hint kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--t3-line, var(--line));
+  border-radius: 5px;
+  background: rgba(255,255,255,.04);
+  color: var(--muted-foreground);
+  font-family: var(--font-code);
+  font-size: 10px;
+}
+.composer-hint:hover { opacity: 1; }
+
+/* ── Timeline/file cards: keep T3 borders, add hover affordance ── */
+.timeline-event:hover,
+.file-change-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--t3-line));
+}
+
+/* ── Jump-to-latest button polish ── */
+.jump-to-latest-button {
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--t3-line));
+  background: rgba(15, 17, 22, .92);
+  color: var(--foreground);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.jump-to-latest-button:hover { border-color: var(--primary); }
+
+/* ── Small screens: hero stacks cleanly ── */
+@media (max-width: 900px) {
+  .integration-hero { flex-direction: column; }
+}

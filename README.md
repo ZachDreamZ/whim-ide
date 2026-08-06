@@ -145,7 +145,7 @@ Tauri writes release artifacts under `src-tauri/target/release/bundle/`. See the
 - `npm run check` — passed: TypeScript, ESLint, and Vitest.
 - `npm run build` — passed.
 - `npm audit --audit-level=moderate` — passed with 0 vulnerabilities.
-- Current frontend suite: 39 test files and 141 tests passing.
+- Current frontend suite: 42 test files and 148 tests passing.
 - Native Rust checks require a local Rust/MSVC/WebView2-capable Windows environment; this sandbox does not include Cargo.
 
 Historical native verification from the Windows environment remains:

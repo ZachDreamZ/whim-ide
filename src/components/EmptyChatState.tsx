@@ -8,6 +8,7 @@ type EmptyChatStateProps = {
   branch?: string | null;
   modelLabel?: string;
   micSupported?: boolean;
+  enterToSend?: boolean;
   provider?: string;
   apiKey?: string;
   baseUrl?: string;
@@ -55,6 +56,7 @@ export function EmptyChatState({
   branch,
   modelLabel,
   micSupported = false,
+  enterToSend = true,
   provider,
   apiKey,
   baseUrl,
@@ -103,6 +105,7 @@ export function EmptyChatState({
           onStop={onStop}
           isRunning={isRunning}
           placeholder="What do you want to build?"
+          enterToSend={enterToSend}
           modelLabel={modelLabel}
           micSupported={micSupported}
           provider={provider}

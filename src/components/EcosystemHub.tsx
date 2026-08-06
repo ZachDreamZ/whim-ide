@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { bridge } from "../lib/bridge";
+import { HubHeader } from "./HubHeader";
 
 type EcosystemHubProps = { workspace: string };
 type IntegrationKind = "MCP" | "Plugin";
@@ -397,6 +398,12 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
 
   return (
     <main className="hub-page ecosystem-page">
+      <HubHeader
+        kicker="Ecosystem"
+        title="Integrations &amp; skills"
+        description="Browse and configure MCP servers, skills, and IDE integrations for this workspace. Everything is declared in .whim/config.json and stays workspace-local."
+        icon={<Plug size={13} />}
+      />
       {!native && (
         <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
           <Plug size={14} />

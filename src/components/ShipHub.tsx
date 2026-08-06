@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { deployAdapters } from "../data/product";
 import { bridge, type NativeResult } from "../lib/bridge";
+import { HubHeader } from "./HubHeader";
 
 type ShipHubProps = { workspace: string };
 type PreflightStatus = "idle" | "checking" | "ready" | "blocked";
@@ -308,6 +309,12 @@ export function ShipHub({ workspace }: ShipHubProps) {
 
   return (
     <main className="hub-page ship-page">
+      <HubHeader
+        kicker="Ship"
+        title="Release &amp; deploy"
+        description="Run native preflight checks against the supported deploy adapters, review the release diff, and promote through an explicit human-owned production guard."
+        icon={<Rocket size={13} />}
+      />
       {!native && (
         <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
           <ShieldCheck size={14} />

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Code2,
   Command,
+  Database,
   FileSearch,
   FolderOpen,
   CalendarClock,
@@ -12,14 +13,13 @@ import {
   GitPullRequest,
   Globe2,
   MessageSquareText,
-  Orbit,
   Rocket,
   Search,
   Sparkles,
   WandSparkles,
   type LucideIcon,
 } from "lucide-react";
-import type { ViewId } from "./WorkspaceRail";
+import type { ViewId } from "../types/navigation";
 
 type PaletteCommand = { id: string; label: string; hint: string; icon: LucideIcon; action: () => void; keywords: string };
 
@@ -44,7 +44,8 @@ export function CommandPalette({ open, projectName, onClose, onNavigate, onOpenW
     { id: "models", label: "Connect or switch a model", hint: "Configured routes", icon: Bot, keywords: "provider model local lm studio ollama", action: () => { onNavigate("providers"); onClose(); } },
     { id: "scheduled", label: "Manage scheduled tasks", hint: "Scheduled", icon: CalendarClock, keywords: "schedule recurring automation", action: () => { onNavigate("scheduled"); onClose(); } },
     { id: "plugins", label: "Browse installed plugins", hint: "Plugins", icon: Blocks, keywords: "plugin skill mcp installed", action: () => { onNavigate("plugins"); onClose(); } },
-    { id: "eve", label: "Inspect an Eve agent", hint: "Eve Agents", icon: Orbit, keywords: "vercel eve durable agent skills tools channels evals", action: () => { onNavigate("eve"); onClose(); } },
+    { id: "ecosystem", label: "Browse the integration ecosystem", hint: "Ecosystem", icon: Blocks, keywords: "mcp skills ide integrations catalog", action: () => { onNavigate("ecosystem"); onClose(); } },
+    { id: "services", label: "Provision local services", hint: "Services", icon: Database, keywords: "docker compose database postgres redis provisioning", action: () => { onNavigate("services"); onClose(); } },
     { id: "sites", label: "Inspect Sites connection", hint: "Sites", icon: Globe2, keywords: "sites hosting deploy", action: () => { onNavigate("sites"); onClose(); } },
     { id: "prs", label: "Review pull requests", hint: "GitHub", icon: GitPullRequest, keywords: "github pr review branch", action: () => { onNavigate("pullRequests"); onClose(); } },
     { id: "verify", label: "Run release readiness", hint: "Ship", icon: CheckCircle2, keywords: "test check browser journey", action: () => { onNavigate("ship"); onClose(); } },

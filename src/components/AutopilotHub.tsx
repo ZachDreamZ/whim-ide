@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { automationSettings } from "../data/product";
 import { bridge, type EnvironmentReport } from "../lib/bridge";
+import { HubHeader } from "./HubHeader";
 
 type AutomationFile = { version: 1; enabled: Record<string, boolean>; updatedAt: string };
 type HistoryItem = { id: string; label: string; at: Date };
@@ -113,6 +114,12 @@ export function AutopilotHub({ workspace, environment, onOpenFile }: { workspace
 
   return (
     <main className="hub-page autopilot-page">
+      <HubHeader
+        kicker="Autopilot"
+        title="Automatic everything"
+        description="Declare which automation rules Whim may run on your behalf. Locked safety rules are always enforced, and every personalization surface stays reviewable."
+        icon={<Sparkles size={13} />}
+      />
       {!native && (
         <div className="inline-notice" style={{ margin: "1.5rem 1.5rem 0 1.5rem" }}>
           <ShieldCheck size={14} />
