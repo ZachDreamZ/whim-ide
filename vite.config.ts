@@ -30,6 +30,9 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    // Arena previews arrive through a generated e2b.app host; allow dev-only
+    // preview hosts while native/Tauri builds remain unaffected.
+    allowedHosts: host ? true : undefined,
     hmr: host
       ? {
           protocol: "ws",
