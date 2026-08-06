@@ -57,13 +57,14 @@ import {
   type EnvironmentReport,
   type OrchestrationJob,
   type WorkspaceInfo,
+  type WorkspaceEntry,
 } from "./lib/bridge";
 import { isOmniRouteProvider } from "./lib/omniroute-config";
 import { updateStore, useUpdate } from "./lib/updateService";
 import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
 import { isContinuationOnly } from "./lib/history";
-import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
+import type { WorkbenchFileChange } from "./types/workbench";
 
 const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] };
 const defaultCredentials: CredentialReport = { environmentNames: [], envFiles: [] };
@@ -112,6 +113,7 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceEntry[]>([]);
 
   const [treeLoading, setTreeLoading] = useState(false);
   const [, setTreeError] = useState<string | null>(null);
@@ -307,6 +309,7 @@ function App() {
     setTreeError(null);
     try {
       const nextEntries = await bridge.listWorkspace(root) as WorkspaceEntry[];
+      setWorkspaceFiles(nextEntries);
       const packageEntry = nextEntries.find((entry) => entry.kind === "file" && entry.path.replace(/\\/g, "/").toLowerCase() === "package.json");
       const packageJson = packageEntry ? await bridge.readFile(root, packageEntry.path).catch(() => null) : null;
       const nextProfile = inspectProject(nextEntries, packageJson);
@@ -472,11 +475,41 @@ function App() {
     }
   }, [workspacePath]);
 
+  const handleFileCreate = useCallback(async (path: string, content: string) => {
+    if (!workspacePath) return;
+    try {
+      await bridge.writeFile(workspacePath, path, content, true);
+      setToast(`Created file ${path} successfully!`);
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to create file.");
+    }
+  }, [workspacePath, refreshWorkspace]);
+
   const closeReadOnlyFile = useCallback(() => {
     setReadOnlyFile(null);
     setActiveFile("");
     setFileError(null);
   }, []);
+
+  const handleFileDelete = useCallback(async (path: string) => {
+    if (!workspacePath) return;
+    try {
+      if (bridge.isNative()) {
+        await bridge.runCommand(workspacePath, `Remove-Item -Force -Path "${path}"`, {
+          operationId: crypto.randomUUID(),
+          timeoutMs: 10_000,
+        });
+      }
+      setToast(`Deleted ${path} successfully!`);
+      if (activeFile === path) {
+        closeReadOnlyFile();
+      }
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to delete file.");
+    }
+  }, [workspacePath, activeFile, closeReadOnlyFile, refreshWorkspace]);
 
   const refreshCurrentProviders = refreshProviders;
 
@@ -552,6 +585,10 @@ function App() {
               onRefresh: () => void refreshWorkspace(),
               onTaskSelect: (job) => void openSidebarTask(job),
               onChatSelect: openSidebarChat,
+              files: workspaceFiles,
+              onFileSelect: (path) => void chooseFile(path),
+              onFileCreate: handleFileCreate,
+              onFileDelete: handleFileDelete,
             }}
             branch={branch}
             changesCount={changes.length}
@@ -734,6 +771,10 @@ function App() {
               onRefresh={() => void refreshWorkspace()}
               onTaskSelect={(job) => void openSidebarTask(job)}
               onChatSelect={openSidebarChat}
+              files={workspaceFiles}
+              onFileSelect={(path) => void chooseFile(path)}
+              onFileCreate={handleFileCreate}
+              onFileDelete={handleFileDelete}
             />
             <div className="workbench">
               <div className="workbench-main agent-first">

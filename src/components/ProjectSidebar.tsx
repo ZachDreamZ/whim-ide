@@ -19,12 +19,16 @@ import {
   Settings2,
   Sparkles,
   WandSparkles,
+  FileCode,
+  Trash2,
+  FilePlus,
 } from "lucide-react";
 import type { ViewId } from "../types/navigation";
 import {
   bridge,
   type ChatThreadSummary,
   type OrchestrationJob,
+  type WorkspaceEntry,
 } from "../lib/bridge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -52,6 +56,10 @@ export type ProjectSidebarProps = {
   onRefresh?: () => void;
   onTaskSelect?: (job: OrchestrationJob) => void;
   onChatSelect?: (thread: ChatThreadSummary) => void;
+  files?: readonly WorkspaceEntry[];
+  onFileSelect?: (path: string) => void;
+  onFileCreate?: (path: string, content: string) => Promise<void>;
+  onFileDelete?: (path: string) => Promise<void>;
 };
 
 const primaryItems = [
@@ -121,6 +129,10 @@ export function ProjectSidebar({
   onRefresh,
   onTaskSelect,
   onChatSelect,
+  files,
+  onFileSelect,
+  onFileCreate,
+  onFileDelete,
 }: ProjectSidebarProps) {
   const native = bridge.isNative();
   const [jobs, setJobs] = useState<OrchestrationJob[]>([]);
@@ -283,6 +295,59 @@ export function ProjectSidebar({
       </div>
 
       <ScrollArea className="mt-2 min-h-0 flex-1">
+        {/* Workspace Files */}
+        {workspace && workspace !== "No workspace open" && files && files.length > 0 && (
+          <section className="px-2 pb-2 border-b border-border/40" aria-labelledby="files-heading">
+            <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
+              <span id="files-heading" className="flex items-center gap-1.5"><FolderOpen size={12} /> Workspace Files</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                title="Create file"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const path = prompt("Enter new file path relative to workspace root (e.g., src/utils.ts):");
+                  if (path && path.trim()) {
+                    await onFileCreate?.(path.trim(), "// Created by Whim Standalone Workspace\n");
+                  }
+                }}
+              >
+                <FilePlus size={14} />
+              </Button>
+            </div>
+            <div className="space-y-0.5 mt-1 max-h-56 overflow-y-auto pr-1">
+              {files
+                .filter((f) => f.kind === "file")
+                .map((file) => (
+                  <div
+                    key={file.path}
+                    className="group flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
+                    onClick={() => onFileSelect?.(file.path)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <FileCode size={13} className="text-zinc-500 shrink-0" />
+                      <span className="truncate font-mono text-[11px] text-zinc-300">{file.path}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="opacity-0 group-hover:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                      title="Delete file"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete ${file.path}?`)) {
+                          await onFileDelete?.(file.path);
+                        }
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
+
         {/* Pinned */}
         {pinnedItems.length > 0 && (
           <section className="px-2 pb-2" aria-labelledby="pinned-heading">
