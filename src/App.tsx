@@ -55,34 +55,22 @@ import { isOmniRouteProvider } from "./lib/omniroute-config";
 import { updateStore, useUpdate } from "./lib/updateService";
 import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
+import { isContinuationOnly } from "./lib/history";
 import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
 
 const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] };
 const defaultCredentials: CredentialReport = { environmentNames: [], envFiles: [] };
 const defaultProfile: ProjectProfile = { framework: null, packageManager: null, checkCommand: null, devCommand: null };
 
-/** Continuation-only words that should never stand alone as conversation titles. */
-const CONTINUATION_WORDS = new Set([
-  "continue", "go", "next", "ok", "yes", "no", "done",
-  "more", "again", "retry", "fix", "apply", "proceed",
-]);
-
-function isContinuationOnlyTitle(title: string): boolean {
-  const lower = title.toLowerCase().trim();
-  if (CONTINUATION_WORDS.has(lower)) return true;
-  const stripped = lower.replace(/^[a-z0-9]+[:\s-]+/i, "").trim();
-  return stripped.length > 0 && CONTINUATION_WORDS.has(stripped);
-}
-
 /** Remove stale chat threads from the old task system whose titles are
- *  purely continuation stubs and whose message count is trivial (≤1).  
+ *  purely continuation stubs and whose message count is trivial (≤1).
  *  Threads with real conversation history are preserved. */
 async function cleanupStaleContinuationThreads(): Promise<void> {
   if (!bridge.isNative()) return;
   try {
     const threads = await bridge.listChatThreads();
     for (const thread of threads) {
-      if (isContinuationOnlyTitle(thread.title) && thread.messageCount <= 1) {
+      if (isContinuationOnly(thread.title) && thread.messageCount <= 1) {
         await bridge.deleteChatThread(thread.id).catch(() => {});
       }
     }
@@ -109,6 +97,7 @@ function App() {
   const handleNewChat = useCallback(() => {
     setChatResetKey((k) => k + 1);
     setActiveThreadId(null);
+    setOpenedJobId(null);
     setChatTitle("New chat");
     setView("build");
   }, []);
@@ -123,7 +112,7 @@ function App() {
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [, setOpenedJobId] = useState<string | null>(null);
+  const [openedJobId, setOpenedJobId] = useState<string | null>(null);
 
 
   const [models] = useState<string[]>([]);
@@ -434,7 +423,9 @@ function App() {
       if (!workspacePath || workspacePath.replace(/\\/g, "/").toLowerCase() !== job.workspace.replace(/\\/g, "/").toLowerCase()) {
         await activateWorkspace(await bridge.useWorkspace(job.workspace));
       }
+      setActiveThreadId(null);
       setOpenedJobId(job.id);
+      setChatResetKey((key) => key + 1);
       setView("build");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not open this task.");
@@ -444,6 +435,7 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   const openSidebarChat = useCallback((thread: ChatThreadSummary) => {
+    setOpenedJobId(null);
     setActiveThreadId(thread.id);
     setView("build");
   }, []);
@@ -511,6 +503,7 @@ function App() {
                 workspaceInfo={workspace}
                 branch={branch}
                 initialThreadId={activeThreadId}
+                initialJobId={openedJobId}
                 provider={agentProvider}
                 apiKey={agentApiKey}
                 baseUrl={agentBaseUrl}

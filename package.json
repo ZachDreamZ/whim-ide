@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "benchmark:agents": "node scripts/benchmark-agent-harness.mjs",
+    "docs:demo": "node scripts/render-t3-demo.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",

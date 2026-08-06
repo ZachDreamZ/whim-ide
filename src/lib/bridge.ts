@@ -519,6 +519,16 @@ export type OAuthAuthUrlResponse = {
   redirectUri: string;
 };
 
+export type OAuthExchangeRequest = {
+  providerId: string;
+  code: string;
+  codeVerifier?: string | null;
+  redirectUri: string;
+  clientId?: string | null;
+  /** Echoed anti-forgery state from oauthBuildAuthUrl; required by Rust. */
+  state: string;
+};
+
 /** Full OAuth token stored in the keyring. */
 export type OAuthToken = {
   accessToken: string;
@@ -680,6 +690,19 @@ function nativeResultFromCommandResult(result: CommandResultShape): NativeResult
     durationMs: result.durationMs,
     cancelled: result.cancelled,
     timedOut: result.timedOut,
+  };
+}
+
+export function oauthExchangeCommandArgs(req: OAuthExchangeRequest): { req: Record<string, string | null> } {
+  return {
+    req: {
+      providerId: req.providerId,
+      code: req.code,
+      codeVerifier: req.codeVerifier ?? null,
+      redirectUri: req.redirectUri,
+      clientId: req.clientId ?? null,
+      state: req.state,
+    },
   };
 }
 
@@ -1420,16 +1443,8 @@ export const bridge = {
   },
 
   /** Exchange an authorization code for tokens (manual flow). */
-  async oauthExchange(
-    providerId: string,
-    code: string,
-    codeVerifier: string | null,
-    redirectUri: string,
-    clientId: string | null
-  ): Promise<OAuthToken> {
-    return call<OAuthToken>("oauth_exchange", {
-      req: { providerId, code, codeVerifier, redirectUri, clientId },
-    });
+  async oauthExchange(req: OAuthExchangeRequest): Promise<OAuthToken> {
+    return call<OAuthToken>("oauth_exchange", oauthExchangeCommandArgs(req));
   },
 
   /** Refresh a stored token. */
