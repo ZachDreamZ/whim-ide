@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentEventsToParts, agentLiveSummary, agentRunEvidence, whimError } from "./bridge";
+import { agentEventsToParts, agentLiveSummary, agentRunEvidence, oauthExchangeCommandArgs, whimError } from "./bridge";
 
 describe("bridge event boundary", () => {
   it("parses structured native errors without requiring message matching", () => {
@@ -78,5 +78,25 @@ describe("bridge event boundary", () => {
     expect(agentLiveSummary({ type: "progress", message: "Running Verify\u0000\n\n\nnow" })).toBe("Running Verify   now");
     expect(agentLiveSummary({ type: "tool_use", part: { tool: "write_file", state: { status: "completed", output: "API_KEY=secret" } } })).toBe("Completed: Write File");
     expect(agentLiveSummary({ type: "reasoning", part: { text: "hidden chain" } })).toBe("Model reasoning updated.");
+  });
+
+  it("includes the OAuth anti-forgery state in manual exchange IPC args", () => {
+    expect(oauthExchangeCommandArgs({
+      providerId: "github",
+      code: "abc",
+      codeVerifier: "verifier",
+      redirectUri: "http://127.0.0.1:8765/callback",
+      clientId: null,
+      state: "csrf-state",
+    })).toEqual({
+      req: {
+        providerId: "github",
+        code: "abc",
+        codeVerifier: "verifier",
+        redirectUri: "http://127.0.0.1:8765/callback",
+        clientId: null,
+        state: "csrf-state",
+      },
+    });
   });
 });
