@@ -28,13 +28,13 @@ export function PersonalizationSettings({ settings, onChange, saving }: Props) {
 
   return <div className="mx-auto max-w-[760px] px-10 py-12">
     <header className="mb-9">
-      <h1 className="flex items-center gap-2 text-2xl font-medium text-white"><SlidersHorizontal size={21}/> Personalization</h1>
-      <p className="mt-2 text-sm text-white/50">Persistent preferences are applied by the native agent to every provider and can be disabled at any time.</p>
+      <h1 className="flex items-center gap-2 text-2xl font-medium text-foreground"><SlidersHorizontal size={21}/> Personalization</h1>
+      <p className="mt-2 text-sm text-foreground/50">Persistent preferences are applied by the native agent to every provider and can be disabled at any time.</p>
     </header>
 
     <section className="mb-8">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><Brain size={15}/> Response preferences</div>
-      <div className="rounded-xl border border-white/5 bg-white/[0.02] px-5">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"><Brain size={15}/> Response preferences</div>
+      <div className="rounded-xl border border-border bg-white/[0.02] px-5">
         <SettingsRow
           label="Enable personalization"
           description="Apply your response style and custom instructions to future Vibe runs."
@@ -55,8 +55,8 @@ export function PersonalizationSettings({ settings, onChange, saving }: Props) {
     </section>
 
     <section className="mb-8">
-      <label htmlFor="whim-custom-instructions" className="mb-3 block text-sm font-semibold text-[#ececf1]">Custom instructions</label>
-      <p className="mb-3 text-[13px] leading-relaxed text-[#a3a3a3]">Add stable preferences, terminology, or response conventions. Current requests and native safety boundaries always take priority.</p>
+      <label htmlFor="whim-custom-instructions" className="mb-3 block text-sm font-semibold text-foreground">Custom instructions</label>
+      <p className="mb-3 text-[13px] leading-relaxed text-muted-foreground">Add stable preferences, terminology, or response conventions. Current requests and native safety boundaries always take priority.</p>
       <textarea
         id="whim-custom-instructions"
         aria-label="Custom instructions"
@@ -66,14 +66,14 @@ export function PersonalizationSettings({ settings, onChange, saving }: Props) {
         onChange={(event) => setInstructions(event.target.value)}
         onBlur={saveInstructions}
         placeholder="For example: Prefer concise explanations and show exact verification evidence."
-        className="min-h-40 w-full resize-y rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-relaxed text-[#ececf1] outline-none transition-colors placeholder:text-white/25 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-45"
+        className="min-h-40 w-full resize-y rounded-xl border border-border bg-white/[0.03] px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/25 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-45"
       />
-      <div className="mt-2 flex justify-between text-xs text-white/35"><span>Saved on blur</span><span>{instructions.length.toLocaleString()} / 8,000</span></div>
+      <div className="mt-2 flex justify-between text-xs text-foreground/35"><span>Saved on blur</span><span>{instructions.length.toLocaleString()} / 8,000</span></div>
     </section>
 
     <section>
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]"><ShieldCheck size={15}/> Memory and privacy</div>
-      <div className="rounded-xl border border-white/5 bg-white/[0.02] px-5">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"><ShieldCheck size={15}/> Memory and privacy</div>
+      <div className="rounded-xl border border-border bg-white/[0.02] px-5">
         <SettingsRow
           label="Use project memory"
           description="Allow agents to read bounded repository guidance and the local observation ledger, and append successful mission summaries. Turn this off for a memory-free run."
@@ -83,6 +83,6 @@ export function PersonalizationSettings({ settings, onChange, saving }: Props) {
       </div>
     </section>
 
-    <p className="mt-5 flex items-center gap-2 text-xs text-white/40"><ShieldCheck size={13}/>{saving ? "Saving personalization…" : "Stored only in Whim's local native configuration."}</p>
+    <p className="mt-5 flex items-center gap-2 text-xs text-foreground/40"><ShieldCheck size={13}/>{saving ? "Saving personalization…" : "Stored only in Whim's local native configuration."}</p>
   </div>;
 }

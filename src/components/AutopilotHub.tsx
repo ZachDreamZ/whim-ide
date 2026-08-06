@@ -127,7 +127,7 @@ export function AutopilotHub({ workspace, environment, onOpenFile }: { workspace
         </div>
       )}
       <section className="market-toolbar" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#8a95a5", fontSize: "13px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "var(--muted-foreground)", fontSize: "13px" }}>
           <Sparkles size={14} />
           <span><strong>{loading ? "Reading project policy" : `${enabledCount} rules enabled`}</strong> · .whim/automation.json</span>
         </div>

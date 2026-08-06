@@ -437,7 +437,7 @@ export function EcosystemHub({ workspace }: EcosystemHubProps) {
           ))}
           <div className="market-divider" />
           <span>Source</span>
-          <div style={{ padding: "5px 7px", color: "#687384", fontSize: 8, lineHeight: 1.5 }}>Workspace<br />.whim/config.json</div>
+          <div style={{ padding: "5px 7px", color: "var(--muted-foreground)", fontSize: 8, lineHeight: 1.5 }}>Workspace<br />.whim/config.json</div>
         </aside>
 
         <section className="plugin-results">

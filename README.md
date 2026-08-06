@@ -2,12 +2,12 @@
 
 **Build at the speed of intent — agent-first.**
 
-Whim is a Windows-first desktop prototype for a provider-neutral vibe-coding environment, reshaped around the agent. Describe what you want, steer it naturally, and keep the path to deployment in the same workspace. The agent chat (Mission Control) is the primary surface; the project file tree and a read-only file viewer are satellites around it — there is no editor and no simulated live preview.
+Whim is a Windows-first desktop environment for a provider-neutral vibe-coding workflow, reshaped around the agent. Describe what you want, steer it naturally, and keep the path to deployment in the same workspace. The agent chat is the primary surface; the project file tree and a read-only file viewer are satellites around it — there is no editor and no simulated live preview.
 
 
-## T3 Code-inspired experience
+## T3 Code design language
 
-Whim now uses a darker, compact, chat-first shell inspired by T3 Code: a commandable top bar, dense project rail, central conversation canvas, glowing composer, durable evidence cards, and an optional context inspector. The goal is to make the agent loop feel fast without hiding state.
+Whim's shell follows the T3 Code design language: a neutral near-black chrome (`#0a0a0a`), 6% hairline borders, `white/4%` hover surfaces, a 10px control radius, a floating glass composer, and a compact 256px sidebar. Every accent-aware surface (focus rings, active states, progress, buttons, command palette) resolves through the user's **Appearance → Accent** picker, which defaults to the T3 primary blue. No decorative gradients or glows — flat surfaces that keep the agent loop feeling fast without hiding state.
 
 <p align="center">
   <img src="./docs/assets/demo/whim-t3-shell.svg" alt="Whim T3 Code-inspired chat shell" width="920" />
@@ -63,11 +63,9 @@ flowchart TD
   Commit --> Design
 ```
 
-## Prototype status
+## Status
 
-This repository is a working **product prototype**, not yet a production-ready IDE.
-
-The application is a Tauri 2 Windows desktop app with a Rust backend and a React 19, TypeScript, Vite, Tailwind, and WebView2 interface. The agent chat drives the experience; the editor and simulated live preview were removed during the agent-first redesign so the layout reads like Codex Desktop / Claude Code Desktop. The main product surfaces are implemented and navigable:
+The application is a Tauri 2 Windows desktop app with a Rust backend and a React 19, TypeScript, Vite, Tailwind, and WebView2 interface. The agent chat drives the experience; the editor and simulated live preview were removed during the agent-first redesign so the layout reads like T3 Code / Claude Code Desktop. The main product surfaces are implemented, wired to the native bridge, and navigable:
 
 | Surface | Implemented state |
 | --- | --- |
@@ -84,13 +82,13 @@ The Rust bridge also implements guarded workspace file access, PowerShell comman
 ## Current limitations
 
 - No AI provider credentials or local model were configured during verification. Real agent runs require connecting a supported provider or a local model such as Ollama or LM Studio.
-- The agent chat uses a deterministic demo response in browser preview mode and deliberately simulates native-only operations; it is useful for interface evaluation, not proof of a real AI or deployment run. The native app can invoke the real Whim native agent.
+- Browser (Vite) preview is an interface shell: sending a message returns an explicit **Preview mode** notice instead of fabricating agent output. The installed Windows app runs the real native agent.
 - The editor and simulated live preview were removed during the agent-first redesign. File browsing is read-only; there is no in-app code editing.
-- The Ecosystem catalog and several automation behaviors are product-complete interface/spec surfaces, but a general plugin sandbox and background automation engine are not implemented end to end.
+- A general plugin sandbox and a background automation engine are not implemented end to end; the Ecosystem catalog and several automation behaviors are interface surfaces backed by native configuration reads.
 - Native deploy preflight and command adapters exist for Vercel, Netlify, Cloudflare, Render, Railway, Fly.io, and Docker. Azure, Windows packaging, and several broader deployment targets remain UI/spec-only.
 - No production deployment was executed. Production promotion, billing, secrets, and destructive operations remain intentionally human-owned.
 - A Windows x64 setup executable and standalone application were built and smoke-tested. The optional MSI bundler did not finish in this run, so MSI is not included.
-- The `tauri::test` harness (`mock_builder`/`get_ipc_response`) cannot load in this sandbox because `WebView2Loader.dll` is absent (the `winget install Microsoft.EdgeWebView2Runtime` step reports success but deploys no loader here). The agent-dispatch-vs-real-provider E2E therefore runs on a WebView2-capable machine; in this environment the orchestration lifecycle is covered by a runtime-free integration test over the real `DurableJobStore` + `BackendState`.
+- The `tauri::test` harness (`mock_builder`/`get_ipc_response`) cannot load in this sandbox because `WebView2Loader.dll` is absent. The agent-dispatch-vs-real-provider E2E therefore runs on a WebView2-capable machine; in this environment the orchestration lifecycle is covered by a runtime-free integration test over the real `DurableJobStore` + `BackendState`.
 
 ## Run the prototype
 
@@ -145,7 +143,7 @@ Tauri writes release artifacts under `src-tauri/target/release/bundle/`. See the
 - `npm run check` — passed: TypeScript, ESLint, and Vitest.
 - `npm run build` — passed.
 - `npm audit --audit-level=moderate` — passed with 0 vulnerabilities.
-- Current frontend suite: 42 test files and 148 tests passing.
+- Current frontend suite: 34 test files and 122 tests passing.
 - Native Rust checks require a local Rust/MSVC/WebView2-capable Windows environment; this sandbox does not include Cargo.
 
 Historical native verification from the Windows environment remains:

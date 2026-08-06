@@ -54,7 +54,7 @@ export const MentionMenu = memo(function MentionMenu({
             e.preventDefault();
             onSelect(item);
           }}
-          className={`flex items-center gap-3 px-3 py-2 text-sm transition-colors w-full text-left ${index === selectedIndex ? "bg-white/10 text-white" : "text-[#ececf1] hover:bg-white/5"}`}
+          className={`flex items-center gap-3 px-3 py-2 text-sm transition-colors w-full text-left ${index === selectedIndex ? "bg-white/10 text-white" : "text-foreground hover:bg-white/5"}`}
         >
           {item.type === "workspace" ? (
             <IconFolder size={16} className="text-white/50 shrink-0" />

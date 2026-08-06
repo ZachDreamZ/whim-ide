@@ -61,7 +61,7 @@ export const AttachmentButton = memo(function AttachmentButton({
 
       {isOpen && (
         <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg bg-[#2d2d2d] border border-white/10 shadow-2xl py-1 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <button type="button" onClick={handleSelect} className="flex items-center gap-3 px-3 py-2 text-sm text-[#ececf1] hover:bg-white/10 transition-colors w-full text-left">
+          <button type="button" onClick={handleSelect} className="flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors w-full text-left">
             <IconFile size={16} className="text-white/50" /> Attach workspace text file
           </button>
         </div>

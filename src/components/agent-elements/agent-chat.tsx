@@ -145,7 +145,7 @@ export function AgentChat({
             {emptySuggestionsPosition === "top" ? emptySuggestionsNode : null}
             <div className="w-full">
               {inputBarNode}
-              <div className="text-center text-xs text-[#a3a3a3] mt-2 pb-4">
+              <div className="text-center text-xs text-muted-foreground mt-2 pb-4">
                 Whim can make mistakes. Check important info.
               </div>
             </div>

@@ -149,11 +149,19 @@ function collectText(parts: UIMessage["parts"][0][]): string {
     .join("\n");
 }
 
-/** A clearly-labelled, deterministic response for Vite/browser evaluation.
- * Native runs always use the installed agent and never reach this path. */
+/** Browser/preview-mode response. The native Windows app runs the real agent;
+ *  when the Tauri bridge is absent (Vite preview, QA, screenshots) sending a
+ *  message surfaces this honest preview notice instead of fabricating agent
+ *  output. */
 function browserDemoReply(prompt: string, workspaceName?: string): string {
   const outcome = prompt.trim().replace(/\s+/g, " ");
-  return `**Browser preview response**\n\nI captured your request${workspaceName ? ` for **${workspaceName}**` : ""}: “${outcome}”\n\nIn the installed Whim app, I would inspect the workspace, propose a focused plan, make only approved changes, and report the verification evidence. Connect a provider and open the Windows desktop app to run this for real.`;
+  return [
+    "> **Preview mode** — the agent runtime is not available in this browser window.",
+    "",
+    `Your request${workspaceName ? ` for **${workspaceName}**` : ""} was captured: “${outcome}”`,
+    "",
+    "Open the installed **Whim Windows app** to run the real agent: it will inspect the workspace, propose a focused plan, make only approved changes, and report verification evidence.",
+  ].join("\n");
 }
 
 function workspaceRelativePath(workspace: string, selectedPath: string): string | null {

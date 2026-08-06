@@ -62,22 +62,22 @@ export function UpdatesSettings() {
   return (
     <div className="mx-auto max-w-[760px] px-10 py-12">
       <header className="mb-9">
-        <h1 className="text-2xl font-medium text-white">Updates</h1>
-        <p className="mt-2 text-sm text-white/50">
+        <h1 className="text-2xl font-medium text-foreground">Updates</h1>
+        <p className="mt-2 text-sm text-foreground/50">
           Keep Whim current with signed, verified releases for your platform.
         </p>
       </header>
 
       {/* About */}
       <section className="mb-8">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
           <RefreshCw size={15} /> About
         </div>
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-5">
+        <div className="rounded-xl border border-border bg-white/[0.02] px-5">
           <SettingsRow
             label="Current version"
             description={update.native ? `Whim ${update.currentVersion}` : "Native app required for updates"}
-            control={{ type: "custom", node: <span className="text-xs text-white/40">{update.native ? update.currentVersion : "—"}</span> }}
+            control={{ type: "custom", node: <span className="text-xs text-foreground/40">{update.native ? update.currentVersion : "—"}</span> }}
           />
           <SettingsRow
             label="Update channel"
@@ -101,7 +101,7 @@ export function UpdatesSettings() {
           <SettingsRow
             label="Last checked"
             description={lastCheckedLabel ? `Next automatic check respects the cooldown.` : "Not checked yet"}
-            control={{ type: "custom", node: <span className="text-xs text-white/40">{lastCheckedLabel ?? "—"}</span> }}
+            control={{ type: "custom", node: <span className="text-xs text-foreground/40">{lastCheckedLabel ?? "—"}</span> }}
             borderBottom={false}
           />
         </div>
@@ -109,10 +109,10 @@ export function UpdatesSettings() {
 
       {/* Status */}
       <section>
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#ececf1]">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
           <Download size={15} /> Status
         </div>
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-5">
+        <div className="rounded-xl border border-border bg-white/[0.02] px-5">
           <StatusContent
             update={update}
             percent={percent}
@@ -186,7 +186,7 @@ function StatusContent({
         <SettingsRow
           label="Checking for updates…"
           description="Contacting update server"
-          control={{ type: "custom", node: <span className="text-xs text-white/40">Checking…</span> }}
+          control={{ type: "custom", node: <span className="text-xs text-foreground/40">Checking…</span> }}
           borderBottom={false}
         />
       );
@@ -225,7 +225,7 @@ function StatusContent({
               type: "custom",
               node: (
                 <button
-                  className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50"
+                  className="text-xs bg-blue-600 hover:bg-blue-500 text-foreground px-3 py-1 rounded disabled:opacity-50"
                   onClick={onPrimaryAction}
                   disabled={isBusy}
                 >
@@ -262,7 +262,7 @@ function StatusContent({
           control={{
             type: "custom",
             node: (
-              <span className="text-xs text-white/40">
+              <span className="text-xs text-foreground/40">
                 <Check size={13} className="inline mr-1" />
                 {percent}%
               </span>
@@ -289,7 +289,7 @@ function StatusContent({
             type: "custom",
             node: (
               <button
-                className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50"
+                className="text-xs bg-blue-600 hover:bg-blue-500 text-foreground px-3 py-1 rounded disabled:opacity-50"
                 onClick={onPrimaryAction}
                 disabled={update.workActive || isBusy}
               >
@@ -307,7 +307,7 @@ function StatusContent({
         <SettingsRow
           label="Installing update"
           description="Whim will restart when finished."
-          control={{ type: "custom", node: <span className="text-xs text-white/40">Installing…</span> }}
+          control={{ type: "custom", node: <span className="text-xs text-foreground/40">Installing…</span> }}
           borderBottom={false}
         />
       );

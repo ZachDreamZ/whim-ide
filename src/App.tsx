@@ -115,7 +115,10 @@ function App() {
   const [openedJobId, setOpenedJobId] = useState<string | null>(null);
 
 
-  const [models] = useState<string[]>([]);
+  // Discovered model list is populated by the native provider runtime and
+  // reported through ProviderHub; the chat surfaces render "Provider default"
+  // plus the saved model until discovery is wired through.
+  const models: string[] = [];
   const [agentProvider, setAgentProvider] = useState(() => localStorage.getItem("whim:agent:provider") ?? "auto");
   const [agentApiKey, setAgentApiKey] = useState("");
   const [agentBaseUrl, setAgentBaseUrl] = useState(() => localStorage.getItem("whim:agent:baseUrl") ?? "");
