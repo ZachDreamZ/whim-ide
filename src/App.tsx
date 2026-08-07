@@ -16,7 +16,6 @@ import {
   Trash2,
   Globe,
   X,
-  MessageSquareText,
 } from "lucide-react";
 import "./App.css";
 import { Titlebar } from "./components/Titlebar";
@@ -125,7 +124,8 @@ function App() {
 
   const [editedContent, setEditedContent] = useState("");
   const [isDirty, setIsDirty] = useState(false);
-  const [editorTab, setEditorTab] = useState<"editor" | "preview" | "inbox" | "atlas">("editor");
+  const [editorTab, setEditorTab] = useState<"editor" | "preview">("editor");
+  const [consoleMode, setConsoleMode] = useState<"terminal" | "inbox">("terminal");
   const [atlasUrl, setAtlasUrl] = useState("https://www.google.com");
   const [atlasPrompt, setAtlasPrompt] = useState("");
   const [isAutomatingAtlas, setIsAutomatingAtlas] = useState(false);
@@ -143,12 +143,12 @@ function App() {
   }, [workspacePath]);
 
   useEffect(() => {
-    if (editorTab === "inbox") {
+    if (consoleMode === "inbox") {
       void refreshInbox();
       const timer = setInterval(() => void refreshInbox(), 3000);
       return () => clearInterval(timer);
     }
-  }, [editorTab, refreshInbox]);
+  }, [consoleMode, refreshInbox]);
 
   const handleSendInboxMessage = useCallback(async () => {
     if (!workspacePath || !newMsgContent.trim()) return;
@@ -209,7 +209,6 @@ function App() {
 
   const [runOutput, setRunOutput] = useState("");
   const [isRunningCommand, setIsRunningCommand] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("http://127.0.0.1:1420");
 
   useEffect(() => {
     if (readOnlyFile) {
@@ -760,18 +759,6 @@ function App() {
                         <Eye size={12} />
                         Live Preview
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditorTab("inbox")}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
-                          editorTab === "inbox"
-                            ? "bg-zinc-800 text-white shadow-sm"
-                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
-                        }`}
-                      >
-                        <MessageSquareText size={12} />
-                        Agent Inbox
-                      </button>
                     </div>
                   </div>
 
@@ -840,119 +827,112 @@ function App() {
                       spellCheck={false}
                     />
 
-                    {runOutput && (
-                      <div className="h-44 border-t border-zinc-800 bg-[#090d12] flex flex-col min-h-0 shadow-inner">
-                        <header className="h-8 px-4 flex items-center justify-between bg-[#11161d] text-[10px] text-zinc-400 font-sans border-b border-zinc-800/60 uppercase tracking-wider select-none font-bold">
-                          <span>Terminal Console</span>
+                    <div className="h-48 border-t border-zinc-800 bg-[#090d12] flex flex-col min-h-0 shadow-inner">
+                      <header className="h-8 px-4 flex items-center justify-between bg-[#11161d] text-[10px] text-zinc-400 font-sans border-b border-zinc-800/60 uppercase tracking-wider select-none font-bold">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => setRunOutput("")}
+                            onClick={() => setConsoleMode("terminal")}
+                            className={`px-2 py-0.5 rounded transition ${
+                              consoleMode === "terminal" ? "bg-zinc-800 text-white" : "hover:text-zinc-200"
+                            }`}
+                          >
+                            Terminal Log
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConsoleMode("inbox")}
+                            className={`px-2 py-0.5 rounded flex items-center gap-1 transition ${
+                              consoleMode === "inbox" ? "bg-zinc-800 text-white" : "hover:text-zinc-200"
+                            }`}
+                          >
+                            Agent Inbox {inboxMessages.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />}
+                          </button>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {consoleMode === "inbox" && inboxMessages.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleClearInbox}
+                              className="text-red-400 hover:text-red-300 transition-all font-semibold"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (consoleMode === "terminal") setRunOutput("");
+                              else void handleClearInbox();
+                            }}
                             className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition"
                             title="Clear console"
                           >
                             <Trash2 size={11} />
                           </button>
-                        </header>
-                        <pre className="flex-1 p-3 overflow-y-auto font-mono text-[11px] text-zinc-300 leading-normal whitespace-pre-wrap select-text bg-[#090d12]">
-                          {runOutput}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                ) : editorTab === "preview" ? (
-                  <div className="flex-1 min-h-0 flex flex-col bg-[#0b0e14]">
-                    <div className="h-10 px-3 flex items-center gap-2 border-b border-zinc-800 bg-[#10141b]">
-                      <Globe size={12} className="text-zinc-500" />
-                      <input
-                        type="text"
-                        value={previewUrl}
-                        onChange={(e) => setPreviewUrl(e.target.value)}
-                        className="flex-1 h-7 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-700"
-                        placeholder="http://127.0.0.1:1420"
-                      />
-                    </div>
-                    <iframe
-                      src={previewUrl}
-                      title="Live App Preview"
-                      className="flex-1 w-full border-none bg-white"
-                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                    />
-                  </div>
-                ) : editorTab === "inbox" ? (
-                  <div className="flex-1 min-h-0 flex flex-col bg-[#0b0e14]">
-                    <header className="h-10 px-4 flex items-center justify-between bg-[#11161d] border-b border-zinc-800/80 select-none">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-sans">
-                        Shared Mailbox (Agent Teams)
-                      </span>
-                      {inboxMessages.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleClearInbox}
-                          className="px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 hover:bg-zinc-800 rounded transition"
-                        >
-                          Clear Mailbox
-                        </button>
-                      )}
-                    </header>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0d1117]">
-                      {inboxMessages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 gap-2 select-none">
-                          <MessageSquareText size={24} className="text-zinc-700" />
-                          <p className="text-sm font-semibold text-zinc-300">Inbox is empty</p>
-                          <p className="text-xs max-w-[250px] leading-relaxed text-zinc-500">
-                            No coordination messages have been posted by sub-agents yet. Type a message below to steer your team.
-                          </p>
                         </div>
-                      ) : (
-                        inboxMessages.map((msg) => (
-                          <div
-                            key={msg.id}
-                            className={`p-3 rounded-xl border max-w-[85%] ${
-                              msg.sender === "User"
-                                ? "bg-indigo-600/10 border-indigo-500/15 ml-auto text-right"
-                                : "bg-zinc-900/40 border-zinc-800/80 mr-auto text-left"
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 select-none">
-                              <span className={msg.sender === "User" ? "text-indigo-400" : "text-emerald-400"}>
-                                {msg.sender}
-                              </span>
-                              <span>➔</span>
-                              <span className="capitalize">{msg.recipient}</span>
-                              <span className="text-zinc-600 ml-auto">
-                                {new Date(msg.timestampMs).toLocaleTimeString()}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-200 mt-1.5 leading-relaxed break-words whitespace-pre-wrap">
-                              {msg.content}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                      </header>
 
-                    <div className="h-14 px-3 flex items-center gap-2 border-t border-zinc-800 bg-[#10141b]">
-                      <input
-                        type="text"
-                        value={newMsgContent}
-                        onChange={(e) => setNewContent(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            void handleSendInboxMessage();
-                          }
-                        }}
-                        placeholder="Write a message to steer sub-agents..."
-                        className="flex-1 h-8 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-zinc-700 font-sans"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSendInboxMessage}
-                        disabled={!newMsgContent.trim()}
-                        className="h-8 px-4 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50"
-                      >
-                        Send
-                      </button>
+                      {consoleMode === "terminal" ? (
+                        <pre className="flex-1 p-3 overflow-y-auto font-mono text-[11px] text-zinc-300 leading-normal whitespace-pre-wrap select-text bg-[#090d12]">
+                          {runOutput || "Terminal console idle. Click [Run Check] to trigger a verification script."}
+                        </pre>
+                      ) : (
+                        <div className="flex-1 flex flex-col min-h-0 bg-[#090d12]">
+                          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                            {inboxMessages.length === 0 ? (
+                              <p className="text-zinc-600 text-center py-4 select-none italic text-[11px]">
+                                No sub-agent messages. Send a message below to steer your team.
+                              </p>
+                            ) : (
+                              inboxMessages.map((msg) => (
+                                <div
+                                  key={msg.id}
+                                  className={`p-2.5 rounded-lg border max-w-[85%] text-[11px] ${
+                                    msg.sender === "User"
+                                      ? "bg-indigo-600/10 border-indigo-500/15 ml-auto text-right"
+                                      : "bg-zinc-900/40 border-zinc-800/80 mr-auto text-left"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1 text-[9px] font-bold text-zinc-500 select-none">
+                                    <span className={msg.sender === "User" ? "text-indigo-400" : "text-emerald-400"}>
+                                      {msg.sender}
+                                    </span>
+                                    <span>➔</span>
+                                    <span className="capitalize">{msg.recipient}</span>
+                                  </div>
+                                  <p className="text-zinc-200 mt-1 leading-normal break-words whitespace-pre-wrap">
+                                    {msg.content}
+                                  </p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          <div className="h-10 px-2 flex items-center gap-1.5 border-t border-zinc-800/60 bg-[#11161d]">
+                            <input
+                              type="text"
+                              value={newMsgContent}
+                              onChange={(e) => setNewContent(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  void handleSendInboxMessage();
+                                }
+                              }}
+                              placeholder="Message to sub-agents..."
+                              className="flex-1 h-6 px-2 bg-[#0d1117] border border-zinc-800/80 rounded-md text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-700 font-sans"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleSendInboxMessage}
+                              disabled={!newMsgContent.trim()}
+                              className="h-6 px-3 text-[10px] font-bold rounded-md bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -962,7 +942,9 @@ function App() {
                       <input
                         type="text"
                         value={atlasUrl}
-                        onChange={(e) => setAtlasUrl(e.target.value)}
+                        onChange={(e) => {
+                          setAtlasUrl(e.target.value);
+                        }}
                         className="flex-1 h-7 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-700"
                         placeholder="https://www.google.com"
                       />
