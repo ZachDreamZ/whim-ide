@@ -35,7 +35,17 @@ function compactText(value: string, limit: number): string {
 function sanitizeXmlContent(content: string): string {
   return content
     .replace(/<\/workspace_attachment>/gi, "&lt;/workspace_attachment&gt;")
-    .replace(/<workspace_attachment/gi, "&lt;workspace_attachment");
+    .replace(/<workspace_attachment/gi, "&lt;workspace_attachment")
+    .replace(/<\/whim_mission>/gi, "&lt;/whim_mission&gt;")
+    .replace(/<whim_mission/gi, "&lt;whim_mission")
+    .replace(/<\/custom_instructions>/gi, "&lt;/custom_instructions&gt;")
+    .replace(/<custom_instructions/gi, "&lt;custom_instructions")
+    .replace(/<\/project_memory>/gi, "&lt;/project_memory&gt;")
+    .replace(/<project_memory/gi, "&lt;project_memory")
+    .replace(/<\/harness_profile>/gi, "&lt;/harness_profile&gt;")
+    .replace(/<harness_profile/gi, "&lt;harness_profile")
+    .replace(/<\/agent_capabilities>/gi, "&lt;/agent_capabilities&gt;")
+    .replace(/<agent_capabilities/gi, "&lt;agent_capabilities");
 }
 
 /**
