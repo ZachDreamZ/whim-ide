@@ -19,12 +19,17 @@ import {
   Settings2,
   Sparkles,
   WandSparkles,
+  FileCode,
+  Trash2,
+  FilePlus,
+  FolderPlus,
 } from "lucide-react";
 import type { ViewId } from "../types/navigation";
 import {
   bridge,
   type ChatThreadSummary,
   type OrchestrationJob,
+  type WorkspaceEntry,
 } from "../lib/bridge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -52,6 +57,12 @@ export type ProjectSidebarProps = {
   onRefresh?: () => void;
   onTaskSelect?: (job: OrchestrationJob) => void;
   onChatSelect?: (thread: ChatThreadSummary) => void;
+  files?: readonly WorkspaceEntry[];
+  onFileSelect?: (path: string) => void;
+  onFileCreate?: (path: string, content: string) => Promise<void>;
+  onFileDelete?: (path: string) => Promise<void>;
+  onFolderCreate?: (path: string) => Promise<void>;
+  onChatDelete?: (id: string) => Promise<void>;
 };
 
 const primaryItems = [
@@ -121,6 +132,12 @@ export function ProjectSidebar({
   onRefresh,
   onTaskSelect,
   onChatSelect,
+  files,
+  onFileSelect,
+  onFileCreate,
+  onFileDelete,
+  onFolderCreate,
+  onChatDelete,
 }: ProjectSidebarProps) {
   const native = bridge.isNative();
   const [jobs, setJobs] = useState<OrchestrationJob[]>([]);
@@ -283,6 +300,88 @@ export function ProjectSidebar({
       </div>
 
       <ScrollArea className="mt-2 min-h-0 flex-1">
+        {/* Workspace Files */}
+        {workspace && workspace !== "No workspace open" && files && files.length > 0 && (
+          <section className="px-2 pb-2 border-b border-border/40" aria-labelledby="files-heading">
+            <div className="flex h-6 items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
+              <span id="files-heading" className="flex items-center gap-1.5"><FolderOpen size={12} /> Workspace Files</span>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Create folder"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const path = prompt("Enter new folder path relative to workspace root (e.g., src/components):");
+                    if (path && path.trim()) {
+                      await onFolderCreate?.(path.trim());
+                    }
+                  }}
+                >
+                  <FolderPlus size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Create file"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const path = prompt("Enter new file path relative to workspace root (e.g., src/utils.ts):");
+                    if (path && path.trim()) {
+                      await onFileCreate?.(path.trim(), "// Created by Whim Standalone Workspace\n");
+                    }
+                  }}
+                >
+                  <FilePlus size={14} />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-0.5 mt-1 max-h-56 overflow-y-auto pr-1">
+              {files
+                .filter((f) => f.kind === "directory")
+                .map((dir) => (
+                  <div
+                    key={dir.path}
+                    className="group flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-default select-none"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Folder size={13} className="text-zinc-500 shrink-0" />
+                      <span className="truncate font-mono text-[11px] text-zinc-400">{dir.path}</span>
+                    </div>
+                  </div>
+                ))}
+              {files
+                .filter((f) => f.kind === "file")
+                .map((file) => (
+                  <div
+                    key={file.path}
+                    className="group flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
+                    onClick={() => onFileSelect?.(file.path)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <FileCode size={13} className="text-zinc-500 shrink-0" />
+                      <span className="truncate font-mono text-[11px] text-zinc-300">{file.path}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="opacity-0 group-hover:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                      title="Delete file"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete ${file.path}?`)) {
+                          await onFileDelete?.(file.path);
+                        }
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
+
         {/* Pinned */}
         {pinnedItems.length > 0 && (
           <section className="px-2 pb-2" aria-labelledby="pinned-heading">
@@ -351,17 +450,31 @@ export function ProjectSidebar({
                           </Button>
                         ))}
                         {projectChats.map((chat) => (
-                          <Button
+                          <div
                             key={chat.id}
-                            variant="ghost"
-                            className="h-7 w-full justify-start gap-2 px-2 py-1 text-left text-xs font-normal"
-                            title={chat.title}
+                            className="group/chat flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
                             onClick={() => onChatSelect?.(chat)}
                             onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
                           >
-                            <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 flex-1 truncate">{chat.title}</span>
-                          </Button>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                              <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="opacity-0 group-hover/chat:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                              title="Delete conversation"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                                  await onChatDelete?.(chat.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={11} />
+                            </Button>
+                          </div>
                         ))}
                       </>
                     )}
@@ -377,17 +490,31 @@ export function ProjectSidebar({
           <section className="px-2 pb-3" aria-labelledby="chats-heading">
             <div className="flex h-6 items-center px-2 text-[11px] font-medium text-muted-foreground" id="chats-heading">Chats</div>
             {unattachedChats.slice(0, 8).map((chat) => (
-              <Button
+              <div
                 key={chat.id}
-                variant="ghost"
-                className="h-7 w-full justify-start gap-2 px-2 text-xs font-normal"
-                title={chat.title}
+                className="group/chat flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-xs text-foreground/80 hover:bg-accent cursor-pointer"
                 onClick={() => onChatSelect?.(chat)}
                 onContextMenu={(e) => { e.preventDefault(); togglePin(chat.id); }}
               >
-                <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{chat.title}</span>
-              </Button>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <MessageSquareText size={12} className="shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="opacity-0 group-hover/chat:opacity-100 h-5 w-5 text-red-500 hover:text-red-400 p-0 hover:bg-zinc-800 transition rounded"
+                  title="Delete conversation"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                      await onChatDelete?.(chat.id);
+                    }
+                  }}
+                >
+                  <Trash2 size={11} />
+                </Button>
+              </div>
             ))}
           </section>
         )}

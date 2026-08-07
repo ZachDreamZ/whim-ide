@@ -52,6 +52,16 @@ pub static BUILTIN_PROVIDERS: LazyLock<Vec<OAuthProviderConfig>> = LazyLock::new
             default_redirect_port: 48914,
             use_pkce: true,
         },
+        OAuthProviderConfig {
+            id: "prime".into(),
+            name: "Prime Intellect".into(),
+            auth_url: "https://app.primeintellect.ai/oauth/authorize".into(),
+            token_url: "https://app.primeintellect.ai/oauth/token".into(),
+            client_id: None,
+            scopes: vec!["api".into(), "user".into()],
+            default_redirect_port: 48915,
+            use_pkce: true,
+        },
     ]
 });
 

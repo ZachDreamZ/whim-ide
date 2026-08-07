@@ -6,6 +6,12 @@ export const PROVIDER_ENVIRONMENT_VARIABLES: Readonly<Record<string, readonly st
   qwen: ["DASHSCOPE_API_KEY"],
   xiaomi: ["XIAOMI_API_KEY"],
   omniroute: ["OMNIROUTE_API_KEY"],
+  groq: ["GROQ_API_KEY"],
+  fireworks: ["FIREWORKS_API_KEY"],
+  together: ["TOGETHER_API_KEY"],
+  mistral: ["MISTRAL_API_KEY"],
+  cohere: ["COHERE_API_KEY"],
+  prime: ["PRIME_API_KEY", "PRIME_INTELLECT_API_KEY"],
 };
 
 export function providerHasEnvironmentCredential(provider: string, names: readonly string[]) {

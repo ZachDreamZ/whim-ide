@@ -743,3 +743,77 @@ pub(crate) fn write_workspace_file_at(
         modified_ms,
     })
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxMessage {
+    pub id: String,
+    pub sender: String,
+    pub recipient: String,
+    pub content: String,
+    pub timestamp_ms: u64,
+    pub status: String,
+}
+
+#[tauri::command]
+pub async fn get_inbox_messages(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+) -> Result<Vec<InboxMessage>, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    let path = root.join(".whim").join("inbox.json");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("Cannot read inbox file: {error}"))?;
+    if content.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let messages: Vec<InboxMessage> = serde_json::from_str(&content)
+        .unwrap_or_else(|_| Vec::new());
+    Ok(messages)
+}
+
+#[tauri::command]
+pub async fn send_inbox_message(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+    message: InboxMessage,
+) -> Result<Vec<InboxMessage>, String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    let path = root.join(".whim").join("inbox.json");
+    
+    let mut messages = if path.exists() {
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        serde_json::from_str::<Vec<InboxMessage>>(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    
+    // Add new message to the end
+    messages.push(message);
+    
+    // Write back to disk atomically
+    let parent = path.parent().ok_or("Invalid path parent")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let serialized = serde_json::to_string_pretty(&messages)
+        .map_err(|e| format!("Serialization failed: {e}"))?;
+    fs::write(&path, serialized)
+        .map_err(|e| format!("Cannot write inbox file: {e}"))?;
+        
+    Ok(messages)
+}
+
+#[tauri::command]
+pub async fn clear_inbox_messages(
+    state: State<'_, BackendState>,
+    workspace: Option<String>,
+) -> Result<(), String> {
+    let root = resolve_agent_workspace(state.inner(), workspace.as_deref()).await?;
+    let path = root.join(".whim").join("inbox.json");
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| format!("Cannot clear inbox: {e}"))?;
+    }
+    Ok(())
+}

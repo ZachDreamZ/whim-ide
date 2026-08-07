@@ -32,6 +32,12 @@ function compactText(value: string, limit: number): string {
   return `${value.slice(0, limit)}\n[Context truncated to preserve room for execution and verification.]`;
 }
 
+function sanitizeXmlContent(content: string): string {
+  return content
+    .replace(/<\/workspace_attachment>/gi, "&lt;/workspace_attachment&gt;")
+    .replace(/<workspace_attachment/gi, "&lt;workspace_attachment");
+}
+
 /**
  * Creates an explicit closed-loop contract: inspect → choose a bounded action
  * → verify with real evidence → react to changed evidence. It deliberately
@@ -50,7 +56,7 @@ export function buildAgentHarnessPrompt(input: HarnessInput): HarnessPrompt {
       omittedAttachments.push(attachment.path);
       continue;
     }
-    const content = compactText(attachment.content, Math.min(MAX_ATTACHMENT_CHARS, remaining));
+    const content = sanitizeXmlContent(compactText(attachment.content, Math.min(MAX_ATTACHMENT_CHARS, remaining)));
     remaining -= content.length;
     includedAttachments.push(attachment.path);
     attachmentSections.push(`<workspace_attachment path="${attachment.path.replace(/"/g, "&quot;")}">\n${content}\n</workspace_attachment>`);

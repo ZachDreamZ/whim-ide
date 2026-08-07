@@ -48,7 +48,13 @@ pub(crate) async fn chat(
         | Provider::Compatible
         | Provider::ZenMux
         | Provider::XAi
-        | Provider::OrcaRouter => {
+        | Provider::OrcaRouter
+        | Provider::Groq
+        | Provider::Fireworks
+        | Provider::Together
+        | Provider::Mistral
+        | Provider::Cohere
+        | Provider::Prime => {
             chat_openai_style(base, &resolved_key, model, system, messages, tools).await
         }
         Provider::Anthropic => {

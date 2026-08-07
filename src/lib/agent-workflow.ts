@@ -19,7 +19,8 @@ export type MissionAgentMode =
   | "refactorer"
   | "dataScientist"
   | "accessibilityExpert"
-  | "localizer";
+  | "localizer"
+  | "primeAgent";
 
 export type MissionWorkflow = {
   agent: MissionAgentMode;
@@ -125,10 +126,17 @@ const WORKFLOWS: Record<MissionAgentMode, MissionWorkflow> = {
     jobMode: "build",
     instruction: "Detect hardcoded strings, extract them into internationalization files, and apply standard translations.",
   },
+  primeAgent: {
+    agent: "primeAgent",
+    jobMode: "auto",
+    instruction: "Act as Prime Agent, a self-improving Recursive Language Model (RLM) harness inside a persistent IPython kernel control environment. Treat context as a variable (prompt-as-a-variable) and use programmatic tool/sub-agent calling. For long-running tasks, establish a persistent goal, execute/verify programmatically, and trigger harness refinement using `/refine` to update your prompt, memories, and skills based on evidence.",
+  },
 };
 
 const SLASH_ROUTES: Record<string, MissionAgentMode> = {
-  goal: "auto",
+  goal: "primeAgent",
+  refine: "primeAgent",
+  prime: "primeAgent",
   vibe: "auto",
   plan: "planner",
   research: "researcher",

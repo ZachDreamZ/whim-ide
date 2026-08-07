@@ -9,6 +9,14 @@ import {
   Radio,
   ShieldCheck,
   Sparkles,
+  Code2,
+  Eye,
+  Play,
+  Save,
+  Trash2,
+  Globe,
+  X,
+  MessageSquareText,
 } from "lucide-react";
 import "./App.css";
 import { Titlebar } from "./components/Titlebar";
@@ -50,13 +58,15 @@ import {
   type EnvironmentReport,
   type OrchestrationJob,
   type WorkspaceInfo,
+  type WorkspaceEntry,
+  type InboxMessage,
 } from "./lib/bridge";
 import { isOmniRouteProvider } from "./lib/omniroute-config";
 import { updateStore, useUpdate } from "./lib/updateService";
 import { inspectProject, parseGitState, type ProjectProfile } from "./lib/project";
 import { providerHasEnvironmentCredential } from "./lib/provider-credentials";
 import { isContinuationOnly } from "./lib/history";
-import type { WorkspaceEntry, WorkbenchFileChange } from "./types/workbench";
+import type { WorkbenchFileChange } from "./types/workbench";
 
 const defaultEnvironment: EnvironmentReport = { platform: "Windows", tools: [] };
 const defaultCredentials: CredentialReport = { environmentNames: [], envFiles: [] };
@@ -105,11 +115,80 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
+  const workspacePath = workspace?.path ?? null;
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceEntry[]>([]);
 
   const [treeLoading, setTreeLoading] = useState(false);
   const [, setTreeError] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState("");
   const [readOnlyFile, setReadOnlyFile] = useState<ReadOnlyFile | null>(null);
+
+  const [editedContent, setEditedContent] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
+  const [editorTab, setEditorTab] = useState<"editor" | "preview" | "inbox">("editor");
+  const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
+  const [newMsgContent, setNewContent] = useState("");
+
+  const refreshInbox = useCallback(async () => {
+    if (!workspacePath) return;
+    try {
+      const msgs = await bridge.getInboxMessages(workspacePath);
+      setInboxMessages(msgs);
+    } catch {
+      // Ignore background errors
+    }
+  }, [workspacePath]);
+
+  useEffect(() => {
+    if (editorTab === "inbox") {
+      void refreshInbox();
+      const timer = setInterval(() => void refreshInbox(), 3000);
+      return () => clearInterval(timer);
+    }
+  }, [editorTab, refreshInbox]);
+
+  const handleSendInboxMessage = useCallback(async () => {
+    if (!workspacePath || !newMsgContent.trim()) return;
+    try {
+      const msg: InboxMessage = {
+        id: crypto.randomUUID(),
+        sender: "User",
+        recipient: "primeAgent",
+        content: newMsgContent.trim(),
+        timestampMs: Date.now(),
+        status: "unread",
+      };
+      const updated = await bridge.sendInboxMessage(msg, workspacePath);
+      setInboxMessages(updated);
+      setNewContent("");
+      setToast("Message sent to sub-agent inbox!");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to send message.");
+    }
+  }, [workspacePath, newMsgContent]);
+
+  const handleClearInbox = useCallback(async () => {
+    if (!workspacePath) return;
+    try {
+      await bridge.clearInboxMessages(workspacePath);
+      setInboxMessages([]);
+      setToast("Inbox cleared successfully.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to clear inbox.");
+    }
+  }, [workspacePath]);
+
+  const [runOutput, setRunOutput] = useState("");
+  const [isRunningCommand, setIsRunningCommand] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("http://127.0.0.1:1420");
+
+  useEffect(() => {
+    if (readOnlyFile) {
+      setEditedContent(readOnlyFile.content);
+      setIsDirty(false);
+      setRunOutput("");
+    }
+  }, [readOnlyFile]);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [openedJobId, setOpenedJobId] = useState<string | null>(null);
@@ -194,7 +273,6 @@ function App() {
     return () => motion.removeEventListener("change", applyMotion);
   }, [appSettings.appearance]);
 
-  const workspacePath = workspace?.path ?? null;
   const projectName = workspace?.name ?? "No workspace";
 
   useEffect(() => {
@@ -285,6 +363,7 @@ function App() {
     setTreeError(null);
     try {
       const nextEntries = await bridge.listWorkspace(root) as WorkspaceEntry[];
+      setWorkspaceFiles(nextEntries);
       const packageEntry = nextEntries.find((entry) => entry.kind === "file" && entry.path.replace(/\\/g, "/").toLowerCase() === "package.json");
       const packageJson = packageEntry ? await bridge.readFile(root, packageEntry.path).catch(() => null) : null;
       const nextProfile = inspectProject(nextEntries, packageJson);
@@ -413,10 +492,103 @@ function App() {
     }
   }, [loadReadOnlyFile, workspacePath]);
 
+  const handleSaveFile = useCallback(async () => {
+    if (!workspacePath || !readOnlyFile) return;
+    try {
+      await bridge.writeFile(workspacePath, readOnlyFile.path, editedContent);
+      setIsDirty(false);
+      setToast(`Saved ${readOnlyFile.path.split(/[\\/]/).pop()} successfully!`);
+      void refreshWorkspace();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save file.";
+      setToast(message);
+    }
+  }, [workspacePath, readOnlyFile, editedContent, refreshWorkspace]);
+
+  const handleRunCommand = useCallback(async () => {
+    if (!workspacePath) return;
+    setIsRunningCommand(true);
+    setRunOutput("Executing verification check...");
+    try {
+      const result = await bridge.runCommand(
+        workspacePath,
+        "npm run check",
+        { operationId: crypto.randomUUID(), timeoutMs: 60_000 }
+      );
+      const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+      setRunOutput(output || "Verification completed with no output.");
+      if (result.success) {
+        setToast("Verification check passed!");
+      } else {
+        setToast("Verification check failed.");
+      }
+    } catch (error) {
+      setRunOutput(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsRunningCommand(false);
+    }
+  }, [workspacePath]);
+
+  const handleFileCreate = useCallback(async (path: string, content: string) => {
+    if (!workspacePath) return;
+    try {
+      await bridge.writeFile(workspacePath, path, content, true);
+      setToast(`Created file ${path} successfully!`);
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to create file.");
+    }
+  }, [workspacePath, refreshWorkspace]);
+
+  const handleFolderCreate = useCallback(async (path: string) => {
+    if (!workspacePath) return;
+    try {
+      if (bridge.isNative()) {
+        await bridge.runCommand(workspacePath, `New-Item -ItemType Directory -Force -Path "${path}"`, {
+          operationId: crypto.randomUUID(),
+          timeoutMs: 10_000,
+        });
+      }
+      setToast(`Created folder ${path} successfully!`);
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to create folder.");
+    }
+  }, [workspacePath, refreshWorkspace]);
+
   const closeReadOnlyFile = useCallback(() => {
     setReadOnlyFile(null);
     setActiveFile("");
     setFileError(null);
+  }, []);
+
+  const handleFileDelete = useCallback(async (path: string) => {
+    if (!workspacePath) return;
+    try {
+      if (bridge.isNative()) {
+        await bridge.runCommand(workspacePath, `Remove-Item -Force -Path "${path}"`, {
+          operationId: crypto.randomUUID(),
+          timeoutMs: 10_000,
+        });
+      }
+      setToast(`Deleted ${path} successfully!`);
+      if (activeFile === path) {
+        closeReadOnlyFile();
+      }
+      await refreshWorkspace();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to delete file.");
+    }
+  }, [workspacePath, activeFile, closeReadOnlyFile, refreshWorkspace]);
+
+  const handleChatDelete = useCallback(async (id: string) => {
+    try {
+      await bridge.deleteChatThread(id);
+      setToast("Conversation deleted successfully.");
+      window.dispatchEvent(new Event("whim:history-changed"));
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Failed to delete conversation.");
+    }
   }, []);
 
   const refreshCurrentProviders = refreshProviders;
@@ -493,6 +665,12 @@ function App() {
               onRefresh: () => void refreshWorkspace(),
               onTaskSelect: (job) => void openSidebarTask(job),
               onChatSelect: openSidebarChat,
+              files: workspaceFiles,
+              onFileSelect: (path) => void chooseFile(path),
+              onFileCreate: handleFileCreate,
+              onFileDelete: handleFileDelete,
+              onFolderCreate: handleFolderCreate,
+              onChatDelete: handleChatDelete,
             }}
             branch={branch}
             changesCount={changes.length}
@@ -522,17 +700,232 @@ function App() {
                 onOpenWorkspace={openWorkspace}
               />
             {readOnlyFile && (
-              <section className="read-only-file" aria-label="File viewer">
-                <header className="read-only-file-header">
-                  <span>{currentFileName}</span>
-                  <button type="button" onClick={closeReadOnlyFile} aria-label="Close file">Close</button>
+              <section className="flex-1 min-w-[400px] h-full flex flex-col bg-[#0b0e14] border-l border-zinc-800" aria-label="Standalone workspace workbench">
+                <header className="h-12 px-4 flex items-center justify-between border-b border-zinc-800 bg-[#10141b] text-sm text-zinc-300 font-sans select-none">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-zinc-200 tracking-wide font-mono text-xs truncate max-w-[150px]">
+                      {currentFileName}
+                    </span>
+                    <div className="flex items-center gap-1 bg-[#0b0e14] p-1 rounded-lg border border-zinc-800/80">
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("editor")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                          editorTab === "editor"
+                            ? "bg-zinc-800 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <Code2 size={12} />
+                        Code Editor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("preview")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                          editorTab === "preview"
+                            ? "bg-zinc-800 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <Eye size={12} />
+                        Live Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("inbox")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1.5 ${
+                          editorTab === "inbox"
+                            ? "bg-zinc-800 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <MessageSquareText size={12} />
+                        Agent Inbox
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {editorTab === "editor" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRunCommand}
+                          disabled={isRunningCommand}
+                          className="h-8 px-3 text-xs font-semibold rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 transition disabled:opacity-50"
+                        >
+                          <Play size={11} className={isRunningCommand ? "animate-pulse" : ""} />
+                          Run Check
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveFile}
+                          className={`h-8 px-3 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition ${
+                            isDirty
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 hover:border-emerald-400 shadow-md shadow-emerald-950/20"
+                              : "bg-transparent hover:bg-zinc-900 text-zinc-500 border-zinc-800"
+                          }`}
+                        >
+                          <Save size={11} />
+                          Save Changes
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeReadOnlyFile}
+                      className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-zinc-200 transition"
+                      aria-label="Close panel"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
                 </header>
+
                 {fileLoading ? (
-                  <p className="palette-empty">Reading…</p>
+                  <div className="flex-1 flex flex-col items-center justify-center text-sm text-zinc-500 bg-[#0d1117]">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-zinc-500 mb-2"></div>
+                    Loading file...
+                  </div>
                 ) : fileError ? (
-                  <p className="file-error">{fileError}</p>
+                  <div className="flex-1 p-6 text-zinc-400 bg-[#0d1117] flex flex-col items-center justify-center gap-4 text-center">
+                    <span className="text-zinc-600 font-sans">⚠️ {fileError}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadReadOnlyFile(workspacePath ?? "", readOnlyFile?.path ?? "")}
+                      className="px-4 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 transition"
+                    >
+                      Retry Reading File
+                    </button>
+                  </div>
+                ) : editorTab === "editor" ? (
+                  <div className="flex-1 min-h-0 flex flex-col relative bg-[#0b0e14]">
+                    <textarea
+                      value={editedContent}
+                      onChange={(e) => {
+                        setEditedContent(e.target.value);
+                        setIsDirty(e.target.value !== readOnlyFile.content);
+                      }}
+                      className="flex-1 w-full h-full p-4 bg-[#0d1117] text-[#c9d1d9] font-mono text-xs leading-relaxed focus:outline-none resize-none overflow-y-auto selection:bg-zinc-700/80"
+                      spellCheck={false}
+                    />
+
+                    {runOutput && (
+                      <div className="h-44 border-t border-zinc-800 bg-[#090d12] flex flex-col min-h-0 shadow-inner">
+                        <header className="h-8 px-4 flex items-center justify-between bg-[#11161d] text-[10px] text-zinc-400 font-sans border-b border-zinc-800/60 uppercase tracking-wider select-none font-bold">
+                          <span>Terminal Console</span>
+                          <button
+                            type="button"
+                            onClick={() => setRunOutput("")}
+                            className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition"
+                            title="Clear console"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </header>
+                        <pre className="flex-1 p-3 overflow-y-auto font-mono text-[11px] text-zinc-300 leading-normal whitespace-pre-wrap select-text bg-[#090d12]">
+                          {runOutput}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ) : editorTab === "preview" ? (
+                  <div className="flex-1 min-h-0 flex flex-col bg-[#0b0e14]">
+                    <div className="h-10 px-3 flex items-center gap-2 border-b border-zinc-800 bg-[#10141b]">
+                      <Globe size={12} className="text-zinc-500" />
+                      <input
+                        type="text"
+                        value={previewUrl}
+                        onChange={(e) => setPreviewUrl(e.target.value)}
+                        className="flex-1 h-7 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-700"
+                        placeholder="http://127.0.0.1:1420"
+                      />
+                    </div>
+                    <iframe
+                      src={previewUrl}
+                      title="Live App Preview"
+                      className="flex-1 w-full border-none bg-white"
+                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    />
+                  </div>
                 ) : (
-                  <pre className="read-only-file-content">{readOnlyFile.content}</pre>
+                  <div className="flex-1 min-h-0 flex flex-col bg-[#0b0e14]">
+                    <header className="h-10 px-4 flex items-center justify-between bg-[#11161d] border-b border-zinc-800/80 select-none">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-sans">
+                        Shared Mailbox (Agent Teams)
+                      </span>
+                      {inboxMessages.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearInbox}
+                          className="px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 hover:bg-zinc-800 rounded transition"
+                        >
+                          Clear Mailbox
+                        </button>
+                      )}
+                    </header>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0d1117]">
+                      {inboxMessages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 gap-2 select-none">
+                          <MessageSquareText size={24} className="text-zinc-700" />
+                          <p className="text-sm font-semibold text-zinc-300">Inbox is empty</p>
+                          <p className="text-xs max-w-[250px] leading-relaxed text-zinc-500">
+                            No coordination messages have been posted by sub-agents yet. Type a message below to steer your team.
+                          </p>
+                        </div>
+                      ) : (
+                        inboxMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`p-3 rounded-xl border max-w-[85%] ${
+                              msg.sender === "User"
+                                ? "bg-indigo-600/10 border-indigo-500/15 ml-auto text-right"
+                                : "bg-zinc-900/40 border-zinc-800/80 mr-auto text-left"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 select-none">
+                              <span className={msg.sender === "User" ? "text-indigo-400" : "text-emerald-400"}>
+                                {msg.sender}
+                              </span>
+                              <span>➔</span>
+                              <span className="capitalize">{msg.recipient}</span>
+                              <span className="text-zinc-600 ml-auto">
+                                {new Date(msg.timestampMs).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-200 mt-1.5 leading-relaxed break-words whitespace-pre-wrap">
+                              {msg.content}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="h-14 px-3 flex items-center gap-2 border-t border-zinc-800 bg-[#10141b]">
+                      <input
+                        type="text"
+                        value={newMsgContent}
+                        onChange={(e) => setNewContent(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            void handleSendInboxMessage();
+                          }
+                        }}
+                        placeholder="Write a message to steer sub-agents..."
+                        className="flex-1 h-8 px-3 bg-[#0d1117] border border-zinc-800/80 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-zinc-700 font-sans"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSendInboxMessage}
+                        disabled={!newMsgContent.trim()}
+                        className="h-8 px-4 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
                 )}
               </section>
             )}
@@ -549,6 +942,12 @@ function App() {
               onRefresh={() => void refreshWorkspace()}
               onTaskSelect={(job) => void openSidebarTask(job)}
               onChatSelect={openSidebarChat}
+              files={workspaceFiles}
+              onFileSelect={(path) => void chooseFile(path)}
+              onFileCreate={handleFileCreate}
+              onFileDelete={handleFileDelete}
+              onFolderCreate={handleFolderCreate}
+              onChatDelete={handleChatDelete}
             />
             <div className="workbench">
               <div className="workbench-main agent-first">
