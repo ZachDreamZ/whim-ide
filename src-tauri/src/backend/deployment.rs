@@ -1782,6 +1782,12 @@ pub fn discover_providers() -> Vec<ProviderStatus> {
         ("zenmux", "ZenMux"),
         ("xai", "xAI (Grok)"),
         ("orcarouter", "OrcaRouter"),
+        ("groq", "Groq"),
+        ("fireworks", "Fireworks"),
+        ("together", "Together AI"),
+        ("mistral", "Mistral AI"),
+        ("cohere", "Cohere"),
+        ("prime", "Prime Intellect"),
     ];
     for (provider, label) in cloud {
         let has = crate::agent::provider_key_available(provider);

@@ -36,6 +36,23 @@ describe("agent workflow routing", () => {
     expect(request.workflow.agent).toBe("researcher");
   });
 
+  it("routes prime agent slash commands correctly", () => {
+    const requestPrime = resolveMissionRequest("/prime optimize the query", "auto");
+    expect(requestPrime.command).toBe("prime");
+    expect(requestPrime.content).toBe("optimize the query");
+    expect(requestPrime.workflow.agent).toBe("primeAgent");
+    expect(requestPrime.workflow.jobMode).toBe("auto");
+    expect(requestPrime.workflow.instruction).toContain("Prime Agent");
+
+    const requestGoal = resolveMissionRequest("/goal build a compiler", "auto");
+    expect(requestGoal.command).toBe("goal");
+    expect(requestGoal.workflow.agent).toBe("primeAgent");
+
+    const requestRefine = resolveMissionRequest("/refine refactor memory usage", "auto");
+    expect(requestRefine.command).toBe("refine");
+    expect(requestRefine.workflow.agent).toBe("primeAgent");
+  });
+
   it("reconstructs the enforced role for durable retries", () => {
     expect(agentForJobMode("auto")).toBe("auto");
     expect(agentForJobMode("vibe")).toBe("auto");

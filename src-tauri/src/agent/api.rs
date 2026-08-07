@@ -157,7 +157,13 @@ pub async fn fetch_provider_models(
         | Provider::Compatible
         | Provider::ZenMux
         | Provider::XAi
-        | Provider::OrcaRouter => {
+        | Provider::OrcaRouter
+        | Provider::Groq
+        | Provider::Fireworks
+        | Provider::Together
+        | Provider::Mistral
+        | Provider::Cohere
+        | Provider::Prime => {
             if api_key.is_empty() && provider_requires_key(provider_enum) {
                 return Err("An API key is required to list these models.".into());
             }

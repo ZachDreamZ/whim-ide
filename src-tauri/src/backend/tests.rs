@@ -1010,6 +1010,11 @@ fn command_output_secrets_are_redacted() {
         "export OPENAI_API_KEY=sk-ant-realkeyvalue1234567890abcdef\n",
         "token=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n",
         "Authorization: Bearer ya29.abcdefghijklmnopqrstuvwxyz0123456789\n",
+        "pi_token=pi_realkeyvalue12345678abcdef\n",
+        "prime_token=prime_realkeyvalue12345678abcdef\n",
+        "deepseek_token=deepseek-abcdef0123456789abcdef0123456789\n",
+        "omni_token=omni_realkeyvalue12345678abcdef\n",
+        "zen_token=zen_realkeyvalue12345678abcdef\n",
         "normal build output 12345\n",
         "-----BEGIN RSA PRIVATE KEY-----\nMIIsecret\n-----END RSA PRIVATE KEY-----\n",
     );
@@ -1025,6 +1030,26 @@ fn command_output_secrets_are_redacted() {
     assert!(
         !redacted.contains("ya29.abcdefghijklmnopqrstuvwxyz0123456789"),
         "oauth token must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("pi_realkeyvalue12345678abcdef"),
+        "pi key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("prime_realkeyvalue12345678abcdef"),
+        "prime key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("deepseek-abcdef0123456789abcdef0123456789"),
+        "deepseek key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("omni_realkeyvalue12345678abcdef"),
+        "omni key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("zen_realkeyvalue12345678abcdef"),
+        "zen key must be redacted: {redacted}"
     );
     assert!(
         redacted.contains("[REDACTED PRIVATE KEY]"),

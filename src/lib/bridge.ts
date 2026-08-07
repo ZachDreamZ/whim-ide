@@ -1464,6 +1464,30 @@ export const bridge = {
     return call<void>("oauth_clear_token", { providerId });
   },
 
+  async getInboxMessages(workspace?: string): Promise<InboxMessage[]> {
+    if (!inTauri()) return [];
+    return call<InboxMessage[]>("get_inbox_messages", { workspace });
+  },
+
+  async sendInboxMessage(message: InboxMessage, workspace?: string): Promise<InboxMessage[]> {
+    if (!inTauri()) return [];
+    return call<InboxMessage[]>("send_inbox_message", { workspace, message });
+  },
+
+  async clearInboxMessages(workspace?: string): Promise<void> {
+    if (!inTauri()) return;
+    return call<void>("clear_inbox_messages", { workspace });
+  },
+
+};
+
+export type InboxMessage = {
+  id: string;
+  sender: string;
+  recipient: string;
+  content: string;
+  timestampMs: number;
+  status: "unread" | "read";
 };
 
 function findSessionId(events: unknown[]): string | undefined {
