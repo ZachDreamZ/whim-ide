@@ -324,23 +324,34 @@ pub(crate) fn resolve_key_with(
     api_key: &Option<String>,
     mut environment: impl FnMut(&str) -> Option<String>,
 ) -> Option<String> {
-    if let Some(key) = api_key
+    let raw_key = if let Some(key) = api_key
         .as_deref()
         .map(str::trim)
         .filter(|key| !key.is_empty())
     {
-        return Some(key.to_string());
-    }
-
-    for env_var in provider_environment_variables(provider_name(provider)) {
-        if let Some(value) = environment(env_var) {
-            let value = value.trim();
-            if !value.is_empty() {
-                return Some(value.to_string());
+        Some(key.to_string())
+    } else {
+        let mut found = None;
+        for env_var in provider_environment_variables(provider_name(provider)) {
+            if let Some(value) = environment(env_var) {
+                let value = value.trim();
+                if !value.is_empty() {
+                    found = Some(value.to_string());
+                    break;
+                }
             }
         }
-    }
-    None
+        found
+    };
+
+    raw_key.map(|key| {
+        // Sanitize: limit to 2048 chars, strip control characters
+        let sanitized: String = key.chars()
+            .take(2048)
+            .filter(|c| !c.is_control())
+            .collect();
+        sanitized
+    })
 }
 
 /// Resolve the API key to use: prefer the explicit in-session key, otherwise

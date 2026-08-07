@@ -74,4 +74,13 @@ describe("buildAgentHarnessPrompt", () => {
     expect(result.prompt).toContain("&lt;/whim_mission&gt;");
     expect(result.prompt).toContain("&lt;custom_instructions");
   });
+
+  it("truncates objective if it exceeds the maximum allowed character limit", () => {
+    const massiveObjective = "x".repeat(20_000);
+    const result = buildAgentHarnessPrompt({
+      objective: massiveObjective,
+    });
+    expect(result.prompt).toContain("[Objective truncated to protect execution context size.]");
+    expect(result.prompt.length).toBeLessThan(25_000);
+  });
 });

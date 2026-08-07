@@ -199,6 +199,9 @@ pub(crate) async fn optional_selected_workspace_path(
 }
 
 fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
+    if path.contains('\0') {
+        return Err("Workspace path contains an invalid null byte".to_string());
+    }
     if path.trim().is_empty() {
         return Err("Workspace path cannot be empty".to_string());
     }
@@ -791,8 +794,29 @@ pub async fn send_inbox_message(
         Vec::new()
     };
     
+    // Validate and sanitize string fields to strip unexpected control characters
+    let mut sanitized_message = message;
+    sanitized_message.sender = sanitized_message.sender.chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    sanitized_message.recipient = sanitized_message.recipient.chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    sanitized_message.content = sanitized_message.content.chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect();
+    sanitized_message.status = sanitized_message.status.chars()
+        .filter(|c| !c.is_control())
+        .collect();
+        
     // Add new message to the end
-    messages.push(message);
+    messages.push(sanitized_message);
+    
+    // Enforce sliding circular buffer window limit of 500 messages to prevent disk bloat
+    if messages.len() > 500 {
+        let drain_count = messages.len() - 500;
+        messages.drain(0..drain_count);
+    }
     
     // Write back to disk atomically
     let parent = path.parent().ok_or("Invalid path parent")?;

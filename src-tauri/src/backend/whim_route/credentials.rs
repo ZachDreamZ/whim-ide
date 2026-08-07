@@ -71,7 +71,7 @@ fn secret_prefix_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)\b(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|gh[pousr]_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,}|AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]+|glpat-[0-9A-Za-z_-]{20,}|glrt-[0-9A-Za-z_-]{20,}|npm_[0-9A-Za-z]{36}|pi_[A-Za-z0-9_]{20,}|prime_[A-Za-z0-9_]{20,}|deepseek-[0-9a-fA-F]{32}|omni_[A-Za-z0-9_]{20,}|zen_[A-Za-z0-9_]{20,})\b",
+            r"(?i)\b(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|gh[pousr]_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,}|AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]+|glpat-[0-9A-Za-z_-]{20,}|glrt-[0-9A-Za-z_-]{20,}|npm_[0-9A-Za-z]{36}|pi_[A-Za-z0-9_]{20,}|prime_[A-Za-z0-9_]{20,}|deepseek-[0-9a-fA-F]{32}|omni_[A-Za-z0-9_]{20,}|zen_[A-Za-z0-9_]{20,}|sk_(?:live|test)_[A-Za-z0-9]{24,}|rk_(?:live|test)_[A-Za-z0-9]{24,}|https://hooks\.slack\.com/services/[A-Z0-9_]{8,12}/[A-Z0-9_]{8,12}/[A-Za-z0-9_]{24}|https://(?:canary\.)?discord\.com/api/webhooks/[0-9]{17,20}/[A-Za-z0-9_-]{60,80})\b",
         )
         .expect("valid secret prefix regex")
     })

@@ -1015,6 +1015,9 @@ fn command_output_secrets_are_redacted() {
         "deepseek_token=deepseek-abcdef0123456789abcdef0123456789\n",
         "omni_token=omni_realkeyvalue12345678abcdef\n",
         "zen_token=zen_realkeyvalue12345678abcdef\n",
+        "stripe_key=sk_live_123456789012345678901234\n",
+        "slack_url=https://hooks.slack.com/services/T12345678/B12345678/123456789012345678901234\n",
+        "discord_url=https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890\n",
         "normal build output 12345\n",
         "-----BEGIN RSA PRIVATE KEY-----\nMIIsecret\n-----END RSA PRIVATE KEY-----\n",
     );
@@ -1050,6 +1053,18 @@ fn command_output_secrets_are_redacted() {
     assert!(
         !redacted.contains("zen_realkeyvalue12345678abcdef"),
         "zen key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("sk_live_123456789012345678901234"),
+        "stripe key must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("T12345678/B12345678/123456789012345678901234"),
+        "slack webhook must be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("discord_url=https://discord.com/api/webhooks/123456789012345678/"),
+        "discord webhook must be redacted: {redacted}"
     );
     assert!(
         redacted.contains("[REDACTED PRIVATE KEY]"),
