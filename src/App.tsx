@@ -533,6 +533,17 @@ function App() {
     }
   }, [workspacePath, readOnlyFile, editedContent, refreshWorkspace]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void handleSaveFile();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSaveFile]);
+
   const handleRunCommand = useCallback(async () => {
     if (!workspacePath) return;
     setIsRunningCommand(true);
