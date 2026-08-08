@@ -186,13 +186,15 @@ fn build_anthropic_messages(messages: &[Value]) -> Vec<Value> {
             let tool_use_id = message["tool_call_id"].as_str().unwrap_or("").to_string();
             let content = message["content"].as_str().unwrap_or("").to_string();
             if let Some(last) = out.last_mut() {
-                if last["role"].as_str() == Some("user") && last["content"].is_array() {
-                    last["content"].as_array_mut().unwrap().push(json!({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use_id,
-                        "content": content
-                    }));
-                    continue;
+                if last["role"].as_str() == Some("user") {
+                    if let Some(content_blocks) = last["content"].as_array_mut() {
+                        content_blocks.push(json!({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": content
+                        }));
+                        continue;
+                    }
                 }
             }
             out.push(json!({
