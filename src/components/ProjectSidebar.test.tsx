@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ProjectSidebar } from "./ProjectSidebar";
+import { ProjectSidebar, isSafeRelativePath } from "./ProjectSidebar";
 import { bridge, type ChatThreadSummary, type OrchestrationJob } from "../lib/bridge";
 
 vi.mock("../lib/bridge", () => ({
@@ -65,5 +65,33 @@ describe("ProjectSidebar", () => {
 
     // Browser is inside the More dropdown — verify the dropdown exists
     expect(screen.getByText("More")).toBeInTheDocument();
+  });
+
+  describe("isSafeRelativePath", () => {
+    it("permits valid relative paths", () => {
+      expect(isSafeRelativePath("src/utils.ts")).toBe(true);
+      expect(isSafeRelativePath("components/sidebar/ProjectSidebar.tsx")).toBe(true);
+      expect(isSafeRelativePath("package.json")).toBe(true);
+    });
+
+    it("rejects directory traversals", () => {
+      expect(isSafeRelativePath("../etc/passwd")).toBe(false);
+      expect(isSafeRelativePath("src/../../etc/passwd")).toBe(false);
+      expect(isSafeRelativePath(".")).toBe(false);
+      expect(isSafeRelativePath("src/.")).toBe(false);
+    });
+
+    it("rejects absolute paths", () => {
+      expect(isSafeRelativePath("/etc/passwd")).toBe(false);
+      expect(isSafeRelativePath("C:\\Windows\\System32")).toBe(false);
+    });
+
+    it("rejects null-bytes and dangerous filename characters", () => {
+      expect(isSafeRelativePath("src/utils\0.ts")).toBe(false);
+      expect(isSafeRelativePath("src/hello?world.ts")).toBe(false);
+      expect(isSafeRelativePath("src/hello*world.ts")).toBe(false);
+      expect(isSafeRelativePath("src/hello<world.ts")).toBe(false);
+      expect(isSafeRelativePath("src/hello>world.ts")).toBe(false);
+    });
   });
 });

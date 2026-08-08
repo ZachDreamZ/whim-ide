@@ -65,6 +65,19 @@ export type ProjectSidebarProps = {
   onChatDelete?: (id: string) => Promise<void>;
 };
 
+export function isSafeRelativePath(path: string): boolean {
+  if (!path || path.trim().length === 0) return false;
+  if (path.includes("\0")) return false;
+  // Block directory traversal components
+  const parts = path.split(/[/\\]/);
+  if (parts.some((p) => p === ".." || p === ".")) return false;
+  // Block absolute paths
+  if (path.startsWith("/") || path.startsWith("\\") || /^[a-zA-Z]:/.test(path)) return false;
+  // Block dangerous filename characters
+  if (/[<>:"|?*]/.test(path)) return false;
+  return true;
+}
+
 const primaryItems = [
   { id: "build", label: "New chat", icon: Sparkles },
   { id: "scheduled", label: "Scheduled", icon: CalendarClock },
@@ -314,7 +327,12 @@ export function ProjectSidebar({
                     e.stopPropagation();
                     const path = prompt("Enter new folder path relative to workspace root (e.g., src/components):");
                     if (path && path.trim()) {
-                      await onFolderCreate?.(path.trim());
+                      const trimmed = path.trim();
+                      if (!isSafeRelativePath(trimmed)) {
+                        alert("Invalid path: Directory traversal, absolute paths, and special characters (< > : \" | ? *) are forbidden.");
+                        return;
+                      }
+                      await onFolderCreate?.(trimmed);
                     }
                   }}
                 >
@@ -328,7 +346,12 @@ export function ProjectSidebar({
                     e.stopPropagation();
                     const path = prompt("Enter new file path relative to workspace root (e.g., src/utils.ts):");
                     if (path && path.trim()) {
-                      await onFileCreate?.(path.trim(), "// Created by Whim Standalone Workspace\n");
+                      const trimmed = path.trim();
+                      if (!isSafeRelativePath(trimmed)) {
+                        alert("Invalid path: Directory traversal, absolute paths, and special characters (< > : \" | ? *) are forbidden.");
+                        return;
+                      }
+                      await onFileCreate?.(trimmed, "// Created by Whim Standalone Workspace\n");
                     }
                   }}
                 >
