@@ -58,24 +58,24 @@ enum AgentErrorKind {
 
 fn categorize_agent_error(error: &str) -> AgentErrorKind {
     let error_lower = error.to_lowercase();
-    
+
     // Network transient errors
     if error_lower.contains("connection") || error_lower.contains("timeout") || error_lower.contains("network") {
         return AgentErrorKind::NetworkTransient;
     }
-    
+
     // Provider transient errors (5xx, rate limits)
-    if error_lower.contains("500") || error_lower.contains("502") || error_lower.contains("503") || 
+    if error_lower.contains("500") || error_lower.contains("502") || error_lower.contains("503") ||
        error_lower.contains("504") || error_lower.contains("rate limit") || error_lower.contains("overloaded") {
         return AgentErrorKind::ProviderTransient;
     }
-    
+
     // Provider permanent errors (4xx except 429)
-    if error_lower.contains("401") || error_lower.contains("403") || error_lower.contains("404") || 
+    if error_lower.contains("401") || error_lower.contains("403") || error_lower.contains("404") ||
        error_lower.contains("422") || error_lower.contains("authentication") || error_lower.contains("unauthorized") {
         return AgentErrorKind::ProviderPermanent;
     }
-    
+
     // Tool errors
     if error_lower.contains("tool") || error_lower.contains("command") {
         if error_lower.contains("permission") || error_lower.contains("access denied") {
@@ -83,12 +83,12 @@ fn categorize_agent_error(error: &str) -> AgentErrorKind {
         }
         return AgentErrorKind::ToolRecoverable;
     }
-    
+
     // Timeout errors
     if error_lower.contains("timeout") || error_lower.contains("timed out") {
         return AgentErrorKind::Timeout;
     }
-    
+
     AgentErrorKind::Unknown
 }
 
@@ -96,7 +96,7 @@ fn should_retry_error(error: &str, retry_count: usize, max_retries: usize) -> bo
     if retry_count >= max_retries {
         return false;
     }
-    
+
     match categorize_agent_error(error) {
         AgentErrorKind::NetworkTransient | AgentErrorKind::ProviderTransient => true,
         AgentErrorKind::ToolRecoverable => retry_count < 2, // Fewer retries for tool errors
@@ -342,14 +342,14 @@ fn log_agent_lifecycle(
         "message": message,
         "timestamp": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0),
     });
-    
+
     if let Some(meta) = metadata {
         event_data["metadata"] = meta;
     }
-    
+
     record_agent_event(
         app,
         operation_id,
@@ -376,7 +376,7 @@ fn log_tool_execution(
         "success": success,
         "error": error_message,
     });
-    
+
     log_agent_lifecycle(
         app,
         operation_id,
@@ -410,13 +410,13 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
     let start = Instant::now();
     let root_display = root.to_string_lossy().into_owned();
     crate::backend::workspace::ensure_project_agent_context_at(&root)?;
-    
+
     // Sync MCP tools before capability resolution if MCP is enabled
     let mcp_capability_enabled = settings.agent.enabled_capabilities.iter().any(|c| c == "mcp");
     if mcp_capability_enabled {
         let _ = mcp_sync_tools(state.inner(), &root).await;
     }
-    
+
     let mut tools = tool_defs_for_profile(profile, mode, settings);
     if mcp_capability_enabled {
         let mcp_tools = state.inner().mcp_manager.list_all_tools().await;
@@ -657,7 +657,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                 Ok(response) => response,
                 Err(error) => {
                     let error_kind = categorize_agent_error(&error);
-                    
+
                     // Intelligent retry logic based on error categorization
                     if should_retry_error(&error, provider_retry, MAX_PROVIDER_RETRIES) {
                         let retry_message = match error_kind {
@@ -666,7 +666,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                             AgentErrorKind::ToolRecoverable => "Tool error detected, attempting recovery...",
                             _ => "Error detected, retrying...",
                         };
-                        
+
                         record_agent_event(
                             app,
                             operation_id,
@@ -676,11 +676,11 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                                 message: format!("{} (attempt {}/{})", retry_message, provider_retry + 1, MAX_PROVIDER_RETRIES),
                             },
                         );
-                        
+
                         provider_retry += 1;
                         continue;
                     }
-                    
+
                     // Permanent errors or retry limit exceeded
                     let error_code = match error_kind {
                         AgentErrorKind::ProviderPermanent => Some("PROVIDER_AUTH".into()),
@@ -690,7 +690,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                         AgentErrorKind::ProviderTransient => Some("PROVIDER_TRANSIENT".into()),
                         _ => Some("PROVIDER".into()),
                     };
-                    
+
                     record_agent_event(
                         app,
                         operation_id,
@@ -806,17 +806,17 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                         }
                     })
                     .collect();
-                
+
                 // Categorize errors for intelligent recovery guidance
                 let error_kinds: Vec<AgentErrorKind> = error_messages
                     .iter()
                     .map(|e| categorize_agent_error(e))
                     .collect();
-                
+
                 let has_tool_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::ToolRecoverable | AgentErrorKind::ToolFatal));
                 let has_provider_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::ProviderTransient | AgentErrorKind::ProviderPermanent));
                 let has_network_errors = error_kinds.iter().any(|k| matches!(k, AgentErrorKind::NetworkTransient));
-                
+
                 let recovery_guidance = if has_tool_errors {
                     "Review the tool errors above. Check for incorrect arguments, missing files, or permission issues. Fix the specific tool calls and try again."
                 } else if has_provider_errors {
@@ -826,14 +826,14 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                 } else {
                     "Review the error output, identify the root cause, and attempt to fix it."
                 };
-                
+
                 let nudge = format!(
                     "You are not finished. The previous steps reported {} error(s):\n{}\n\nRecovery guidance: {}\n\nReview the error output, fix the root cause, and continue. Do not end your turn until the task is complete and any verification you ran passes.",
                     error_messages.len(),
                     error_messages.join("\n"),
                     recovery_guidance
                 );
-                
+
                 record_agent_event(
                     app,
                     operation_id,
@@ -1269,7 +1269,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                 }
             };
             let tool_duration = tool_start.elapsed().as_millis() as u64;
-            
+
             // Log tool execution for comprehensive monitoring
             record_agent_event(
                 app,
@@ -1279,7 +1279,7 @@ pub(crate) async fn run_native_agent<R: tauri::Runtime>(
                     message: format!("Tool {} completed in {}ms (success: {})", tool_display(&call.name), tool_duration, !is_error),
                 },
             );
-            
+
             // Behavioral loop detection observes every completed tool call.
             loop_detector.observe(&call.name, &call.arguments, &output);
             record_agent_event(

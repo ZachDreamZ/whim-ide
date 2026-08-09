@@ -80,7 +80,9 @@ pub(crate) fn record_agent_event<R: tauri::Runtime>(
     events: &mut Vec<Value>,
     event: AgentEvent,
 ) {
-    let event_val = serde_json::to_value(&event).unwrap();
+    let Ok(event_val) = serde_json::to_value(&event) else {
+        return;
+    };
     if let Some(label) = durable_audit_label(&event_val) {
         let backend = window.app_handle().state::<BackendState>();
         record_orchestration_agent_evidence(&backend, operation_id, label);

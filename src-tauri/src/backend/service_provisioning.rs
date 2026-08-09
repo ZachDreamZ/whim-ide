@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -122,6 +122,11 @@ fn state_file_path(root: &Path, id: &str) -> PathBuf {
     service_dir(root, id).join("service.json")
 }
 
+fn utf8_path(path: &Path) -> Result<&str, String> {
+    path.to_str()
+        .ok_or_else(|| format!("Path contains unsupported characters: {}", path.display()))
+}
+
 fn load_service_state(root: &Path, id: &str) -> Result<Option<ServiceResource>, String> {
     let path = state_file_path(root, id);
     if !path.exists() {
@@ -181,11 +186,11 @@ pub async fn list_services(
 }
 
 fn check_port(host: &str, port: u16) -> bool {
-    TcpStream::connect_timeout(
-        &format!("{host}:{port}").parse().unwrap(),
-        Duration::from_millis(2000),
-    )
-    .is_ok()
+    let Ok(address) = host.parse::<std::net::IpAddr>() else {
+        return false;
+    };
+    TcpStream::connect_timeout(&SocketAddr::new(address, port), Duration::from_millis(2000))
+        .is_ok()
 }
 
 fn probe_service(service: &mut ServiceResource) {
@@ -254,7 +259,7 @@ pub async fn provision_service(
 
     // Attempt to start via Docker Compose
     let compose_path = dir.join(COMPOSE_FILE);
-    let compose_str = compose_path.to_str().unwrap().to_string();
+    let compose_str = utf8_path(&compose_path)?.to_string();
     match quick_capture(
         "docker",
         &["compose".to_string(), "-f".to_string(), compose_str, "up".to_string(), "-d".to_string()],
@@ -300,7 +305,7 @@ pub async fn stop_service(
 
     let dir = service_dir(&root, &service_id);
     let compose_path = dir.join(COMPOSE_FILE);
-    let compose_str = compose_path.to_str().unwrap().to_string();
+    let compose_str = utf8_path(&compose_path)?.to_string();
     match quick_capture(
         "docker",
         &["compose".to_string(), "-f".to_string(), compose_str, "down".to_string()],
@@ -335,7 +340,7 @@ pub async fn start_service(
 
     let dir = service_dir(&root, &service_id);
     let compose_path = dir.join(COMPOSE_FILE);
-    let compose_str = compose_path.to_str().unwrap().to_string();
+    let compose_str = utf8_path(&compose_path)?.to_string();
     match quick_capture(
         "docker",
         &["compose".to_string(), "-f".to_string(), compose_str, "up".to_string(), "-d".to_string()],
@@ -380,7 +385,7 @@ pub async fn remove_service(
 
     let dir = service_dir(&root, &service_id);
     let compose_path = dir.join(COMPOSE_FILE);
-    let compose_str = compose_path.to_str().unwrap().to_string();
+    let compose_str = utf8_path(&compose_path)?.to_string();
     let _ = quick_capture(
         "docker",
         &["compose".to_string(), "-f".to_string(), compose_str, "down".to_string(), "-v".to_string()],
