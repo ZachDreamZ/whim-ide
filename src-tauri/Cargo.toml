@@ -1,6 +1,6 @@
 [package]
 name = "workwhim-ide"
-version = "0.4.9"
+version = "5.0.0"
 description = "Whim, a Windows-native IDE for agent-first software creation"
 authors = ["Vendex"]
 edition = "2021"

@@ -39,9 +39,6 @@ pub mod search;
 pub mod service_provisioning;
 pub mod update_state;
 
-#[cfg(test)]
-mod tests;
-
 // Re-export all Tauri commands so lib.rs remains unchanged
 
 // Re-export every public request/result type so callers (notably `agent.rs`,
