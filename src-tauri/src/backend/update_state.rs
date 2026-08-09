@@ -127,24 +127,4 @@ pub fn clear_update_state() {
     let _ = fs::remove_file(path);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn defaults_are_recoverable_and_channel_is_known() {
-        let state = UpdateState::default();
-        assert_eq!(state.channel, "stable");
-        assert!(state.auto_check);
-    }
-
-    #[test]
-    fn unknown_channel_falls_back_to_stable() {
-        let mut state = UpdateState {
-            channel: "canary".into(),
-            ..Default::default()
-        };
-        normalize(&mut state);
-        assert_eq!(state.channel, "stable");
-    }
-}

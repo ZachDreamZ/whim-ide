@@ -644,7 +644,7 @@ function App() {
         <div>
           <span className="native-status"><Radio size={10} /> {bridge.isNative() ? "Windows native" : "Native app required"}</span>
           <span><CloudOff size={11} /> Local workspace</span>
-          <span><Sparkles size={11} /> Whim 0.4</span>
+          <span><Sparkles size={11} /> Whim 5.0</span>
         </div>
       </footer>}
       {appSettings.voice.ambient && (
